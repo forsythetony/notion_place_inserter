@@ -61,6 +61,16 @@ make test
 # With custom secret: make test SECRET=your-secret
 ```
 
+### Tavern API Tests
+
+The `http-test/` folder contains [Tavern](https://tavern.readthedocs.io/)-style API tests. With the server running:
+
+```bash
+make test-api
+```
+
+See [http-test/README.md](http-test/README.md) for configuration and usage.
+
 ### Deploying to Render
 
 1. **Push the repository to GitHub** (if not already done)
@@ -101,8 +111,13 @@ make test
 app/
   __init__.py
   main.py           # FastAPI app with auth check
+http-test/
+  config.tavern.yaml    # Tavern global config (base_url, secret)
+  test_hello_api.tavern.yaml
+  README.md
 requirements.txt
 render.yaml         # Render Blueprint (Infrastructure-as-Code)
+pytest.ini          # Pytest/Tavern config
 Makefile
 README.md
 ```

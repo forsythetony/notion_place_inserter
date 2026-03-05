@@ -1,0 +1,42 @@
+---
+test_name: GET / without Authorization returns 401
+
+stages:
+  - name: Request without auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/"
+      method: GET
+    response:
+      status_code: 401
+      json:
+        detail: "Unauthorized"
+
+---
+test_name: GET / with invalid Authorization returns 401
+
+stages:
+  - name: Request with wrong auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/"
+      method: GET
+      headers:
+        Authorization: "wrong-secret"
+    response:
+      status_code: 401
+      json:
+        detail: "Unauthorized"
+
+---
+test_name: GET / with valid Authorization returns 200 and greeting
+
+stages:
+  - name: Request with valid auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/"
+      method: GET
+      headers:
+        Authorization: "{tavern.env_vars.SECRET}"
+    response:
+      status_code: 200
+      json:
+        message: "Hello there!"

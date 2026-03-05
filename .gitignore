@@ -54,6 +54,13 @@ coverage.xml
 .dmypy.json
 dmypy.run
 
+# Resources
+resources/
+
+# Notion puller output (may contain sensitive page data)
+scripts/notion_puller/output/*
+!scripts/notion_puller/output/.gitkeep
+
 # IDE
 .idea/
 .vscode/
@@ -65,7 +72,10 @@ dmypy.run
 .env
 .env.local
 .env.*.local
+envs/*.env
+!envs/local.env
 
 # OS
 .DS_Store
 Thumbs.db
+envs/local.env

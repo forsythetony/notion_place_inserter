@@ -1,0 +1,4 @@
+# Tavern global config for Hello World API tests
+# BASE_URL and SECRET are read from env vars (see envs/env.template)
+
+is_defaults: true
