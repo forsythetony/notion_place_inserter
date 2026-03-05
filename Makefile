@@ -1,4 +1,4 @@
-.PHONY: install run test test-api notion-pull
+.PHONY: install run run-local test test-api notion-pull
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -10,7 +10,12 @@ install:
 	pip install -r requirements.txt
 
 run:
-	PORT=$(PORT) secret=$(SECRET) uvicorn app.main:app --host 0.0.0.0 --port $(PORT)
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+
+rerun: install run
+
+run-local:
+	@bash -c 'set -a && source envs/local.env && set +a && uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000}'
 
 test:
 	@echo "Testing without auth (expect 401)..."

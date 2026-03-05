@@ -18,6 +18,23 @@ ENV_PATH = PROJECT_ROOT / "envs" / "local.env"
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 
 
+def extract_title_from_rich_text(rich_text_array: list) -> str:
+    """Extract plain text from Notion rich text array."""
+    if not rich_text_array:
+        return ""
+    return "".join(
+        block.get("plain_text", "") or block.get("text", {}).get("content", "")
+        for block in rich_text_array
+    )
+
+
+def sanitize_filename(name: str) -> str:
+    """Sanitize string for use in filename (lowercase, spaces to hyphens, alphanumeric)."""
+    s = re.sub(r"[^\w\s-]", "", name).strip()
+    s = re.sub(r"[-\s]+", "-", s).lower()
+    return s or "unnamed"
+
+
 def extract_id(url_or_id: str) -> str | None:
     """Extract Notion page/database ID from URL or return as-is if already an ID."""
     url_or_id = url_or_id.strip()
@@ -155,7 +172,16 @@ def main():
             raise
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = args.output_dir / f"{obj_id.replace('-', '')}.json"
+    id_part = obj_id.replace("-", "")
+    if output.get("type") == "database":
+        db_title = extract_title_from_rich_text(
+            output.get("database", {}).get("title", [])
+        )
+        name_part = sanitize_filename(db_title) if db_title else ""
+        filename = f"{name_part}_{id_part}.json" if name_part else f"{id_part}.json"
+    else:
+        filename = f"{id_part}.json"
+    out_path = args.output_dir / filename
     out_path.write_text(json.dumps(output, indent=2, default=str), encoding="utf-8")
     logger.info("Saved to {}", out_path)
 

@@ -1,0 +1,48 @@
+---
+test_name: POST /locations without Authorization returns 401
+
+stages:
+  - name: Request without auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/locations"
+      method: POST
+      json:
+        keywords: "coffee shop"
+    response:
+      status_code: 401
+      json:
+        detail: "Unauthorized"
+
+---
+test_name: POST /locations with invalid Authorization returns 401
+
+stages:
+  - name: Request with wrong auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/locations"
+      method: POST
+      headers:
+        Authorization: "wrong-secret"
+      json:
+        keywords: "restaurant"
+    response:
+      status_code: 401
+      json:
+        detail: "Unauthorized"
+
+---
+test_name: POST /locations with valid Authorization returns 200 and Notion page
+
+stages:
+  - name: Request with valid auth header
+    request:
+      url: "{tavern.env_vars.BASE_URL}/locations"
+      method: POST
+      headers:
+        Authorization: "{tavern.env_vars.SECRET}"
+      json:
+        keywords: "park"
+    response:
+      status_code: 200
+      json:
+        object: "page"

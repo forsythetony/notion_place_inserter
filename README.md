@@ -114,6 +114,7 @@ app/
 http-test/
   config.tavern.yaml    # Tavern global config (base_url, secret)
   test_hello_api.tavern.yaml
+  test_locations_api.tavern.yaml
   README.md
 requirements.txt
 render.yaml         # Render Blueprint (Infrastructure-as-Code)

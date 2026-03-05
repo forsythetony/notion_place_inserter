@@ -1,0 +1,138 @@
+openapi: 3.1.0
+
+info:
+  title: Notion Place Inserter API
+  description: |
+    API for inserting place entries into a Notion "Places to Visit" database.
+    All endpoints require secret-based authorization via the Authorization header.
+  version: 1.0.0
+
+servers:
+  - url: /
+    description: Default server
+
+paths:
+  /:
+    get:
+      summary: Health check / greeting
+      description: Returns a greeting if the Authorization header matches the configured secret.
+      operationId: hello
+      security:
+        - SecretAuth: []
+      responses:
+        "200":
+          description: Authorized successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /locations:
+    post:
+      summary: Create a random place entry
+      description: |
+        Creates a random place entry in the Places to Visit Notion database.
+        Keywords are accepted in the request body but not yet used.
+      operationId: createLocation
+      security:
+        - SecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationRequest"
+      responses:
+        "200":
+          description: Place entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotionPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  securitySchemes:
+    SecretAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: The shared secret configured via the SECRET environment variable. Send the secret as the raw Authorization header value.
+
+  schemas:
+    HelloResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: "Hello there!"
+
+    LocationRequest:
+      type: object
+      required:
+        - keywords
+      properties:
+        keywords:
+          type: string
+          description: Search keywords (accepted but not yet used)
+
+    NotionPage:
+      type: object
+      description: Notion page object returned by the Notion API when creating a page
+      properties:
+        object:
+          type: string
+          example: page
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the created page
+        created_time:
+          type: string
+          format: date-time
+        last_edited_time:
+          type: string
+          format: date-time
+        properties:
+          type: object
+          description: Page properties as defined in the database schema
+        url:
+          type: string
+          format: uri
+          description: URL to the page in Notion
+
+    ErrorDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid Authorization header
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorDetail"
+          example:
+            detail: Unauthorized
+    ServerError:
+      description: Server misconfiguration (e.g. SECRET not set)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorDetail"
+          example:
+            detail: Server misconfiguration
+
+security:
+  - SecretAuth: []

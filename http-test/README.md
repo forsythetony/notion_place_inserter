@@ -27,3 +27,5 @@ Edit `config.tavern.yaml` to change the target URL or secret:
 - `secret`: Authorization value for the `Authorization` header (default: `dev-secret`)
 
 For a deployed Render instance, update `base_url` to your service URL and `secret` to the value from the Render Dashboard Environment tab.
+
+**Note:** The `POST /locations` test creates a real entry in the Notion database. Ensure `NOTION_API_KEY` is configured when running the server.
