@@ -1,6 +1,7 @@
 """Claude API service wrapper for poem generation and place/property inference."""
 
 import json
+import re
 from typing import NamedTuple
 
 import anthropic
@@ -194,10 +195,13 @@ Select the best value for "{field_name}" from these allowed options:
 {options_text}
 
 Rules:
-- Return exactly one option from the list when there is a clear match.
-- If there is no clear match, return empty string.
+- Return valid JSON object only: {{"value":"", "confidence":0.0, "source":""}}.
+- "value" must be exactly one allowed option when there is a clear match.
+- If there is no clear match, set "value" to empty string.
+- "confidence" must be between 0 and 1.
+- "source" should briefly describe what evidence was used.
 {suggest_rule}
-- Return only the value (or empty string), nothing else."""
+- Return JSON only, no markdown or extra text."""
         response = self._client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=128,
@@ -205,36 +209,49 @@ Rules:
             messages=[{"role": "user", "content": prompt}],
         )
         raw_value = self._extract_text(response).strip()
+        parsed = self._parse_option_with_suggest_response(raw_value)
+        parsed_value = parsed.get("value", "")
+        parsed_confidence = parsed.get("confidence")
+        parsed_source = parsed.get("source", "")
         logger.bind(
             property_name=field_name,
             options=options,
             claude_raw_value=raw_value,
+            parsed_value=parsed_value,
+            parsed_confidence=parsed_confidence,
+            parsed_source=parsed_source,
         ).info("claude_option_suggest_response")
 
-        if not raw_value:
+        if not parsed_value:
             logger.bind(property_name=field_name).info("claude_option_suggest_no_match")
             return OptionSelectionResult(None, False)
 
         for option in options:
-            if option.lower() == raw_value.lower():
+            if option.lower() == parsed_value.lower():
                 logger.bind(
                     property_name=field_name,
                     selected_option=option,
                 ).info("claude_option_suggest_validated")
                 return OptionSelectionResult(option, False)
 
-        if allow_suggest_new and raw_value.strip():
-            suggested = raw_value.strip().title()
+        if (
+            allow_suggest_new
+            and parsed_value.strip()
+            and parsed_confidence is not None
+            and parsed_confidence >= 0.7
+        ):
+            suggested = parsed_value.strip().title()
             logger.bind(
                 property_name=field_name,
                 suggested_value=suggested,
+                parsed_confidence=parsed_confidence,
             ).info("claude_option_suggest_new_value")
             return OptionSelectionResult(suggested, True)
 
         logger.bind(
             property_name=field_name,
             options=options,
-            claude_raw_value=raw_value,
+            claude_raw_value=parsed_value,
         ).warning("claude_option_suggest_rejected")
         return OptionSelectionResult(None, False)
 
@@ -294,11 +311,13 @@ Select all applicable values for "{field_name}" from these allowed options:
 {options_text}
 
 Rules:
-- Return zero or more values. Use a comma-separated list (e.g. "Landmark, History, Always Free").
-- Match option names exactly (case-insensitive). Each value will be canonicalized.
-- Do not repeat the same tag.
+- Return valid JSON only.
+- Use this exact shape: {{"values": ["Tag One", "Tag Two"]}}.
+- values must be an array of strings. Do not include duplicates.
+- Match option names exactly (case-insensitive) when using allowed options.
 {suggest_rule}
-- If nothing applies, return empty string."""
+- If nothing applies, return {{"values": []}}.
+- Return JSON only, no markdown or prose."""
         response = self._client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=256,
@@ -334,7 +353,14 @@ Rules:
         result: list[str] = []
 
         raw_stripped = raw_value.strip()
-        if raw_stripped.startswith("[") and raw_stripped.endswith("]"):
+        if raw_stripped.startswith("{") and raw_stripped.endswith("}"):
+            try:
+                parsed = json.loads(raw_stripped)
+                values = parsed.get("values", []) if isinstance(parsed, dict) else []
+                parts = [str(p).strip() for p in values if str(p).strip()]
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                parts = [p.strip() for p in raw_stripped.replace("\n", ",").split(",") if p.strip()]
+        elif raw_stripped.startswith("[") and raw_stripped.endswith("]"):
             try:
                 parsed = json.loads(raw_stripped)
                 parts = [str(p).strip() for p in parsed if p] if isinstance(parsed, list) else []
@@ -342,6 +368,7 @@ Rules:
                 parts = [p.strip() for p in raw_stripped.replace("\n", ",").split(",") if p.strip()]
         else:
             parts = [p.strip() for p in raw_stripped.replace("\n", ",").split(",") if p.strip()]
+        suggested_count = 0
         for part in parts:
             part_lower = part.lower()
             if part_lower in seen_lower:
@@ -349,9 +376,15 @@ Rules:
             if part_lower in options_lower:
                 seen_lower.add(part_lower)
                 result.append(options_lower[part_lower])
-            elif allow_suggest_new and part.strip():
+            elif (
+                allow_suggest_new
+                and part.strip()
+                and suggested_count < 2
+                and self._is_valid_suggested_tag(part)
+            ):
                 seen_lower.add(part_lower)
                 result.append(part.strip().title())
+                suggested_count += 1
             else:
                 logger.bind(
                     rejected_value=part,
@@ -359,6 +392,55 @@ Rules:
                 ).debug("claude_multi_select_rejected_non_allowed")
 
         return result
+
+    def _parse_option_with_suggest_response(self, raw_value: str) -> dict:
+        """Parse option response that may be JSON object or plain text."""
+        stripped = raw_value.strip()
+        default = {"value": stripped, "confidence": None, "source": ""}
+        if not stripped:
+            return default
+        if not (stripped.startswith("{") and stripped.endswith("}")):
+            return default
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return default
+        if not isinstance(parsed, dict):
+            return default
+        value = str(parsed.get("value", "")).strip()
+        confidence_raw = parsed.get("confidence")
+        confidence = None
+        if isinstance(confidence_raw, (int, float)):
+            confidence = float(confidence_raw)
+        source = str(parsed.get("source", "")).strip()
+        return {"value": value, "confidence": confidence, "source": source}
+
+    def _is_valid_suggested_tag(self, value: str) -> bool:
+        """Heuristic guardrail for new tags from model suggestions."""
+        text = value.strip()
+        if not text:
+            return False
+        if len(text) > 32:
+            return False
+        if re.search(r"[.!?;:()\[\]{}\"`]", text):
+            return False
+        words = [w for w in text.split() if w]
+        if len(words) == 0 or len(words) > 3:
+            return False
+        lower = text.lower()
+        banned_prefixes = (
+            "i ",
+            "i'm ",
+            "and ",
+            "none ",
+            "looking ",
+            "no ",
+        )
+        if lower.startswith(banned_prefixes):
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9&' -]+", text):
+            return False
+        return any(c.isalpha() for c in text)
 
     def choose_emoji_for_place(self, candidate_context: dict) -> str | None:
         """

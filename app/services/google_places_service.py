@@ -28,8 +28,24 @@ def _extract_neighborhood_from_components(components: list[dict] | None) -> str 
         text = (comp.get("longText") or comp.get("shortText") or "").strip()
         if not text:
             continue
-        if "neighborhood" in comp_types or "sublocality" in comp_types:
+        if (
+            "neighborhood" in comp_types
+            or "sublocality" in comp_types
+            or any(t.startswith("sublocality_level_") for t in comp_types)
+        ):
             return text
+
+    # Some places expose district-like areas through administrative levels.
+    for comp in components:
+        comp_types = comp.get("types") or []
+        if not isinstance(comp_types, list):
+            continue
+        text = (comp.get("longText") or comp.get("shortText") or "").strip()
+        if not text:
+            continue
+        if "administrative_area_level_3" in comp_types:
+            return text
+
     for comp in components:
         comp_types = comp.get("types") or []
         if not isinstance(comp_types, list):

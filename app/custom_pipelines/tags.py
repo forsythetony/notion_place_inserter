@@ -8,7 +8,7 @@ from app.pipeline_lib.steps.notion_format import format_value_for_notion
 
 
 class InferTagsStep(PipelineStep):
-    """Infer tags from Google place signals using schema options and optional new suggestions."""
+    """Infer tags from Google place signals using existing schema options only."""
 
     def __init__(self, prop_name: str, prop_schema: PropertySchema):
         self._prop_name = prop_name
@@ -67,7 +67,7 @@ class InferTagsStep(PipelineStep):
                 field_name=self._prop_name,
                 options=options,
                 candidate_context=candidate_context,
-                allow_suggest_new=True,
+                allow_suggest_new=False,
             )
             log.bind(claude_selected_values=selected).info(
                 "tags_multi_select_result"

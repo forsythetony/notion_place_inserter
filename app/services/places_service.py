@@ -106,8 +106,7 @@ class PlacesService:
             raise RuntimeError("places_global_pipeline not registered")
         pipeline = pipeline_cls(db_name=PLACES_DB_NAME)
 
-        keywords_preview = keywords[:50] + ("..." if len(keywords) > 50 else "")
-        with log_pipeline_request(run_id, keywords_preview, self._dry_run) as result:
+        with log_pipeline_request(run_id, keywords, self._dry_run) as result:
             pipeline.run(context)
             properties = context.get_properties()
             property_sources = context.get_property_sources()

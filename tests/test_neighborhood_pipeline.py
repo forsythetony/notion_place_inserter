@@ -184,6 +184,43 @@ def test_neighborhood_pipeline_omits_property_when_no_claude():
     assert "Neighborhood" not in props
 
 
+def test_neighborhood_pipeline_rejects_directional_conflict():
+    """Pipeline drops neighborhood when selected direction conflicts with address direction."""
+    schema = PropertySchema(
+        name="Neighborhood",
+        type="select",
+        options=[
+            SelectOption(id="1", name="South Minneapolis", color="blue"),
+            SelectOption(id="2", name="Northeast Minneapolis", color="green"),
+        ],
+    )
+    pipeline = NeighborhoodPipeline("Neighborhood", schema)
+    fake_claude = _FakeClaude("South Minneapolis", is_new=False)
+    ctx = PipelineRunContext(
+        run_id="r1",
+        initial={
+            "_claude_service": fake_claude,
+            CtxKeys.GOOGLE_PLACE: {
+                "displayName": "Odin Apartments",
+                "formattedAddress": "401 1st Ave NE, Minneapolis, MN 55413, USA",
+                "neighborhood": None,
+                "primaryType": "apartment_complex",
+                "types": ["apartment_complex", "point_of_interest"],
+                "latitude": 44.9900172,
+                "longitude": -93.2557362,
+            },
+        },
+    )
+    ctx.set("_global_pipeline_id", "gp")
+    ctx.set("_current_stage_id", "s1")
+    ctx.set("_current_pipeline_id", "p1")
+
+    _run_pipeline(pipeline, ctx, "r1", "s1")
+
+    props = ctx.get_properties()
+    assert "Neighborhood" not in props
+
+
 def _capture_logs():
     captured = []
 

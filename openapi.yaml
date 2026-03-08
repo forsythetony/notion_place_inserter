@@ -33,10 +33,14 @@ paths:
 
   /locations:
     post:
-      summary: Create a random place entry
+      summary: Create a place entry from keywords
       description: |
-        Creates a random place entry in the Places to Visit Notion database.
-        Keywords are accepted in the request body but not yet used.
+        Creates a place entry in the Places to Visit Notion database by running a
+        pipeline (query rewrite, Google Places lookup, property resolution).
+        When async is enabled (default, LOCATIONS_ASYNC_ENABLED=1), the request is
+        enqueued and returns immediately with job_id; the pipeline runs in the background.
+        When async is disabled (LOCATIONS_ASYNC_ENABLED=0), the pipeline runs
+        synchronously and returns the created Notion page.
       operationId: createLocation
       security:
         - SecretAuth: []
@@ -48,7 +52,112 @@ paths:
               $ref: "#/components/schemas/LocationRequest"
       responses:
         "200":
-          description: Place entry created successfully
+          description: |
+            Async mode: request accepted and enqueued.
+            Sync mode: place entry created successfully (Notion page object).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/LocationAcceptedResponse"
+                  - $ref: "#/components/schemas/NotionPage"
+        "400":
+          description: Validation failed (empty keywords or exceeds max length)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              example:
+                detail: keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Unable to enqueue request (queue unavailable; async mode only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              example:
+                detail: Unable to enqueue request
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /test/claude:
+    get:
+      summary: Generate a poem (test)
+      description: Generate a poem using Claude, inspired by the given seed. Test endpoint.
+      operationId: claudePoem
+      security:
+        - SecretAuth: []
+      parameters:
+        - name: poem_seed
+          in: query
+          required: false
+          schema:
+            type: string
+            default: sunset
+          description: Seed word to inspire the poem
+      responses:
+        "200":
+          description: Poem generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [poem]
+                properties:
+                  poem:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /test/googlePlacesSearch:
+    get:
+      summary: Search Google Places (test)
+      description: Search for places using the Google Places API. Test endpoint.
+      operationId: googlePlacesSearch
+      security:
+        - SecretAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query for places
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [query, results]
+                properties:
+                  query:
+                    type: string
+                  results:
+                    type: array
+                    items: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /test/randomLocation:
+    post:
+      summary: Create random place entry (test)
+      description: |
+        Create a random place entry in the Places to Visit database using
+        schema-derived random values. Does not call Claude or Google Places. Test-only.
+      operationId: randomLocation
+      security:
+        - SecretAuth: []
+      responses:
+        "200":
+          description: Random place entry created successfully
           content:
             application/json:
               schema:
@@ -83,7 +192,25 @@ components:
       properties:
         keywords:
           type: string
-          description: Search keywords (accepted but not yet used)
+          minLength: 1
+          maxLength: 300
+          description: Search keywords for the place (e.g. "stone arch bridge in minneapolis"). Must be non-empty after trimming whitespace.
+
+    LocationAcceptedResponse:
+      type: object
+      description: Returned when async mode is enabled and the job was successfully enqueued
+      required:
+        - status
+        - job_id
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+          example: accepted
+        job_id:
+          type: string
+          description: Unique identifier for the enqueued job (e.g. loc_01HR9R8V4W2YQ3A6T9D1X2B7C8)
+          example: loc_01HR9R8V4W2YQ3A6T9D1X2B7C8
 
     NotionPage:
       type: object

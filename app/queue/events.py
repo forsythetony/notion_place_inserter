@@ -52,7 +52,7 @@ def _on_failure(event: PipelineFailureEvent) -> None:
         "Pipeline failed",
         job_id=event.job_id,
         run_id=event.run_id,
-        keywords=event.keywords[:50],
+        keywords=event.keywords,
         error=err,
     )
 

@@ -43,6 +43,16 @@ _CONTEXT_KEYS = (
     "dry_run",
     "failed_pipeline_count",
     "error",
+    "candidate_context",
+    "claude_raw_value",
+    "canonical_values",
+    "claude_selected_value",
+    "claude_selected_values",
+    "is_new_neighborhood",
+    "parsed_value",
+    "parsed_confidence",
+    "parsed_source",
+    "direct_selected_value",
 )
 
 

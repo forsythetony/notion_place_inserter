@@ -299,6 +299,38 @@ def test_choose_multi_select_returns_empty_when_no_match():
     assert len(fake_client.messages.calls) == 1
 
 
+def test_choose_multi_select_parses_json_values_shape():
+    """Method accepts JSON object responses with values array."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient('{"values":["Landmark","History","landmark"]}')
+    service._client = fake_client
+
+    result = service.choose_multi_select_from_context(
+        field_name="Tags",
+        options=["Landmark", "History"],
+        candidate_context={"primaryType": "point_of_interest"},
+        allow_suggest_new=False,
+    )
+
+    assert result == ["Landmark", "History"]
+
+
+def test_choose_multi_select_rejects_prose_like_new_suggestions():
+    """Method ignores sentence-like suggested tags even when suggest-new is enabled."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("Landmark, I don't see strong indicators that match tags")
+    service._client = fake_client
+
+    result = service.choose_multi_select_from_context(
+        field_name="Tags",
+        options=["Landmark", "History"],
+        candidate_context={"primaryType": "landmark"},
+        allow_suggest_new=True,
+    )
+
+    assert result == ["Landmark"]
+
+
 # --- choose_option_with_suggest_from_context ---
 
 
@@ -329,7 +361,7 @@ def test_choose_option_with_suggest_returns_matched_option():
 def test_choose_option_with_suggest_returns_new_value_when_allow_suggest_new():
     """Method returns (suggested_value, True) when no match and allow_suggest_new=True."""
     service = ClaudeService(api_key="test-key")
-    fake_client = _FakeClient("Uptown")
+    fake_client = _FakeClient('{"value":"Uptown","confidence":0.92,"source":"address neighborhood"}')
     service._client = fake_client
 
     from app.services.claude_service import OptionSelectionResult
@@ -348,6 +380,23 @@ def test_choose_option_with_suggest_returns_new_value_when_allow_suggest_new():
     assert result.value == "Uptown"
     assert result.is_new is True
     assert len(fake_client.messages.calls) == 1
+
+
+def test_choose_option_with_suggest_rejects_low_confidence_new_value():
+    """Method rejects suggested new value when confidence is low."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient('{"value":"Uptown","confidence":0.4,"source":"weak hint"}')
+    service._client = fake_client
+
+    result = service.choose_option_with_suggest_from_context(
+        field_name="Neighborhood",
+        options=["South Minneapolis", "North Loop"],
+        candidate_context={"neighborhood": "Uptown"},
+        allow_suggest_new=True,
+    )
+
+    assert result.value is None
+    assert result.is_new is False
 
 
 def test_choose_option_with_suggest_rejects_new_when_allow_suggest_new_false():

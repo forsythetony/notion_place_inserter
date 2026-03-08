@@ -69,7 +69,7 @@ def test_tags_pipeline_sets_property_when_claude_returns_values():
     ]
     assert fake_claude.calls[0]["field_name"] == "Tags"
     assert fake_claude.calls[0]["options"] == ["Landmark", "History", "Always Free"]
-    assert fake_claude.calls[0]["allow_suggest_new"] is True
+    assert fake_claude.calls[0]["allow_suggest_new"] is False
 
 
 def test_tags_pipeline_omits_property_when_no_values():
