@@ -15,6 +15,8 @@ help:
 	@echo "  make rerun             - Install dependencies and start the server"
 	@echo "  make run-local         - Start the server with envs/local.env"
 	@echo "  make run-dry-run       - Start the server in dry-run mode (no Notion writes)"
+	@echo "  make run-async         - Start the server with async locations (default)"
+	@echo "  make run-sync          - Start the server with sync locations (LOCATIONS_ASYNC_ENABLED=0)"
 	@echo "  make kill-port         - Kill process on port $(PORT)"
 	@echo "  make test              - Quick smoke test (curl health check)"
 	@echo "  make test-api          - Run pytest (http-test + tests, excludes locations integration)"
@@ -38,6 +40,12 @@ run-local:
 
 run-dry-run:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) DRY_RUN=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+
+run-async:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOCATIONS_ASYNC_ENABLED=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+
+run-sync:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=0; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOCATIONS_ASYNC_ENABLED=0 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 kill-port:
 	@bash -c 'pid=$$(lsof -ti:$(PORT)); if [ -n "$$pid" ]; then kill -9 $$pid && echo "Killed process on port $(PORT)"; else echo "Nothing running on port $(PORT)"; fi'

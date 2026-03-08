@@ -20,7 +20,23 @@ Today `POST /locations` validates `keywords`, then runs the full pipeline inline
 - User experience is blocked on processing completion.
 - Retries and failure handling are tied to request lifecycle.
 
-## Proposed Target Design
+## Current Implementation (Phase 1 — In-Memory)
+
+Phase 1 uses an **in-memory** queue and worker inside the FastAPI process:
+
+- **Queue**: `asyncio.Queue` — jobs are held in process memory.
+- **Worker**: Background `asyncio` task started in FastAPI lifespan; consumes jobs and runs `PlacesService.create_place_from_query`.
+- **Event bus**: In-memory publish/subscribe; success subscriber logs `Pipeline executed successfully!`.
+
+**Constraints (by design for Phase 1):**
+
+- **Single-instance only** — each app instance has its own queue; no cross-instance sharing.
+- **Non-durable** — jobs are lost on restart, deploy, or process crash.
+- **No retries/DLQ** — failed jobs are logged but not retried or moved to a dead-letter queue.
+
+Future phases can introduce Redis/RQ or SQS for durability and multi-instance support.
+
+## Proposed Target Design (Future Phases)
 
 ### High-Level Flow
 
@@ -36,7 +52,10 @@ Worker (separate process)
   -> Consume job
   -> Run existing Places pipeline
   -> Record outcome (success/failure)
-  -> Emit internal processing signal (future: communication service subscriber)
+  -> Emit internal processing signal
+Event subscriber (current behavior)
+  -> Log "Pipeline executed successfully!"
+  -> Future: send user-facing messages/notifications
 ```
 
 ### API Contract
@@ -137,14 +156,18 @@ Required behavior:
 - Reuses current pipeline architecture; no business-logic rewrite required.
 - Logs structured outcome with `job_id`, `run_id`, `attempt`.
 
-### 5) Outcome/Signal Publisher (internal event now, external comms later)
+### 5) Outcome/Signal Publisher + Subscriber (minimal now, extensible later)
 
 After each terminal job state:
 
 - emit `location.processing.succeeded` or
 - emit `location.processing.failed`.
 
-For now, this can remain internal logging + event publish abstraction. In a future phase, a communications service subscribes and notifies users.
+For now, the subscriber behavior should stay intentionally minimal and only log:
+
+`Pipeline executed successfully!`
+
+In a future phase, expand this subscriber to send user-facing messages/notifications.
 
 ## Data and State Model
 

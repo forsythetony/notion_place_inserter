@@ -1,5 +1,6 @@
 """FastAPI application with secret-based authorization."""
 
+import asyncio
 import hmac
 import os
 import sys
@@ -9,6 +10,12 @@ from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException
 from loguru import logger
 
+from app.queue import (
+    create_location_queue,
+    subscribe_to_success,
+    run_worker_loop,
+    EventBus,
+)
 from app.routes import locations, test
 from app.services.claude_service import ClaudeService
 from app.services.freepik_service import FreepikService
@@ -126,8 +133,36 @@ async def lifespan(app: FastAPI):
         dry_run=dry_run,
     )
 
+    async_enabled = os.environ.get("LOCATIONS_ASYNC_ENABLED", "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    app.state.locations_async_enabled = async_enabled
+
+    if async_enabled:
+        job_queue = create_location_queue()
+        event_bus = EventBus()
+        subscribe_to_success(event_bus)
+        app.state.location_job_queue = job_queue
+        app.state.location_event_bus = event_bus
+        worker_task = asyncio.create_task(
+            run_worker_loop(job_queue, app.state.places_service, event_bus)
+        )
+        app.state.location_worker_task = worker_task
+    else:
+        app.state.location_job_queue = None
+        app.state.location_event_bus = None
+        app.state.location_worker_task = None
+
     yield
-    # shutdown (no cleanup needed)
+
+    if async_enabled and app.state.location_worker_task:
+        app.state.location_worker_task.cancel()
+        try:
+            await app.state.location_worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Hello World API", lifespan=lifespan)

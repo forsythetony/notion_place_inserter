@@ -48,10 +48,10 @@ stages:
         detail: "keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries."
 
 ---
-test_name: POST /locations with valid Authorization returns 200 and Notion page
+test_name: POST /locations with valid Authorization returns 200
 
 stages:
-  - name: Request with valid auth header
+  - name: Request with valid auth - accepts sync (Notion page) or async (accepted) response
     request:
       url: "{tavern.env_vars.BASE_URL}/locations"
       method: POST
@@ -62,7 +62,7 @@ stages:
     response:
       status_code: 200
       verify_response_with:
-        function: tests.tavern_verifiers:verify_notion_page
+        function: tests.tavern_verifiers:verify_locations_200
 
 ---
 test_name: POST /test/randomLocation returns 200 and Notion page
