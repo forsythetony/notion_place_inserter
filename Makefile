@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run kill-port test test-api test-icon test-google-places test-random-location test-locations notion-pull
+.PHONY: help install run run-local run-dry-run kill-port test test-api test-icon test-google-places test-random-location test-locations notion-pull tag
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -26,6 +26,7 @@ help:
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
 	@echo "  make notion-pull       - Run Notion puller script"
+	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
 
 install:
 	pip install -r requirements.txt
@@ -77,3 +78,8 @@ test-api-%:
 
 notion-pull:
 	python scripts/notion_puller/main.py
+
+tag:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \
+	if ! echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "Error: VERSION must match semantic versioning (e.g. v1.0.0)"; exit 1; fi; \
+	git tag -a "$(VERSION)" -m "Release $(VERSION)" && git push origin "$(VERSION)"
