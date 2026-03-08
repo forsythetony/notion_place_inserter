@@ -31,6 +31,23 @@ stages:
         detail: "Unauthorized"
 
 ---
+test_name: POST /locations with empty keywords returns 400
+
+stages:
+  - name: Request with empty keywords
+    request:
+      url: "{tavern.env_vars.BASE_URL}/locations"
+      method: POST
+      headers:
+        Authorization: "{tavern.env_vars.SECRET}"
+      json:
+        keywords: ""
+    response:
+      status_code: 400
+      json:
+        detail: "keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries."
+
+---
 test_name: POST /locations with valid Authorization returns 200 and Notion page
 
 stages:
@@ -44,5 +61,20 @@ stages:
         keywords: "park"
     response:
       status_code: 200
-      json:
-        object: "page"
+      verify_response_with:
+        function: tests.tavern_verifiers:verify_notion_page
+
+---
+test_name: POST /test/randomLocation returns 200 and Notion page
+
+stages:
+  - name: Request random location with valid auth
+    request:
+      url: "{tavern.env_vars.BASE_URL}/test/randomLocation"
+      method: POST
+      headers:
+        Authorization: "{tavern.env_vars.SECRET}"
+    response:
+      status_code: 200
+      verify_response_with:
+        function: tests.tavern_verifiers:verify_notion_page

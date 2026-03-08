@@ -35,6 +35,9 @@ wheels/
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Application logs (auto-rotated)
+logs/
+
 # Unit test / coverage
 .htmlcov
 .tox/

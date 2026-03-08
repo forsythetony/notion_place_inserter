@@ -1,7 +1,6 @@
 """Locations API routes."""
 
-from fastapi import APIRouter, Depends, Request
-from loguru import logger
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.dependencies import require_auth
@@ -18,13 +17,14 @@ class LocationRequest(BaseModel):
 @router.post("/locations")
 def create_location(request: Request, body: LocationRequest, _: None = Depends(require_auth)):
     """
-    Create a random place entry in the Places to Visit database.
-    Keywords are accepted but not yet used.
+    Create a place entry in the Places to Visit database.
+    Runs pipeline (query rewrite + Google Places + property resolution).
+    Keywords must be non-empty. For random test entries, use POST /test/randomLocation.
     """
-    location_service: "LocationService" = request.app.state.location_service
-
-    entry = location_service.generate_random_entry("Places to Visit")
-    logger.info("Generated random entry: {}", entry)
-
-    created = location_service.create_location(entry)
-    return created
+    if not body.keywords.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries.",
+        )
+    places_service: "PlacesService" = request.app.state.places_service
+    return places_service.create_place_from_query(body.keywords)

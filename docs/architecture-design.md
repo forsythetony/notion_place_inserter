@@ -388,7 +388,7 @@ app/
 │   ├── claude_service.py
 │   ├── google_places_service.py
 │   ├── scraper_service.py              # (future) Website scraping
-│   └── location_service.py            # (legacy, eventually replaced)
+│   └── places_service.py              # PlacesService (place creation pipeline wrapper)
 ├── pipeline_lib/
 │   ├── core.py                         # GlobalPipeline, Stage, Pipeline, PipelineStep
 │   ├── context.py                      # PipelineRunContext / shared state helpers
