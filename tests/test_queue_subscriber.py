@@ -52,3 +52,16 @@ def test_enqueue_returns_job_id_and_run_id():
     assert job.job_id == job_id
     assert job.run_id == run_id
     assert job.keywords == "stone arch bridge"
+    assert job.recipient_whatsapp is None
+
+
+def test_enqueue_passes_recipient_through():
+    """enqueue_location_job carries recipient_whatsapp when provided."""
+    queue = create_location_queue()
+    job_id, _ = enqueue_location_job(
+        queue,
+        "test place",
+        recipient_whatsapp="whatsapp:+15551234567",
+    )
+    job = queue.get_nowait()
+    assert job.recipient_whatsapp == "whatsapp:+15551234567"

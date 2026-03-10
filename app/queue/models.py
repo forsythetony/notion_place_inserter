@@ -13,6 +13,7 @@ class LocationJob:
     keywords: str
     created_at: datetime
     attempt: int = 0
+    recipient_whatsapp: str | None = None
 
 
 @dataclass
@@ -23,6 +24,7 @@ class PipelineSuccessEvent:
     run_id: str
     keywords: str
     result: dict
+    recipient_whatsapp: str | None = None
 
 
 @dataclass
@@ -33,3 +35,4 @@ class PipelineFailureEvent:
     run_id: str
     keywords: str
     error: str | Exception
+    recipient_whatsapp: str | None = None

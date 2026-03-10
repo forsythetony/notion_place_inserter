@@ -99,6 +99,9 @@ def test_neighborhood_pipeline_omits_property_when_no_value():
 
     props = ctx.get_properties()
     assert "Neighborhood" not in props
+    omissions = ctx.get_property_omissions()
+    assert omissions["Neighborhood"]["pipeline_id"] == "neighborhood_Neighborhood"
+    assert omissions["Neighborhood"]["reason"] == "no_value"
 
 
 def test_neighborhood_pipeline_creates_new_and_logs_when_suggested():
@@ -182,6 +185,81 @@ def test_neighborhood_pipeline_omits_property_when_no_claude():
 
     props = ctx.get_properties()
     assert "Neighborhood" not in props
+
+
+def test_neighborhood_pipeline_creates_new_from_sublocality_level_1_without_claude():
+    """Pipeline creates new neighborhood from sublocality_level_1 via deterministic path, no Claude call."""
+    schema = _schema_with_options()
+    pipeline = NeighborhoodPipeline("Neighborhood", schema)
+    fake_claude = _FakeClaude("Uptown", is_new=True)  # would return this if called
+    ctx = PipelineRunContext(
+        run_id="r1",
+        initial={
+            "_claude_service": fake_claude,
+            CtxKeys.GOOGLE_PLACE: {
+                "displayName": "Blanco Colima",
+                "formattedAddress": "Av. Álvaro Obregón, Roma Norte, CDMX",
+                "neighborhood": "Roma Norte",
+                "neighborhood_signal_type": "sublocality_level_1",
+                "addressComponents": [
+                    {
+                        "longText": "Roma Norte",
+                        "shortText": "Roma Nte.",
+                        "types": ["sublocality_level_1", "sublocality", "political"],
+                    },
+                    {"longText": "Ciudad de México", "shortText": "CDMX", "types": ["locality"]},
+                ],
+                "primaryType": "restaurant",
+                "types": ["restaurant"],
+            },
+        },
+    )
+    ctx.set("_global_pipeline_id", "gp")
+    ctx.set("_current_stage_id", "s1")
+    ctx.set("_current_pipeline_id", "p1")
+
+    _run_pipeline(pipeline, ctx, "r1", "s1")
+
+    props = ctx.get_properties()
+    assert props["Neighborhood"] == {"select": {"name": "Roma Norte"}}
+    assert len(fake_claude.calls) == 0
+
+
+def test_neighborhood_pipeline_creates_new_from_neighborhood_signal_without_claude():
+    """Pipeline creates new neighborhood from neighborhood signal type via deterministic path."""
+    schema = PropertySchema(
+        name="Neighborhood",
+        type="select",
+        options=[SelectOption(id="1", name="Downtown", color="blue")],
+    )
+    pipeline = NeighborhoodPipeline("Neighborhood", schema)
+    fake_claude = _FakeClaude(None)
+    ctx = PipelineRunContext(
+        run_id="r1",
+        initial={
+            "_claude_service": fake_claude,
+            CtxKeys.GOOGLE_PLACE: {
+                "displayName": "Local Cafe",
+                "formattedAddress": "123 Main St, Barrio Nuevo",
+                "neighborhood": "Barrio Nuevo",
+                "neighborhood_signal_type": "neighborhood",
+                "addressComponents": [
+                    {"longText": "Barrio Nuevo", "shortText": "Barrio N.", "types": ["neighborhood"]},
+                ],
+                "primaryType": "cafe",
+                "types": ["cafe"],
+            },
+        },
+    )
+    ctx.set("_global_pipeline_id", "gp")
+    ctx.set("_current_stage_id", "s1")
+    ctx.set("_current_pipeline_id", "p1")
+
+    _run_pipeline(pipeline, ctx, "r1", "s1")
+
+    props = ctx.get_properties()
+    assert props["Neighborhood"] == {"select": {"name": "Barrio Nuevo"}}
+    assert len(fake_claude.calls) == 0
 
 
 def test_neighborhood_pipeline_rejects_directional_conflict():

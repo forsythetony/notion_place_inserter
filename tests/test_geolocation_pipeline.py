@@ -76,6 +76,88 @@ def test_google_places_service_normalize_neighborhood_none_when_no_components():
     assert normalized.get("neighborhood") is None
 
 
+def test_google_places_service_normalize_includes_neighborhood_debug_signals():
+    """_normalize_place includes google_neighborhood_signals for debug logging."""
+    svc = GooglePlacesService(api_key="test-key")
+    place_raw = {
+        "id": "ChIJ123",
+        "displayName": {"text": "Loring Park"},
+        "addressComponents": [
+            {"longText": "Loring Park", "shortText": "Loring Park", "types": ["neighborhood"]},
+            {"longText": "Minneapolis", "shortText": "Minneapolis", "types": ["locality"]},
+        ],
+    }
+    normalized = svc._normalize_place(place_raw)
+    signals = normalized.get("google_neighborhood_signals", [])
+    assert len(signals) >= 1
+    assert any(s.get("text") == "Loring Park" and "neighborhood" in (s.get("types") or []) for s in signals)
+
+
+def test_google_places_service_normalize_extracts_sublocality_level_1_as_neighborhood():
+    """_normalize_place extracts neighborhood from sublocality_level_1 when present."""
+    svc = GooglePlacesService(api_key="test-key")
+    place_raw = {
+        "id": "ChIJ123",
+        "displayName": {"text": "Blanco Colima"},
+        "formattedAddress": "Av. Álvaro Obregón, Roma Norte, CDMX",
+        "addressComponents": [
+            {
+                "longText": "Roma Norte",
+                "shortText": "Roma Nte.",
+                "types": ["sublocality_level_1", "sublocality", "political"],
+                "languageCode": "es",
+            },
+            {"longText": "Ciudad de México", "shortText": "CDMX", "types": ["locality"]},
+        ],
+    }
+    normalized = svc._normalize_place(place_raw)
+    assert normalized.get("neighborhood") == "Roma Norte"
+    assert normalized.get("neighborhood_signal_type") == "sublocality_level_1"
+
+
+def test_google_places_service_normalize_prefers_sublocality_level_1_over_locality():
+    """_normalize_place prefers sublocality_level_1 over locality when both present."""
+    svc = GooglePlacesService(api_key="test-key")
+    place_raw = {
+        "id": "ChIJ123",
+        "displayName": {"text": "Test Place"},
+        "addressComponents": [
+            {"longText": "Ciudad de México", "shortText": "CDMX", "types": ["locality"]},
+            {
+                "longText": "Roma Norte",
+                "shortText": "Roma Nte.",
+                "types": ["sublocality_level_1", "sublocality", "political"],
+            },
+        ],
+    }
+    normalized = svc._normalize_place(place_raw)
+    assert normalized.get("neighborhood") == "Roma Norte"
+    assert normalized.get("neighborhood_signal_type") == "sublocality_level_1"
+
+
+def test_google_places_service_normalize_includes_sublocality_level_1_in_debug_signals():
+    """_normalize_place includes sublocality_level_1 in google_neighborhood_signals."""
+    svc = GooglePlacesService(api_key="test-key")
+    place_raw = {
+        "id": "ChIJ123",
+        "displayName": {"text": "Blanco Colima"},
+        "addressComponents": [
+            {
+                "longText": "Roma Norte",
+                "shortText": "Roma Nte.",
+                "types": ["sublocality_level_1", "sublocality", "political"],
+            },
+            {"longText": "Ciudad de México", "shortText": "CDMX", "types": ["locality"]},
+        ],
+    }
+    normalized = svc._normalize_place(place_raw)
+    signals = normalized.get("google_neighborhood_signals", [])
+    assert any(
+        s.get("text") == "Roma Norte" and "sublocality_level_1" in (s.get("types") or [])
+        for s in signals
+    )
+
+
 def test_extract_latitude_returns_value_when_present():
     """ExtractLatitude returns latitude when available."""
     step = ExtractLatitude()

@@ -1,0 +1,23 @@
+INFO:     127.0.0.1:59048 - "POST /locations HTTP/1.1" 200 OK
+                                                       Dry Run: Places to Visit                                                        
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Property    ┃ Type         ┃ Value                                                                     ┃ Resolved By                ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Source      │ select       │ Notion Place Inserter                                                     │ constant_value_Source      │
+│ Coordinates │ rich_text    │ 19.419712399999998, -99.15989359999999                                    │ coordinates_Coordinates    │
+│ Latitude    │ rich_text    │ 19.419712399999998                                                        │ latitude_Latitude          │
+│ Longitude   │ rich_text    │ -99.15989359999999                                                        │ longitude_Longitude        │
+│ Google Maps │ url          │ https://maps.google.com/?cid=13188413951774177041&g_mp=Cidnb29nbGUubWFwc… │ google_maps_Google Maps    │
+│ Address     │ rich_text    │ Colima 168, Roma Nte., Cuauhtémoc, 06700 Ciudad de México, CDMX, Mexico   │ address_Address            │
+│ Name        │ title        │ Blanco Colima                                                             │ title_Name                 │
+│ URL         │ url          │ https://www.blancocolimamx.com/es                                         │ website_URL                │
+│ Tags        │ multi_select │ Restaurant, Food                                                          │ tags_Tags                  │
+│ Notes       │ rich_text    │ Blanco Colima is an upscale restaurant located at Colima 168 in Roma      │ description_Notes          │
+│             │              │ Norte, Cuau...                                                            │                            │
+│ Main Type   │ select       │ Restaurant/Bar                                                            │ primary_type_Main Type     │
+│ Location    │ relation     │ https://www.notion.so/30e86b6ec5318030b42fd433a34aa0bb                    │ location_relation_Location │
+│ Icon        │ external     │ https://cdn-icons-png.freepik.com/128/430/430396.png                      │ resolve_icon_emoji         │
+│ Cover       │ external     │ https://lh3.googleusercontent.com/places/ANXAkqHDDP3t0KhFKpOcik3B_v32dyn… │ resolve_cover_image        │
+│ Yelp        │ —            │ (skipped)                                                                 │ noop_Yelp                  │
+└─────────────┴──────────────┴───────────────────────────────────────────────────────────────────────────┴────────────────────────────┘
+                                                Keywords: Blanco colima in mexico city                                                 

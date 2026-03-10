@@ -77,6 +77,7 @@ def test_configure_logger_uses_defaults_when_env_unset(monkeypatch):
     monkeypatch.delenv("LOG_FILE_PATH", raising=False)
     monkeypatch.delenv("LOG_FILE_ROTATION", raising=False)
     monkeypatch.delenv("LOG_FILE_RETENTION", raising=False)
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
 
     add_calls = []
 
@@ -90,10 +91,34 @@ def test_configure_logger_uses_defaults_when_env_unset(monkeypatch):
         logger.remove()
         _configure_logger()
 
+    stderr_call = add_calls[0]
     file_call = add_calls[1]
+    assert stderr_call["kwargs"]["level"] == "INFO"
+    assert file_call["kwargs"]["level"] == "INFO"
     assert file_call["args"][0] == "logs/app.log"
     assert file_call["kwargs"]["rotation"] == "10 MB"
     assert file_call["kwargs"]["retention"] == 3
+
+
+def test_configure_logger_honors_log_level(monkeypatch):
+    """_configure_logger passes LOG_LEVEL to both stderr and file sinks."""
+    monkeypatch.delenv("LOG_FILE_PATH", raising=False)
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+
+    add_calls = []
+
+    def capture_add(*args, **kwargs):
+        add_calls.append({"args": args, "kwargs": kwargs})
+        return 999
+
+    from loguru import logger
+
+    with patch.object(logger, "add", side_effect=capture_add):
+        logger.remove()
+        _configure_logger()
+
+    assert add_calls[0]["kwargs"]["level"] == "DEBUG"
+    assert add_calls[1]["kwargs"]["level"] == "DEBUG"
 
 
 def test_configure_logger_creates_parent_directory(tmp_path, monkeypatch):
@@ -108,3 +133,24 @@ def test_configure_logger_creates_parent_directory(tmp_path, monkeypatch):
 
     assert nested.parent.exists()
     assert nested.parent.is_dir()
+
+
+def test_configure_logger_handles_braces_in_message_and_context(tmp_path, monkeypatch):
+    """Logger format escapes braces in message/extra content without crashing."""
+    log_file = tmp_path / "app.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+
+    from loguru import logger
+
+    logger.remove()
+    _configure_logger()
+
+    logger.bind(candidate_context={"primaryType": "restaurant"}).info(
+        "brace_payload | raw={}",
+        '{"a": 1, "b": {"c": 2}}',
+    )
+
+    text = log_file.read_text()
+    assert "brace_payload" in text
+    assert "candidate_context={'primaryType': 'restaurant'}" in text

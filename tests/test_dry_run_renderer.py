@@ -135,6 +135,35 @@ def test_render_dry_run_table_shows_skipped_properties():
     assert "noop_Yelp" in output
 
 
+def test_render_dry_run_table_shows_omitted_properties():
+    """render_dry_run_table includes rows for resolved-but-omitted properties."""
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    properties = {
+        "Title": {"title": [{"type": "text", "text": {"content": "Test Place", "link": None}}]},
+    }
+    property_omissions = {
+        "Neighborhood": {
+            "pipeline_id": "neighborhood_Neighborhood",
+            "reason": "no_value",
+        }
+    }
+
+    render_dry_run_table(
+        PLACES_DB_NAME,
+        properties,
+        keywords=None,
+        property_omissions=property_omissions,
+        console=console,
+    )
+
+    output = buf.getvalue()
+    assert "Neighborhood" in output
+    assert "(no value)" in output
+    assert "neighborhood_Neighborhood" in output
+
+
 def test_places_service_dry_run_preserves_json_response_structure():
     """PlacesService dry-run returns the same JSON shape as before (mode, database, properties, summary)."""
     from unittest.mock import MagicMock, patch
@@ -155,6 +184,7 @@ def test_places_service_dry_run_preserves_json_response_structure():
         keywords="test keywords",
         property_sources=None,
         property_skips=None,
+        property_omissions=None,
         icon=None,
         cover=None,
     )

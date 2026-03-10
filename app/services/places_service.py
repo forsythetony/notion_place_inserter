@@ -111,6 +111,7 @@ class PlacesService:
             properties = context.get_properties()
             property_sources = context.get_property_sources()
             property_skips = context.get_property_skips()
+            property_omissions = context.get_property_omissions()
             icon = context.get(ContextKeys.ICON)
             cover = context.get(ContextKeys.COVER_IMAGE)
             result.property_count = len(properties)
@@ -119,6 +120,7 @@ class PlacesService:
                 keywords=keywords,
                 property_sources=property_sources,
                 property_skips=property_skips,
+                property_omissions=property_omissions,
                 icon=icon,
                 cover=cover,
             )
@@ -166,6 +168,7 @@ class PlacesService:
         keywords: str | None = None,
         property_sources: dict[str, str] | None = None,
         property_skips: dict[str, str] | None = None,
+        property_omissions: dict[str, dict[str, str]] | None = None,
         *,
         icon: dict | None = None,
         cover: dict | None = None,
@@ -178,6 +181,7 @@ class PlacesService:
                 keywords=keywords,
                 property_sources=property_sources,
                 property_skips=property_skips,
+                property_omissions=property_omissions,
                 icon=icon,
                 cover=cover,
             )

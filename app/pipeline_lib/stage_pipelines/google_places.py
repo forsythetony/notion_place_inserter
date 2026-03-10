@@ -1,10 +1,11 @@
 """Place-intake stage pipelines: query rewrite and Google Places fetch."""
 
+import json
 import os
 
 from app.pipeline_lib.context import ContextKeys, PipelineRunContext
 from app.pipeline_lib.core import Pipeline, PipelineStep
-from app.pipeline_lib.logging import log_step
+from app.pipeline_lib.logging import bind_orchestration, log_step
 
 
 class RewriteQueryWithClaudeStep(PipelineStep):
@@ -68,14 +69,38 @@ class GooglePlacesToCacheStep(PipelineStep):
             google = context.get("_google_places_service")
             if not google:
                 return None
-            results = google.search_places(query)
+            result = google.search_places(query, return_raw_response=True)
+            results, raw_search_response = result
             place = results[0] if results else None
+            bound = bind_orchestration(
+                run_id=run_id,
+                global_pipeline=gp_id,
+                stage=stage_id,
+                pipeline=pipeline_id,
+                step=self.step_id,
+                step_name=self.name,
+            )
+            bound.debug(
+                "google_places_search_raw_response | raw_response={}",
+                json.dumps(raw_search_response, default=str),
+            )
             if place and self._fetch_details_if_needed:
-                place = self._enrich_with_details_if_needed(google, place)
+                place = self._enrich_with_details_if_needed(
+                    google, place, bound, run_id, gp_id, stage_id, pipeline_id
+                )
             context.set(ContextKeys.GOOGLE_PLACE, place)
             return place
 
-    def _enrich_with_details_if_needed(self, google, place: dict) -> dict:
+    def _enrich_with_details_if_needed(
+        self,
+        google,
+        place: dict,
+        bound_logger=None,
+        run_id: str = "",
+        gp_id: str = "",
+        stage_id: str = "",
+        pipeline_id: str = "",
+    ) -> dict:
         """Fetch place details when search result lacks narrative summary fields."""
         has_summary = bool(
             place.get("generativeSummary") or place.get("editorialSummary")
@@ -86,7 +111,13 @@ class GooglePlacesToCacheStep(PipelineStep):
         if not place_id:
             return place
         try:
-            details = google.get_place_details(place_id)
+            result = google.get_place_details(place_id, return_raw_response=True)
+            details, raw_details_response = result
+            if bound_logger and raw_details_response is not None:
+                bound_logger.debug(
+                    "google_places_details_raw_response | raw_response={}",
+                    json.dumps(raw_details_response, default=str),
+                )
             if details:
                 merged = dict(place)
                 if details.get("generativeSummary"):
@@ -97,6 +128,10 @@ class GooglePlacesToCacheStep(PipelineStep):
                     merged["addressComponents"] = details["addressComponents"]
                 if details.get("neighborhood") is not None:
                     merged["neighborhood"] = details["neighborhood"]
+                if details.get("neighborhood_signal_type") is not None:
+                    merged["neighborhood_signal_type"] = details["neighborhood_signal_type"]
+                if details.get("google_neighborhood_signals") is not None:
+                    merged["google_neighborhood_signals"] = details["google_neighborhood_signals"]
                 if details.get("photos") and not merged.get("photos"):
                     merged["photos"] = details["photos"]
                 return merged

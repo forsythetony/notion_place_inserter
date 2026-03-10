@@ -18,11 +18,13 @@ from app.queue import (
 )
 from app.routes import locations, test
 from app.services.claude_service import ClaudeService
+from app.services.communicator import Communicator
 from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
 from app.services.location_service import LocationService
 from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
+from app.services.whatsapp_service import WhatsAppService
 
 # Context keys to render when present (pipeline orchestration metadata)
 _CONTEXT_KEYS = (
@@ -53,7 +55,22 @@ _CONTEXT_KEYS = (
     "parsed_confidence",
     "parsed_source",
     "direct_selected_value",
+    "deterministic_signal_type",
+    "deterministic_selected_value",
+    "google_neighborhood_signals",
+    "place_id",
+    "address_component_count",
+    "neighborhood_options",
+    "address_components_neighborhood_subset",
+    "claude_prompt_preview",
+    "suggested_value",
+    "selected_option",
 )
+
+
+def _escape_braces(value: object) -> str:
+    """Escape braces so dynamic loguru format strings stay valid."""
+    return str(value).replace("{", "{{").replace("}", "}}")
 
 
 def _log_format(record: dict) -> str:
@@ -65,11 +82,11 @@ def _log_format(record: dict) -> str:
         "|",
         f"{record['name']}:{record['function']}:{record['line']}",
         "-",
-        record["message"],
+        _escape_braces(record["message"]),
     ]
     extra = record.get("extra", {})
     ctx_parts = [
-        f"{k}={extra[k]}"
+        f"{k}={_escape_braces(extra[k])}"
         for k in _CONTEXT_KEYS
         if k in extra and extra[k] is not None and extra[k] != ""
     ]
@@ -86,8 +103,9 @@ def _configure_logger() -> None:
     are deleted (retention) rather than compressed, for resource-constrained
     environments.
     """
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
     logger.remove()
-    logger.add(sys.stderr, format=_log_format)
+    logger.add(sys.stderr, format=_log_format, level=log_level)
 
     log_path = os.environ.get("LOG_FILE_PATH", "logs/app.log")
     log_rotation = os.environ.get("LOG_FILE_ROTATION", "10 MB")
@@ -100,7 +118,9 @@ def _configure_logger() -> None:
         format=_log_format,
         rotation=log_rotation,
         retention=int(log_retention),
+        level=log_level,
     )
+    logger.info("logger_configured | level={} file={}", log_level, log_path)
 
 
 @asynccontextmanager
@@ -154,6 +174,36 @@ async def lifespan(app: FastAPI):
         job_queue = create_location_queue()
         event_bus = EventBus()
         subscribe_to_success(event_bus)
+
+        twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+        twilio_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+        twilio_from = os.environ.get("TWILIO_WHATSAPP_NUMBER", "").strip()
+        if twilio_sid and twilio_token and twilio_from:
+            whatsapp_svc = WhatsAppService(
+                account_sid=twilio_sid,
+                auth_token=twilio_token,
+                from_number=twilio_from,
+            )
+            status_enabled = os.environ.get("WHATSAPP_STATUS_ENABLED", "1").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            default_recipient = os.environ.get("WHATSAPP_STATUS_RECIPIENT_DEFAULT", "").strip() or None
+            max_error_chars = int(os.environ.get("WHATSAPP_STATUS_MAX_ERROR_CHARS", "300"))
+            communicator = Communicator(
+                whatsapp_service=whatsapp_svc,
+                enabled=status_enabled,
+                default_recipient=default_recipient,
+                max_error_chars=max_error_chars,
+            )
+            event_bus.subscribe_success(communicator.notify_pipeline_success)
+            event_bus.subscribe_failure(communicator.notify_pipeline_failure)
+        else:
+            logger.info(
+                "whatsapp_status_skipped | twilio credentials not configured; run-status notifications disabled"
+            )
+
         app.state.location_job_queue = job_queue
         app.state.location_event_bus = event_bus
         worker_task = asyncio.create_task(

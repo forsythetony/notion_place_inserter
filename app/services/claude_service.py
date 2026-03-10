@@ -202,6 +202,12 @@ Rules:
 - "source" should briefly describe what evidence was used.
 {suggest_rule}
 - Return JSON only, no markdown or extra text."""
+        prompt_preview = self._truncate_text(prompt, max_chars=1200)
+        logger.bind(
+            property_name=field_name,
+            options=options,
+            claude_prompt_preview=prompt_preview,
+        ).info("claude_option_suggest_prompt_preview")
         response = self._client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=128,

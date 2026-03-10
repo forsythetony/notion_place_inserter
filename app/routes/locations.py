@@ -49,7 +49,7 @@ def create_location(request: Request, body: LocationRequest, _: None = Depends(r
             detail="Unable to enqueue request",
         )
     try:
-        job_id, _run_id = enqueue_location_job(job_queue, body.keywords)
+        job_id, _run_id = enqueue_location_job(job_queue, body.keywords, recipient_whatsapp=None)
     except Exception:
         raise HTTPException(
             status_code=503,

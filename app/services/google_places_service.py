@@ -14,28 +14,87 @@ def _extract_localized_text(obj: dict | None) -> str:
     return ""
 
 
-def _extract_neighborhood_from_components(components: list[dict] | None) -> str | None:
+def _extract_neighborhood_from_components(
+    components: list[dict] | None,
+) -> tuple[str | None, str | None]:
     """
-    Extract neighborhood from addressComponents. Prefers neighborhood/sublocality,
-    falls back to locality for urban context. Returns None if no suitable component.
+    Extract neighborhood from addressComponents. Uses explicit precedence:
+    1. neighborhood
+    2. sublocality_level_1
+    3. sublocality / other sublocality_level_*
+    4. administrative_area_level_3
+    5. locality
+    Prefers longText over shortText. Returns (text, signal_type) or (None, None).
+    signal_type is one of: "neighborhood", "sublocality_level_1", "sublocality",
+    "administrative_area_level_3", "locality".
     """
     if not components:
-        return None
+        return (None, None)
+
+    def _text(comp: dict) -> str:
+        return (comp.get("longText") or comp.get("shortText") or "").strip()
+
+    # 1. neighborhood
     for comp in components:
         comp_types = comp.get("types") or []
         if not isinstance(comp_types, list):
             continue
-        text = (comp.get("longText") or comp.get("shortText") or "").strip()
+        text = _text(comp)
+        if text and "neighborhood" in comp_types:
+            return (text, "neighborhood")
+
+    # 2. sublocality_level_1
+    for comp in components:
+        comp_types = comp.get("types") or []
+        if not isinstance(comp_types, list):
+            continue
+        text = _text(comp)
+        if text and "sublocality_level_1" in comp_types:
+            return (text, "sublocality_level_1")
+
+    # 3. sublocality / other sublocality_level_*
+    for comp in components:
+        comp_types = comp.get("types") or []
+        if not isinstance(comp_types, list):
+            continue
+        text = _text(comp)
         if not text:
             continue
-        if (
-            "neighborhood" in comp_types
-            or "sublocality" in comp_types
-            or any(t.startswith("sublocality_level_") for t in comp_types)
+        if "sublocality" in comp_types or any(
+            t.startswith("sublocality_level_") for t in comp_types
         ):
-            return text
+            return (text, "sublocality")
 
-    # Some places expose district-like areas through administrative levels.
+    # 4. administrative_area_level_3
+    for comp in components:
+        comp_types = comp.get("types") or []
+        if not isinstance(comp_types, list):
+            continue
+        text = _text(comp)
+        if text and "administrative_area_level_3" in comp_types:
+            return (text, "administrative_area_level_3")
+
+    # 5. locality
+    for comp in components:
+        comp_types = comp.get("types") or []
+        if not isinstance(comp_types, list):
+            continue
+        text = _text(comp)
+        if text and "locality" in comp_types:
+            return (text, "locality")
+    return (None, None)
+
+
+def _extract_neighborhood_debug_signals(components: list[dict] | None) -> list[dict]:
+    """
+    Extract neighborhood-related address component diagnostics for debug logging.
+    Returns a list of dicts with text, types, and source for each component that
+    may inform neighborhood resolution (neighborhood, sublocality, sublocality_level_*,
+    administrative_area_level_3, locality).
+    """
+    if not components:
+        return []
+    signals: list[dict] = []
     for comp in components:
         comp_types = comp.get("types") or []
         if not isinstance(comp_types, list):
@@ -43,19 +102,23 @@ def _extract_neighborhood_from_components(components: list[dict] | None) -> str 
         text = (comp.get("longText") or comp.get("shortText") or "").strip()
         if not text:
             continue
-        if "administrative_area_level_3" in comp_types:
-            return text
-
-    for comp in components:
-        comp_types = comp.get("types") or []
-        if not isinstance(comp_types, list):
-            continue
-        text = (comp.get("longText") or comp.get("shortText") or "").strip()
-        if not text:
-            continue
-        if "locality" in comp_types:
-            return text
-    return None
+        neighborhood_types = [
+            "neighborhood",
+            "sublocality",
+            "administrative_area_level_3",
+            "locality",
+        ]
+        sublocality_levels = [t for t in comp_types if t.startswith("sublocality_level_")]
+        if (
+            any(t in comp_types for t in neighborhood_types)
+            or sublocality_levels
+        ):
+            signals.append({
+                "text": text,
+                "types": comp_types,
+                "source": "addressComponents",
+            })
+    return signals
 
 
 class GooglePlacesService:
@@ -79,11 +142,14 @@ class GooglePlacesService:
         self._api_key = api_key
         self._client = httpx.Client(timeout=10.0)
 
-    def search_places(self, query: str) -> list[dict]:
+    def search_places(
+        self, query: str, *, return_raw_response: bool = False
+    ) -> list[dict] | tuple[list[dict], dict]:
         """
         Search for places using the given text query.
         Returns a list of place dicts with displayName, formattedAddress, id, rating,
         websiteUri, googleMapsUri, generativeSummary (when available), etc.
+        When return_raw_response=True, returns (normalized_list, raw_api_response).
         """
         headers = {
             "Content-Type": "application/json",
@@ -95,12 +161,22 @@ class GooglePlacesService:
         response.raise_for_status()
         data = response.json()
         places_raw = data.get("places", [])
-        return [self._normalize_place(p) for p in places_raw]
+        normalized = [self._normalize_place(p) for p in places_raw]
+        if return_raw_response:
+            return (normalized, data)
+        return normalized
 
-    def get_place_details(self, place_id: str, field_mask: str | None = None) -> dict | None:
+    def get_place_details(
+        self,
+        place_id: str,
+        field_mask: str | None = None,
+        *,
+        return_raw_response: bool = False,
+    ) -> dict | None | tuple[dict | None, dict | None]:
         """
         Fetch place details by ID. Used to enrich search results with editorialSummary,
         generativeSummary, and other narrative fields not always present in search.
+        When return_raw_response=True, returns (normalized_place, raw_api_response).
         """
         if not place_id:
             return None
@@ -114,7 +190,10 @@ class GooglePlacesService:
         response = self._client.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
-        return self._normalize_place(data)
+        normalized = self._normalize_place(data)
+        if return_raw_response:
+            return (normalized, data)
+        return normalized
 
     def _normalize_place(self, place: dict) -> dict:
         """Extract and flatten place fields for a clean response."""
@@ -132,7 +211,10 @@ class GooglePlacesService:
 
         editorial_summary = _extract_localized_text(place.get("editorialSummary"))
         address_components = place.get("addressComponents") or []
-        neighborhood = _extract_neighborhood_from_components(address_components)
+        neighborhood, neighborhood_signal_type = _extract_neighborhood_from_components(
+            address_components
+        )
+        google_neighborhood_signals = _extract_neighborhood_debug_signals(address_components)
 
         photos_raw = place.get("photos") or []
         photos = [
@@ -147,6 +229,8 @@ class GooglePlacesService:
             "formattedAddress": place.get("formattedAddress", ""),
             "addressComponents": address_components,
             "neighborhood": neighborhood,
+            "neighborhood_signal_type": neighborhood_signal_type,
+            "google_neighborhood_signals": google_neighborhood_signals,
             "rating": place.get("rating"),
             "websiteUri": place.get("websiteUri", ""),
             "googleMapsUri": place.get("googleMapsUri", ""),

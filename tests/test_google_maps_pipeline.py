@@ -1,11 +1,14 @@
 """Unit tests for Google Maps URL pipeline and related components."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.custom_pipelines.google_maps_url import GoogleMapsUrlPipeline
 from app.models.schema import PropertySchema
 from app.pipeline_lib.context import ContextKeys as CtxKeys, PipelineRunContext
 from app.pipeline_lib.orchestration import _run_pipeline
+from app.pipeline_lib.stage_pipelines.google_places import GooglePlacesToCacheStep
 from app.pipeline_lib.steps.google_places import ExtractGoogleMapsUri
 from app.services.google_places_service import GooglePlacesService
 
@@ -76,10 +79,107 @@ def test_google_places_service_normalize_includes_photos():
     assert normalized["photos"][0]["heightPx"] == 3000
 
 
+def test_google_places_service_search_places_returns_list_by_default():
+    """search_places returns list of normalized places when return_raw_response=False."""
+    svc = GooglePlacesService(api_key="test-key")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "places": [
+            {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}, "formattedAddress": "1 Main St"},
+        ],
+    }
+    mock_response.raise_for_status = MagicMock()
+    svc._client.post = MagicMock(return_value=mock_response)
+
+    result = svc.search_places("stone arch bridge")
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["displayName"] == "Stone Arch Bridge"
+    assert result[0]["id"] == "ChIJ123"
+
+
+def test_google_places_service_search_places_returns_tuple_when_raw_requested():
+    """search_places returns (normalized_list, raw_response) when return_raw_response=True."""
+    svc = GooglePlacesService(api_key="test-key")
+    raw_api_response = {
+        "places": [
+            {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}, "formattedAddress": "1 Main St"},
+        ],
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = raw_api_response
+    mock_response.raise_for_status = MagicMock()
+    svc._client.post = MagicMock(return_value=mock_response)
+
+    result = svc.search_places("stone arch bridge", return_raw_response=True)
+
+    assert isinstance(result, tuple)
+    normalized, raw = result
+    assert len(normalized) == 1
+    assert normalized[0]["displayName"] == "Stone Arch Bridge"
+    assert raw == raw_api_response
+
+
+def test_google_places_service_get_place_details_returns_dict_by_default():
+    """get_place_details returns normalized dict when return_raw_response=False."""
+    svc = GooglePlacesService(api_key="test-key")
+    raw_place = {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}}
+    mock_response = MagicMock()
+    mock_response.json.return_value = raw_place
+    mock_response.raise_for_status = MagicMock()
+    svc._client.get = MagicMock(return_value=mock_response)
+
+    result = svc.get_place_details("ChIJ123")
+
+    assert isinstance(result, dict)
+    assert result["displayName"] == "Stone Arch Bridge"
+    assert result["id"] == "ChIJ123"
+
+
+def test_google_places_service_get_place_details_returns_tuple_when_raw_requested():
+    """get_place_details returns (normalized, raw) when return_raw_response=True."""
+    svc = GooglePlacesService(api_key="test-key")
+    raw_place = {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}}
+    mock_response = MagicMock()
+    mock_response.json.return_value = raw_place
+    mock_response.raise_for_status = MagicMock()
+    svc._client.get = MagicMock(return_value=mock_response)
+
+    result = svc.get_place_details("ChIJ123", return_raw_response=True)
+
+    assert isinstance(result, tuple)
+    normalized, raw = result
+    assert normalized["displayName"] == "Stone Arch Bridge"
+    assert raw == raw_place
+
+
+def test_google_places_to_cache_step_sets_google_place_and_logs_raw_response():
+    """GooglePlacesToCacheStep sets GOOGLE_PLACE and emits DEBUG log with raw response."""
+    mock_google = MagicMock()
+    normalized_place = {"id": "ChIJ123", "displayName": "Stone Arch Bridge", "formattedAddress": "1 Main St"}
+    raw_search_response = {"places": [{"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}}]}
+    mock_google.search_places.return_value = ([normalized_place], raw_search_response)
+
+    ctx = PipelineRunContext(run_id="r1", initial={
+        CtxKeys.RAW_QUERY: "stone arch bridge",
+        CtxKeys.REWRITTEN_QUERY: "stone arch bridge minneapolis",
+    })
+    ctx.set("_global_pipeline_id", "gp1")
+    ctx.set("_current_stage_id", "s1")
+    ctx.set("_current_pipeline_id", "p1")
+    ctx.set("_google_places_service", mock_google)
+
+    step = GooglePlacesToCacheStep(fetch_details_if_needed=False)
+    result = step.execute(ctx, None)
+
+    assert result == normalized_place
+    assert ctx.get(CtxKeys.GOOGLE_PLACE) == normalized_place
+    mock_google.search_places.assert_called_once_with("stone arch bridge minneapolis", return_raw_response=True)
+
+
 def test_google_places_service_get_photo_url_returns_photo_uri():
     """get_photo_url returns photoUri from Places Photo Media API response."""
-    from unittest.mock import MagicMock
-
     svc = GooglePlacesService(api_key="test-key")
     mock_response = MagicMock()
     mock_response.json.return_value = {"photoUri": "https://lh3.googleusercontent.com/photo.jpg"}

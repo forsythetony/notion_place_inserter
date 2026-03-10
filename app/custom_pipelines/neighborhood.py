@@ -44,6 +44,9 @@ class InferNeighborhoodStep(PipelineStep):
             options = [o.name for o in (self._prop_schema.options or []) if o.name]
             place = context.get(ContextKeys.GOOGLE_PLACE)
             if not place:
+                context.mark_property_omitted(
+                    self._prop_name, reason="missing_google_place"
+                )
                 return None
 
             direct_match = _match_option_from_place_neighborhood(place, options)
@@ -61,6 +64,33 @@ class InferNeighborhoodStep(PipelineStep):
                 log.info("neighborhood_option_selection_direct_match")
                 return direct_match
 
+            # Deterministic fast path: strong Google signals (neighborhood, sublocality_level_1)
+            # create new value directly when no existing option matches.
+            strong_signal_types = ("neighborhood", "sublocality_level_1")
+            signal_type = place.get("neighborhood_signal_type")
+            raw_neighborhood = (place.get("neighborhood") or "").strip()
+            if (
+                signal_type in strong_signal_types
+                and raw_neighborhood
+                and _passes_directional_geo_guard(raw_neighborhood, place)
+            ):
+                new_value = raw_neighborhood.title()
+                log = bind_orchestration(
+                    run_id=context.run_id,
+                    global_pipeline=context.get("_global_pipeline_id", ""),
+                    stage=context.get("_current_stage_id", ""),
+                    pipeline=context.get("_current_pipeline_id", ""),
+                    step=self.step_id,
+                    property_name=self._prop_name,
+                    property_type=self._prop_schema.type,
+                    deterministic_signal_type=signal_type,
+                    deterministic_selected_value=new_value,
+                )
+                log.info("neighborhood_option_selection_deterministic_strong_signal")
+                msg = f"Value not found for {self._prop_name}, creating new neighborhood {new_value}"
+                logger.info(msg)
+                return new_value
+
             candidate_context = {
                 "neighborhood": place.get("neighborhood"),
                 "formattedAddress": place.get("formattedAddress"),
@@ -74,6 +104,42 @@ class InferNeighborhoodStep(PipelineStep):
                 "addressComponents": place.get("addressComponents", []),
             }
 
+            google_signals = place.get("google_neighborhood_signals") or []
+            address_components = place.get("addressComponents") or []
+            debug_log = bind_orchestration(
+                run_id=context.run_id,
+                global_pipeline=context.get("_global_pipeline_id", ""),
+                stage=context.get("_current_stage_id", ""),
+                pipeline=context.get("_current_pipeline_id", ""),
+                step=self.step_id,
+                property_name=self._prop_name,
+                property_type=self._prop_schema.type,
+            )
+            if not google_signals:
+                debug_log.bind(
+                    place_id=place.get("id"),
+                    address_component_count=len(address_components),
+                ).info("neighborhood_no_google_sublocality_signals")
+            else:
+                debug_log.bind(google_neighborhood_signals=google_signals).info(
+                    "neighborhood_google_signals_received"
+                )
+            address_components_subset = [
+                {
+                    "text": c.get("longText") or c.get("shortText") or "",
+                    "types": c.get("types", []),
+                }
+                for c in address_components
+                if isinstance(c, dict)
+                and (
+                    "neighborhood" in (c.get("types") or [])
+                    or "sublocality" in (c.get("types") or [])
+                    or any(t.startswith("sublocality_level_") for t in (c.get("types") or []))
+                    or "administrative_area_level_3" in (c.get("types") or [])
+                    or "locality" in (c.get("types") or [])
+                )
+            ]
+
             log = bind_orchestration(
                 run_id=context.run_id,
                 global_pipeline=context.get("_global_pipeline_id", ""),
@@ -84,11 +150,17 @@ class InferNeighborhoodStep(PipelineStep):
                 property_type=self._prop_schema.type,
                 options=options,
                 candidate_context=candidate_context,
+                google_neighborhood_signals=google_signals,
+                neighborhood_options=options,
+                address_components_neighborhood_subset=address_components_subset,
             )
             log.info("neighborhood_option_selection_request")
 
             claude = context.get("_claude_service")
             if not claude:
+                context.mark_property_omitted(
+                    self._prop_name, reason="missing_claude_service"
+                )
                 return None
 
             result = claude.choose_option_with_suggest_from_context(
@@ -100,6 +172,7 @@ class InferNeighborhoodStep(PipelineStep):
 
             if result.value is None:
                 log.info("neighborhood_option_selection_no_value")
+                context.mark_property_omitted(self._prop_name, reason="no_value")
                 return None
 
             if not _passes_directional_geo_guard(result.value, place):
@@ -110,6 +183,9 @@ class InferNeighborhoodStep(PipelineStep):
                     latitude=place.get("latitude"),
                     longitude=place.get("longitude"),
                 ).warning("neighborhood_option_selection_rejected_directional_conflict")
+                context.mark_property_omitted(
+                    self._prop_name, reason="directional_conflict"
+                )
                 return None
 
             if result.is_new:

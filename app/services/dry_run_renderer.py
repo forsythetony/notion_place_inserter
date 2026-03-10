@@ -125,6 +125,7 @@ def render_dry_run_table(
     *,
     property_sources: dict[str, str] | None = None,
     property_skips: dict[str, str] | None = None,
+    property_omissions: dict[str, dict[str, str]] | None = None,
     icon: dict | None = None,
     cover: dict | None = None,
     console: Console | None = None,
@@ -146,6 +147,7 @@ def render_dry_run_table(
 
     sources = property_sources or {}
     skips = property_skips or {}
+    omissions = property_omissions or {}
 
     for prop_name, prop_value in properties.items():
         prop_type = _get_property_type(prop_value)
@@ -170,5 +172,13 @@ def render_dry_run_table(
     for prop_name, pipeline_id in skips.items():
         if prop_name not in properties:
             table.add_row(prop_name, "—", "(skipped)", pipeline_id)
+
+    for prop_name, omission in omissions.items():
+        if prop_name in properties or prop_name in skips:
+            continue
+        pipeline_id = omission.get("pipeline_id", "—")
+        reason = omission.get("reason", "no_value")
+        value = "(no value)" if reason == "no_value" else f"(no value: {reason})"
+        table.add_row(prop_name, "—", value, pipeline_id)
 
     con.print(table)

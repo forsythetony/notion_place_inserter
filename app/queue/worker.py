@@ -56,6 +56,7 @@ async def run_worker_loop(
                     run_id=job.run_id,
                     keywords=job.keywords,
                     result=result,
+                    recipient_whatsapp=job.recipient_whatsapp,
                 )
             )
         except Exception as e:
@@ -66,6 +67,7 @@ async def run_worker_loop(
                     run_id=job.run_id,
                     keywords=job.keywords,
                     error=e,
+                    recipient_whatsapp=job.recipient_whatsapp,
                 )
             )
 
@@ -73,6 +75,8 @@ async def run_worker_loop(
 def enqueue_location_job(
     job_queue: asyncio.Queue[LocationJob],
     keywords: str,
+    *,
+    recipient_whatsapp: str | None = None,
 ) -> tuple[str, str]:
     """
     Enqueue a location job and return (job_id, run_id).
@@ -86,6 +90,7 @@ def enqueue_location_job(
         keywords=keywords,
         created_at=datetime.now(timezone.utc),
         attempt=0,
+        recipient_whatsapp=recipient_whatsapp,
     )
     job_queue.put_nowait(job)
     return job_id, run_id

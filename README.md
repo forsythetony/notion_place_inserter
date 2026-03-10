@@ -172,6 +172,12 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 | `LOG_FILE_PATH` | No | `logs/app.log` | `logs/app.log` | Log file output path for application logs. |
 | `LOG_FILE_ROTATION` | No | `10 MB` | `10 MB` | Maximum log file size before rotation. |
 | `LOG_FILE_RETENTION` | No | `3` | `3` | Number of rotated log files to retain. |
+| `TWILIO_ACCOUNT_SID` | No | Unset | `AC...` | Twilio Account SID for WhatsApp run-status notifications. When async enabled and all Twilio vars set, success/failure messages are sent to `WHATSAPP_STATUS_RECIPIENT_DEFAULT`. |
+| `TWILIO_AUTH_TOKEN` | No | Unset | `...` | Twilio Auth Token. |
+| `TWILIO_WHATSAPP_NUMBER` | No | Unset | `whatsapp:+14155238886` | Twilio WhatsApp sender (sandbox or production). |
+| `WHATSAPP_STATUS_RECIPIENT_DEFAULT` | No | Unset | `whatsapp:+1XXXXXXXXXX` | Fallback recipient for run-status messages. Required for notifications when Twilio is configured. |
+| `WHATSAPP_STATUS_ENABLED` | No | `1` | `1` or `0` | Set `0` to disable WhatsApp notifications without removing Twilio credentials. |
+| `WHATSAPP_STATUS_MAX_ERROR_CHARS` | No | `300` | `300` | Max characters for error text in failure messages; longer errors are truncated. |
 
 > Note: `BASE_URL` is useful for local curl/testing scripts, but it is not required by the app runtime.
 
@@ -198,6 +204,8 @@ app/
     claude_service.py
     google_places_service.py
     location_service.py
+    communicator.py          # Run-status notification orchestration
+    whatsapp_service.py      # Twilio WhatsApp transport
   pipeline_lib/              # Pipeline framework
     core.py, context.py, orchestration.py, logging.py, default.py
     stage_pipelines/, steps/
