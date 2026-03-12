@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-icon test-google-places test-random-location test-locations notion-pull tag
+.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-icon test-google-places test-random-location test-locations notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -35,6 +35,13 @@ help:
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
+	@echo ""
+	@echo "Supabase (local stack, migrations):"
+	@echo "  make supabase-start    - Start local Supabase stack (Docker required)"
+	@echo "  make supabase-stop     - Stop local Supabase stack"
+	@echo "  make supabase-status   - Show Supabase stack status"
+	@echo "  make supabase-reset    - Reset DB and reapply all migrations"
+	@echo "  make supabase-migration-new NAME=<name> - Create new migration file"
 
 install:
 	pip install -r requirements.txt
@@ -100,3 +107,20 @@ tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \
 	if ! echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "Error: VERSION must match semantic versioning (e.g. v1.0.0)"; exit 1; fi; \
 	git tag -a "$(VERSION)" -m "Release $(VERSION)" && git push origin "$(VERSION)"
+
+# Supabase local stack and migration workflow
+supabase-start:
+	supabase start
+
+supabase-stop:
+	supabase stop
+
+supabase-status:
+	supabase status
+
+supabase-reset:
+	supabase db reset
+
+supabase-migration-new:
+	@if [ -z "$(NAME)" ]; then echo "Usage: make supabase-migration-new NAME=<migration_name> (e.g. NAME=add_users_table)"; exit 1; fi; \
+	supabase migration new "$(NAME)"

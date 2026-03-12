@@ -106,6 +106,7 @@ Because user login is out of scope in this phase:
 ### Workstream A - Supabase project/bootstrap
 
 1. Create Supabase project (dev + prod projects if possible).
+   - Current dev project: org `LucidPath Solutions`, ref `ngwcqykrmlwlythbkmwn`
 2. Add `supabase/` project config to repository.
 3. Initialize migration workflow and baseline migration.
 4. Create Phase 1 tables and indexes.

@@ -73,6 +73,34 @@ During normal (non-dry-run) page creation, if `FREEPIK_API_KEY` is not set or Fr
    ```
    Or set `DRY_RUN=1` in `envs/local.env`. POST `/locations` and POST `/test/randomLocation` will return a preview payload (`mode`, `database`, `properties`, `summary`) instead of creating pages. The server console also prints a formatted table of resolved properties for easier debugging.
 
+### Supabase (Local Stack and Migrations)
+
+The project uses Supabase for local database and migration-driven schema management. This is required for Phase 1 platform migration work.
+
+**Prerequisites:** [Supabase CLI](https://supabase.com/docs/guides/cli) and [Docker](https://docs.docker.com/get-docker/) (for local Postgres, Auth, etc.).
+
+**Install Supabase CLI:**
+```bash
+# macOS (Homebrew)
+brew install supabase/tap/supabase
+
+# Or via npm
+npm install -g supabase
+```
+
+**Local stack lifecycle:**
+```bash
+make supabase-start    # Start local Supabase (Postgres, Studio, etc.)
+make supabase-status   # Show service URLs and status
+make supabase-stop     # Stop the stack
+make supabase-reset    # Reset DB and reapply all migrations
+```
+
+**Migration workflow:**
+- Schema changes must be migration files in `supabase/migrations/`, reviewed via PR.
+- Create a new migration: `make supabase-migration-new NAME=<description>` (e.g. `NAME=add_users_table`).
+- Migrations use the format `YYYYMMDDHHmmss_<name>.sql`. Apply with `make supabase-reset` or on first `supabase start`.
+
 ### Testing Locally
 
 With the server running in another terminal:
@@ -213,6 +241,9 @@ app/
   custom_pipelines/          # Per-property pipelines (title, type, etc.)
   routes/
   queue/                    # In-memory async: job queue, worker, event bus, subscriber
+supabase/
+  config.toml               # Supabase CLI config (ports, auth, etc.)
+  migrations/               # Versioned SQL migrations (schema changes via PR only)
 docs/
   architecture-design.md
   pipeline-framework.md      # Framework reference
