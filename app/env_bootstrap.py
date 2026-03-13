@@ -11,6 +11,7 @@ from loguru import logger
 ENV_TEMPLATE_KEYS: tuple[str, ...] = (
     "BASE_URL",
     "SECRET",
+    "CORS_ALLOWED_ORIGINS",
     "SUPABASE_PROJECT_REF",
     "SUPABASE_URL",
     "SUPABASE_PUBLISHABLE_KEY",

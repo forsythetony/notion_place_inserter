@@ -40,8 +40,8 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 3. Verify commands:
    - Build: `pip install -r requirements.txt`
    - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. In **Environment**, set required vars. Important: set auth variable name as `SECRET`.
-5. Deploy and capture API URL (for frontend `BASE_URL`).
+4. In **Environment**, set required vars. Important: set auth variable name as `SECRET`. Add `CORS_ALLOWED_ORIGINS` with the static-site origin (e.g. `https://notion-pipeliner-ui.onrender.com`); comma-separate multiple origins if needed.
+5. Deploy and capture API URL (for frontend `VITE_BASE_URL`).
 
 ### 3) Create worker process (Web Service)
 
@@ -58,13 +58,14 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 1. In Render dashboard: **New -> Static Site**.
 2. Connect the separate frontend repository and branch.
 3. Configure Vite build/publish settings for that repository (typically `npm run build` and publish `dist`).
-4. Add frontend env var:
-   - `BASE_URL=https://<api-service>.onrender.com`
+4. Add frontend env vars:
+   - `VITE_BASE_URL=https://<api-service>.onrender.com`
+   - `VITE_SECRET` — same value as backend `SECRET` (for Authorization header)
 5. Deploy and record static-site URL.
 
 ### 5) Wire CORS and validate browser-to-API path
 
-1. Add static-site origin to backend allowed origins (exact scheme + host).
+1. Set backend env `CORS_ALLOWED_ORIGINS` to the static-site origin (exact scheme + host, e.g. `https://notion-pipeliner-ui.onrender.com`).
 2. Redeploy API if CORS configuration changed.
 3. From deployed UI, click `Run Location Inserter` and verify accepted response state.
 

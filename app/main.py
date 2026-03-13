@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.queue import (
@@ -257,6 +258,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Hello World API", lifespan=lifespan)
 
 SECRET = os.environ.get("SECRET", "")
+
+# CORS: allow frontend origins from env (comma-separated)
+_cors_origins_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
 app.include_router(locations.router)
 app.include_router(test.router)

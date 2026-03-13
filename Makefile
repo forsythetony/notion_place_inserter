@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -36,6 +36,7 @@ help:
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
 	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /locations enqueue"
+	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
@@ -114,6 +115,16 @@ test-remote:
 	echo "Testing remote /locations enqueue (expect 200 accepted in async mode)..."; \
 	curl -s -X POST -H "Authorization: $(REMOTE_SECRET)" -H "Content-Type: application/json" \
 		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/locations"'
+
+# CORS preflight test (server must be running). Use BASE_URL for local or REMOTE_BASE_URL for deployed.
+# Example: make test-cors  # local; or make test-cors REMOTE_BASE_URL=https://hello-world-api-r7h7.onrender.com
+test-cors:
+	@bash -c 'URL="$${REMOTE_BASE_URL:-$(BASE_URL)}"; \
+	echo "CORS preflight OPTIONS to $$URL/locations (Origin: https://notion-pipeliner-ui.onrender.com)..."; \
+	curl -s -i -X OPTIONS "$$URL/locations" \
+		-H "Origin: https://notion-pipeliner-ui.onrender.com" \
+		-H "Access-Control-Request-Method: POST" \
+		-H "Access-Control-Request-Headers: authorization,content-type" | head -20'
 
 test-whatsapp:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_whatsapp.py'
