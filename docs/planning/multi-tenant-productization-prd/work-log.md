@@ -36,6 +36,8 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | worker-retry-backoff | Bounded worker retries with configurable backoff (5,30,60s default); platform_jobs.retry_count migration; final failure marks job/run failed and archives; WORKER_RETRY_DELAYS_SECONDS env; tests. |
+| 2026-03-13 | worker-memory-starvation-investigation | Investigated worker memory starvation using Render chart and runtime logs; documented evidence, likely poison-message retry loop root cause, and remediation plan. |
 | 2026-03-13 | p2_pr02 | Backend auth context: Bearer validation, AuthContext, GET /auth/context, SupabaseAuthRepository wiring, tests, OpenAPI BearerAuth, deprecation notes. |
 | 2026-03-13 | PR-01 complete | Marked PR-01 (auth schema, user_profiles, invitation_codes) as complete; proceeding to PR-02. |
 | 2026-03-13 | Supabase local auth runtime fix | Upgraded Supabase CLI (2.75.0 -> 2.78.1), restarted local stack, verified `/auth/v1/admin/users` succeeds, and cleaned diagnostic test users from `auth.users`. |

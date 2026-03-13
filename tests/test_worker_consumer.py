@@ -21,6 +21,7 @@ def mock_queue_repo():
 def mock_run_repo():
     repo = MagicMock()
     repo.get_run_status.return_value = None  # not terminal
+    repo.get_job_retry_count.return_value = 0
     return repo
 
 
@@ -49,8 +50,15 @@ def _valid_message():
     )
 
 
-async def _run_worker_briefly(mock_queue_repo, mock_run_repo, mock_places_service, event_bus):
-    """Run worker loop for ~0.5s then cancel."""
+async def _run_worker_briefly(
+    mock_queue_repo,
+    mock_run_repo,
+    mock_places_service,
+    event_bus,
+    *,
+    retry_delays_seconds=(0.01, 0.02, 0.03),
+):
+    """Run worker loop for ~0.5s then cancel. Short retry delays for fast tests."""
     task = asyncio.create_task(
         run_worker_loop(
             mock_queue_repo,
@@ -59,6 +67,7 @@ async def _run_worker_briefly(mock_queue_repo, mock_run_repo, mock_places_servic
             event_bus,
             poll_interval_seconds=0.1,
             vt_seconds=30,
+            retry_delays_seconds=retry_delays_seconds,
         )
     )
     await asyncio.sleep(0.5)
@@ -216,10 +225,10 @@ def test_worker_queue_read_error_continues(
     mock_queue_repo.archive.assert_not_called()
 
 
-def test_worker_persist_running_failed_no_archive(
+def test_worker_persist_running_failed_retries_then_archives(
     mock_queue_repo, mock_run_repo, mock_places_service, event_bus
 ):
-    """When persist-running fails, message is not archived (reappears after vt)."""
+    """When persist-running fails, worker retries with backoff then marks failed and archives."""
     mock_queue_repo.read.side_effect = [
         [_valid_message()],
         [],
@@ -230,24 +239,22 @@ def test_worker_persist_running_failed_no_archive(
         mock_queue_repo, mock_run_repo, mock_places_service, event_bus
     ))
 
-    mock_queue_repo.archive.assert_not_called()
+    mock_queue_repo.archive.assert_called_once_with(1)
     mock_places_service.create_place_from_query.assert_not_called()
+    mock_run_repo.increment_job_retry_count.assert_called()
 
 
-def test_worker_persist_failure_failed_no_archive(
+def test_worker_persist_failure_failed_archives_via_handler(
     mock_queue_repo, mock_run_repo, mock_places_service, event_bus
 ):
-    """When pipeline fails but persist-failure raises, message is not archived."""
+    """When pipeline fails but persist-failure raises, outer handler archives to avoid poison loop."""
     mock_queue_repo.read.side_effect = [
         [_valid_message()],
         [],
     ]
     mock_places_service.create_place_from_query.side_effect = ValueError("API error")
     # update_job_status for "running" succeeds; for "failed" we make it raise
-    call_count = [0]
-
     def update_job_status_side_effect(job_id, status, **kw):
-        call_count[0] += 1
         if status == "failed":
             raise RuntimeError("persist failed")
 
@@ -257,21 +264,19 @@ def test_worker_persist_failure_failed_no_archive(
         mock_queue_repo, mock_run_repo, mock_places_service, event_bus
     ))
 
-    mock_queue_repo.archive.assert_not_called()
+    mock_queue_repo.archive.assert_called_once_with(1)
 
 
-def test_worker_persist_success_failed_no_archive(
+def test_worker_persist_success_failed_retries_then_archives(
     mock_queue_repo, mock_run_repo, mock_places_service, event_bus
 ):
-    """When pipeline succeeds but persist-success raises, message is not archived."""
+    """When pipeline succeeds but persist-success raises, worker retries then marks failed and archives."""
     mock_queue_repo.read.side_effect = [
         [_valid_message()],
         [],
     ]
-    call_count = [0]
 
     def update_job_status_side_effect(job_id, status, **kw):
-        call_count[0] += 1
         if status == "succeeded":
             raise RuntimeError("persist success failed")
 
@@ -281,4 +286,52 @@ def test_worker_persist_success_failed_no_archive(
         mock_queue_repo, mock_run_repo, mock_places_service, event_bus
     ))
 
-    mock_queue_repo.archive.assert_not_called()
+    mock_queue_repo.archive.assert_called_once_with(1)
+    mock_run_repo.increment_job_retry_count.assert_called()
+
+
+def test_worker_retry_then_succeeds(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """Pipeline fails twice then succeeds on third attempt; message archived."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    mock_places_service.create_place_from_query.side_effect = [
+        ValueError("API error 1"),
+        ValueError("API error 2"),
+        {"id": "page-123", "mode": "create"},
+    ]
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_called_once_with(1)
+    mock_run_repo.increment_job_retry_count.assert_called()
+    calls = mock_run_repo.increment_job_retry_count.call_args_list
+    assert len(calls) == 2  # after first and second failure
+    assert calls[0][0][1] == 1
+    assert calls[1][0][1] == 2
+    status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
+    assert "succeeded" in status_calls
+
+
+def test_worker_retry_exhausted_marks_failed_and_archives(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """Pipeline fails all attempts; worker marks failed and archives after final attempt."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    mock_places_service.create_place_from_query.side_effect = ValueError("API error")
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_called_once_with(1)
+    status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
+    assert "failed" in status_calls

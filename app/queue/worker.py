@@ -52,6 +52,23 @@ def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None] | No
     )
 
 
+def _parse_retry_delays(raw: str) -> tuple[int, ...]:
+    """Parse WORKER_RETRY_DELAYS_SECONDS (e.g. '5,30,60') into tuple of ints."""
+    if not raw or not raw.strip():
+        return (5, 30, 60)
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    result: list[int] = []
+    for p in parts:
+        try:
+            v = int(p)
+            if v < 0:
+                v = 0
+            result.append(v)
+        except ValueError:
+            continue
+    return tuple(result) if result else (5, 30, 60)
+
+
 async def run_worker_loop(
     queue_repo: SupabaseQueueRepository,
     run_repo: SupabaseRunRepository,
@@ -60,10 +77,12 @@ async def run_worker_loop(
     *,
     poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS,
     vt_seconds: int = _DEFAULT_VT_SECONDS,
+    retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
 ) -> None:
     """
     Consume messages from Supabase queue and run the pipeline.
     Persists lifecycle transitions (queued -> running -> succeeded/failed) and events.
+    Bounded retries with backoff; final failure marks job/run failed and archives message.
     Runs until cancelled; use asyncio.create_task and cancel on shutdown.
     """
     loop = asyncio.get_event_loop()
@@ -82,7 +101,13 @@ async def run_worker_loop(
         for msg in messages:
             try:
                 await _process_message(
-                    msg, queue_repo, run_repo, places_service, event_bus, loop
+                    msg,
+                    queue_repo,
+                    run_repo,
+                    places_service,
+                    event_bus,
+                    loop,
+                    retry_delays_seconds=retry_delays_seconds,
                 )
             except Exception as e:
                 logger.exception(
@@ -90,9 +115,54 @@ async def run_worker_loop(
                     msg.message_id,
                     e,
                 )
-                # Do not archive on unexpected error - message will reappear after vt
-                # Log and continue to next message
-                continue
+                # Bounded retries exhausted or non-retriable: mark failed and archive
+                _handle_final_failure(msg, queue_repo, run_repo, event_bus, e)
+
+
+def _handle_final_failure(
+    msg: QueueMessage,
+    queue_repo: SupabaseQueueRepository,
+    run_repo: SupabaseRunRepository,
+    event_bus: EventBus,
+    error: BaseException,
+) -> None:
+    """Best-effort: persist failed, emit event, archive. Called when _process_message raises."""
+    extracted = _extract_payload(msg)
+    if extracted is None:
+        queue_repo.archive(msg.message_id)
+        return
+    job_id, run_id, keywords, recipient_whatsapp = extracted
+    err_msg = _normalize_error(error)
+    now = datetime.now(timezone.utc)
+    try:
+        run_repo.update_job_status(
+            job_id, "failed", completed_at=now, error_message=err_msg
+        )
+        run_repo.update_run(run_id, status="failed", completed_at=now)
+        run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
+    except Exception:
+        logger.exception(
+            "worker_final_failure_persist_failed | job_id={} run_id={}",
+            job_id,
+            run_id,
+        )
+    try:
+        event_bus.publish_failure(
+            PipelineFailureEvent(
+                job_id=job_id,
+                run_id=run_id,
+                keywords=keywords,
+                error=error,
+                recipient_whatsapp=recipient_whatsapp,
+            )
+        )
+    except Exception:
+        logger.exception("worker_final_failure_event_failed | job_id={}", job_id)
+    try:
+        queue_repo.archive(msg.message_id)
+    except Exception:
+        logger.exception("worker_final_failure_archive_failed | msg_id={}", msg.message_id)
+        raise
 
 
 async def _process_message(
@@ -102,8 +172,10 @@ async def _process_message(
     places_service: "PlacesService",
     event_bus: EventBus,
     loop: asyncio.AbstractEventLoop,
+    *,
+    retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
 ) -> None:
-    """Process a single queue message: validate, idempotency check, execute, persist, archive."""
+    """Process a single queue message: validate, idempotency check, bounded retries, execute, persist, archive."""
     extracted = _extract_payload(msg)
     if extracted is None:
         logger.warning(
@@ -133,99 +205,229 @@ async def _process_message(
         queue_repo.archive(msg.message_id)
         return
 
-    now = datetime.now(timezone.utc)
+    # Bounded retry loop
+    retry_count = run_repo.get_job_retry_count(job_id)
+    max_retries = len(retry_delays_seconds)
 
-    # Persist running
-    try:
-        run_repo.update_job_status(
-            job_id, "running", started_at=now
-        )
-        run_repo.update_run(run_id, status="running")
-        run_repo.insert_event(run_id, "pipeline_started", {"keywords_preview": keywords[:80]})
-    except Exception:
-        logger.exception(
-            "worker_persist_running_failed | job_id={} run_id={}",
-            job_id,
-            run_id,
-        )
-        raise
-
-    # Execute pipeline
-    try:
-        result = await loop.run_in_executor(
-            None,
-            lambda k=keywords: _run_pipeline_sync(places_service, k),
-        )
-    except Exception as e:
-        err_msg = _normalize_error(e)
-        logger.exception(
-            "worker_pipeline_failed | job_id={} run_id={} error={}",
-            job_id,
-            run_id,
-            err_msg,
-        )
+    while True:
+        now = datetime.now(timezone.utc)
         try:
+            # Persist running
             run_repo.update_job_status(
-                job_id, "failed", completed_at=now, error_message=err_msg
+                job_id, "running", started_at=now, retry_count=retry_count
             )
-            run_repo.update_run(run_id, status="failed", completed_at=now)
+            run_repo.update_run(run_id, status="running")
             run_repo.insert_event(
-                run_id,
-                "pipeline_failed",
-                {"error": err_msg},
+                run_id, "pipeline_started", {"keywords_preview": keywords[:80]}
             )
-        except Exception as persist_err:
+        except Exception:
             logger.exception(
-                "worker_persist_failure_failed | job_id={} run_id={}",
+                "worker_persist_running_failed | job_id={} run_id={}",
                 job_id,
                 run_id,
             )
-            raise persist_err from e
+            err = RuntimeError("persist running failed")
+            new_retry_count = retry_count + 1
+            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+                run_repo, job_id, run_id, new_retry_count, _normalize_error(err)
+            ):
+                delay = retry_delays_seconds[retry_count]
+                logger.info(
+                    "worker_retry_scheduled | job_id={} run_id={} retry_count={} delay_seconds={}",
+                    job_id,
+                    run_id,
+                    new_retry_count,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                retry_count = new_retry_count
+                continue
+            _mark_failed_and_archive(
+                msg,
+                queue_repo,
+                run_repo,
+                event_bus,
+                job_id,
+                run_id,
+                keywords,
+                recipient_whatsapp,
+                _normalize_error(err),
+                datetime.now(timezone.utc),
+                err,
+            )
+            return
 
-        event_bus.publish_failure(
-            PipelineFailureEvent(
+        # Execute pipeline
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda k=keywords: _run_pipeline_sync(places_service, k),
+            )
+        except Exception as e:
+            err_msg = _normalize_error(e)
+            logger.exception(
+                "worker_pipeline_failed | job_id={} run_id={} error={} attempt={}",
+                job_id,
+                run_id,
+                err_msg,
+                retry_count + 1,
+            )
+            new_retry_count = retry_count + 1
+            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+                run_repo, job_id, run_id, new_retry_count, err_msg
+            ):
+                delay = retry_delays_seconds[retry_count]
+                logger.info(
+                    "worker_retry_scheduled | job_id={} run_id={} retry_count={} delay_seconds={}",
+                    job_id,
+                    run_id,
+                    new_retry_count,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                retry_count = new_retry_count
+                continue
+            _mark_failed_and_archive(
+                msg,
+                queue_repo,
+                run_repo,
+                event_bus,
+                job_id,
+                run_id,
+                keywords,
+                recipient_whatsapp,
+                err_msg,
+                datetime.now(timezone.utc),
+                e,
+            )
+            return
+
+        # Success path
+        result_meta: dict[str, Any] = {}
+        if isinstance(result, dict):
+            result_meta = {
+                k: v
+                for k, v in result.items()
+                if k in ("id", "page_id", "mode", "database")
+            }
+        try:
+            run_repo.update_job_status(job_id, "succeeded", completed_at=now)
+            run_repo.update_run(
+                run_id,
+                status="succeeded",
+                result_json=result_meta or result if isinstance(result, dict) else {},
+                completed_at=now,
+            )
+            run_repo.insert_event(
+                run_id,
+                "pipeline_succeeded",
+                {"result_preview": result_meta},
+            )
+        except Exception:
+            logger.exception(
+                "worker_persist_success_failed | job_id={} run_id={}",
+                job_id,
+                run_id,
+            )
+            err = RuntimeError("persist success failed")
+            new_retry_count = retry_count + 1
+            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+                run_repo, job_id, run_id, new_retry_count, _normalize_error(err)
+            ):
+                delay = retry_delays_seconds[retry_count]
+                logger.info(
+                    "worker_retry_scheduled | job_id={} run_id={} retry_count={} delay_seconds={}",
+                    job_id,
+                    run_id,
+                    new_retry_count,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                retry_count = new_retry_count
+                continue
+            _mark_failed_and_archive(
+                msg,
+                queue_repo,
+                run_repo,
+                event_bus,
+                job_id,
+                run_id,
+                keywords,
+                recipient_whatsapp,
+                _normalize_error(err),
+                datetime.now(timezone.utc),
+                err,
+            )
+            return
+
+        event_bus.publish_success(
+            PipelineSuccessEvent(
                 job_id=job_id,
                 run_id=run_id,
                 keywords=keywords,
-                error=e,
+                result=result if isinstance(result, dict) else {},
                 recipient_whatsapp=recipient_whatsapp,
             )
         )
         queue_repo.archive(msg.message_id)
         return
 
-    # Success path
-    result_meta: dict[str, Any] = {}
-    if isinstance(result, dict):
-        result_meta = {k: v for k, v in result.items() if k in ("id", "page_id", "mode", "database")}
 
+def _persist_retry_and_schedule(
+    run_repo: SupabaseRunRepository,
+    job_id: str,
+    run_id: str,
+    new_retry_count: int,
+    err_msg: str,
+) -> bool:
+    """Persist retry_count for next attempt. Returns True on success, False on failure."""
     try:
-        run_repo.update_job_status(job_id, "succeeded", completed_at=now)
-        run_repo.update_run(
-            run_id,
-            status="succeeded",
-            result_json=result_meta or result if isinstance(result, dict) else {},
-            completed_at=now,
+        run_repo.increment_job_retry_count(
+            job_id, new_retry_count, error_message=err_msg
         )
-        run_repo.insert_event(
-            run_id,
-            "pipeline_succeeded",
-            {"result_preview": result_meta},
-        )
+        return True
     except Exception:
         logger.exception(
-            "worker_persist_success_failed | job_id={} run_id={}",
+            "worker_increment_retry_failed | job_id={} retry_count={}",
+            job_id,
+            new_retry_count,
+        )
+        return False
+
+
+def _mark_failed_and_archive(
+    msg: QueueMessage,
+    queue_repo: SupabaseQueueRepository,
+    run_repo: SupabaseRunRepository,
+    event_bus: EventBus,
+    job_id: str,
+    run_id: str,
+    keywords: str,
+    recipient_whatsapp: str | None,
+    err_msg: str,
+    now: datetime,
+    error: BaseException,
+) -> None:
+    """Persist failed status, emit event, archive."""
+    try:
+        run_repo.update_job_status(
+            job_id, "failed", completed_at=now, error_message=err_msg
+        )
+        run_repo.update_run(run_id, status="failed", completed_at=now)
+        run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
+    except Exception:
+        logger.exception(
+            "worker_persist_failure_failed | job_id={} run_id={}",
             job_id,
             run_id,
         )
         raise
-
-    event_bus.publish_success(
-        PipelineSuccessEvent(
+    event_bus.publish_failure(
+        PipelineFailureEvent(
             job_id=job_id,
             run_id=run_id,
             keywords=keywords,
-            result=result if isinstance(result, dict) else {},
+            error=error,
             recipient_whatsapp=recipient_whatsapp,
         )
     )

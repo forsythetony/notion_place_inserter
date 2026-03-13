@@ -12,7 +12,7 @@ from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.queue.events import EventBus, subscribe_to_success
-from app.queue.worker import run_worker_loop
+from app.queue.worker import _parse_retry_delays, run_worker_loop
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
 from app.services.freepik_service import FreepikService
@@ -24,7 +24,7 @@ from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
 from app.services.whatsapp_service import WhatsAppService
 
-# Worker tuning (optional env overrides)
+# Worker tuning (optional env overrides; parsed after bootstrap_env in main)
 _WORKER_POLL_INTERVAL = float(os.environ.get("WORKER_POLL_INTERVAL_SECONDS", "1.0"))
 _WORKER_VT_SECONDS = int(os.environ.get("WORKER_VT_SECONDS", "300"))
 
@@ -165,10 +165,14 @@ def main() -> None:
             "worker_whatsapp_skipped | twilio credentials not configured"
         )
 
+    retry_delays = _parse_retry_delays(
+        os.environ.get("WORKER_RETRY_DELAYS_SECONDS", "")
+    )
     logger.info(
-        "worker_starting | poll_interval={} vt_seconds={}",
+        "worker_starting | poll_interval={} vt_seconds={} retry_delays={}",
         _WORKER_POLL_INTERVAL,
         _WORKER_VT_SECONDS,
+        retry_delays,
     )
 
     loop = asyncio.new_event_loop()
@@ -181,6 +185,7 @@ def main() -> None:
             event_bus,
             poll_interval_seconds=_WORKER_POLL_INTERVAL,
             vt_seconds=_WORKER_VT_SECONDS,
+            retry_delays_seconds=retry_delays,
         )
     )
 

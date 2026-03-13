@@ -49,8 +49,9 @@ class SupabaseRunRepository:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
         error_message: str | None = None,
+        retry_count: int | None = None,
     ) -> None:
-        """Update job status and optional timestamps."""
+        """Update job status and optional timestamps, error_message, retry_count."""
         payload: dict[str, Any] = {"status": status}
         if started_at is not None:
             payload["started_at"] = started_at.isoformat()
@@ -58,6 +59,8 @@ class SupabaseRunRepository:
             payload["completed_at"] = completed_at.isoformat()
         if error_message is not None:
             payload["error_message"] = error_message
+        if retry_count is not None:
+            payload["retry_count"] = retry_count
 
         try:
             self._client.table(self._config.table_platform_jobs).update(payload).eq(
@@ -68,6 +71,30 @@ class SupabaseRunRepository:
                 "supabase_update_job_status_failed | job_id={} status={}",
                 job_id,
                 status,
+            )
+            raise
+
+    def increment_job_retry_count(
+        self,
+        job_id: str,
+        retry_count: int,
+        *,
+        error_message: str | None = None,
+    ) -> None:
+        """Update job retry_count and optional error_message (for failed attempt before retry)."""
+        payload: dict[str, Any] = {"retry_count": retry_count}
+        if error_message is not None:
+            payload["error_message"] = error_message
+
+        try:
+            self._client.table(self._config.table_platform_jobs).update(payload).eq(
+                "job_id", job_id
+            ).execute()
+        except Exception:
+            logger.exception(
+                "supabase_increment_job_retry_failed | job_id={} retry_count={}",
+                job_id,
+                retry_count,
             )
             raise
 
@@ -124,6 +151,27 @@ class SupabaseRunRepository:
                 run_id,
             )
             raise
+
+    def get_job_retry_count(self, job_id: str) -> int:
+        """Fetch retry_count for a job. Returns 0 if job not found or column missing."""
+        try:
+            resp = (
+                self._client.table(self._config.table_platform_jobs)
+                .select("retry_count")
+                .eq("job_id", job_id)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_job_retry_count_failed | job_id={}", job_id)
+            raise
+
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return 0
+        row = data[0] if isinstance(data, list) else data
+        val = row.get("retry_count") if isinstance(row, dict) else None
+        return int(val) if val is not None else 0
 
     def get_run_status(self, run_id: str) -> str | None:
         """Fetch run status by run_id. Returns None if run not found."""

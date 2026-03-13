@@ -125,3 +125,43 @@ def test_insert_event_inserts_into_pipeline_run_events(repo, mock_client):
     assert call_arg["run_id"] == "run_1"
     assert call_arg["event_type"] == "pipeline_succeeded"
     assert call_arg["event_payload_json"] == {"property_count": 12}
+
+
+def test_get_job_retry_count_returns_count_when_found(repo, mock_client):
+    """get_job_retry_count returns retry_count when job exists."""
+    mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"retry_count": 2}]
+    )
+    count = repo.get_job_retry_count("loc_abc")
+    assert count == 2
+    mock_client.table.assert_called_with("platform_jobs")
+    mock_client.table.return_value.select.assert_called_with("retry_count")
+    mock_client.table.return_value.select.return_value.eq.assert_called_with(
+        "job_id", "loc_abc"
+    )
+
+
+def test_get_job_retry_count_returns_zero_when_not_found(repo, mock_client):
+    """get_job_retry_count returns 0 when job does not exist."""
+    mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    count = repo.get_job_retry_count("loc_missing")
+    assert count == 0
+
+
+def test_increment_job_retry_count_updates_row(repo, mock_client):
+    """increment_job_retry_count patches platform_jobs by job_id."""
+    repo.increment_job_retry_count(
+        job_id="loc_xyz",
+        retry_count=1,
+        error_message="API error",
+    )
+    mock_client.table.assert_called_with("platform_jobs")
+    mock_client.table.return_value.update.assert_called_once()
+    call_arg = mock_client.table.return_value.update.call_args[0][0]
+    assert call_arg["retry_count"] == 1
+    assert call_arg["error_message"] == "API error"
+    mock_client.table.return_value.update.return_value.eq.assert_called_with(
+        "job_id", "loc_xyz"
+    )
