@@ -76,8 +76,14 @@ def test_post_locations_400_keywords_too_long(client):
 
 def test_post_locations_async_returns_accepted(client):
     """POST /locations with async enabled returns 200 accepted and job_id."""
+    mock_queue_repo = MagicMock()
+    mock_run_repo = MagicMock()
+    mock_queue_repo.send.return_value = MagicMock(message_id=1)
+
     app.state.locations_async_enabled = True
-    app.state.location_job_queue = __import__("asyncio").Queue()
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
     resp = client.post(
         "/locations",
         headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
@@ -89,11 +95,67 @@ def test_post_locations_async_returns_accepted(client):
     assert "job_id" in data
     assert data["job_id"].startswith("loc_")
 
+    mock_run_repo.create_job.assert_called_once()
+    call_kw = mock_run_repo.create_job.call_args[1]
+    assert call_kw["keywords"] == "park"
+    assert call_kw["status"] == "queued"
+    assert call_kw["job_id"].startswith("loc_")
 
-def test_post_locations_async_503_when_queue_unavailable(client):
-    """POST /locations with async enabled but no queue returns 503."""
+    mock_run_repo.create_run.assert_called_once()
+    call_kw = mock_run_repo.create_run.call_args[1]
+    assert call_kw["status"] == "pending"
+    assert "job_id" in call_kw
+    assert "run_id" in call_kw
+
+    mock_queue_repo.send.assert_called_once()
+    call_args = mock_queue_repo.send.call_args
+    payload = call_args[0][0]
+    assert payload["keywords"] == "park"
+    assert payload["job_id"].startswith("loc_")
+    assert "run_id" in payload
+    assert call_args[1]["delay_seconds"] == 0
+
+
+def test_post_locations_async_503_when_repos_unavailable(client):
+    """POST /locations with async enabled but Supabase repos missing returns 503."""
     app.state.locations_async_enabled = True
-    app.state.location_job_queue = None
+    app.state.supabase_queue_repository = None
+    app.state.supabase_run_repository = MagicMock()
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 503
+    assert "enqueue" in resp.json()["detail"].lower()
+
+
+def test_post_locations_async_503_when_run_repo_unavailable(client):
+    """POST /locations with async enabled but run repo missing returns 503."""
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = MagicMock()
+    app.state.supabase_run_repository = None
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 503
+    assert "enqueue" in resp.json()["detail"].lower()
+
+
+def test_post_locations_async_503_when_send_raises(client):
+    """POST /locations with async enabled but queue send raises returns 503."""
+    mock_queue_repo = MagicMock()
+    mock_queue_repo.send.side_effect = RuntimeError("pgmq unavailable")
+    mock_run_repo = MagicMock()
+
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
     resp = client.post(
         "/locations",
         headers={"Authorization": os.environ.get("SECRET", "dev-secret")},

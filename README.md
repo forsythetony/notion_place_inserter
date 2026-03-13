@@ -55,7 +55,7 @@ During normal (non-dry-run) page creation, if `FREEPIK_API_KEY` is not set or Fr
 
 4. **Set the secret** (optional for local dev — defaults to `dev-secret`)
    ```bash
-   export secret=your-local-secret
+   export SECRET=your-local-secret
    ```
 
 5. **Run the server**
@@ -151,7 +151,7 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
    make run
    make test SECRET=your-local-secret
    ```
-   `your-local-secret` must match the `secret=` value in `envs/local.env`.
+   `your-local-secret` must match the `SECRET=` value in `envs/local.env`.
 
 4. **Commit and push to GitHub**
    ```bash
@@ -170,8 +170,8 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 
 6. **Set environment variables in Render**
    - In Render: **Service** -> **Environment**
-   - Add all required variables from the table below
-   - Keep `secret` lowercase (exact name expected by the app)
+   - Add all required variables from the table below (or upload a `.env` file; see [.env file loading](#env-file-loading) below)
+   - Use `SECRET` for auth (uppercase)
    - Redeploy after saving env vars
 
 7. **Verify the deployed API**
@@ -186,7 +186,7 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 
 | Variable | Required | Default | Example | What it does |
 |---|---|---|---|---|
-| `secret` | Yes | Empty (`""`) | `super-long-random-string` | Authorization secret checked against the `Authorization` header on protected routes. |
+| `SECRET` | Yes | Empty (`""`) | `super-long-random-string` | Authorization secret checked against the `Authorization` header on protected routes. |
 | `NOTION_API_KEY` | Yes | None (must be set) | `secret_xxx` | Authenticates Notion API calls to read database schema and create pages. |
 | `ANTHROPIC_TOKEN` | Yes | None (must be set) | `sk-ant-...` | API key for Claude-based text generation/classification in the pipeline. |
 | `GOOGLE_PLACES_API_KEY` | Yes | None (must be set) | `AIza...` | Enables Google Places search/details lookups used for place enrichment. |
@@ -207,7 +207,17 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 | `WHATSAPP_STATUS_ENABLED` | No | `1` | `1` or `0` | Set `0` to disable WhatsApp notifications without removing Twilio credentials. |
 | `WHATSAPP_STATUS_MAX_ERROR_CHARS` | No | `300` | `300` | Max characters for error text in failure messages; longer errors are truncated. |
 
-> Note: `BASE_URL` is useful for local curl/testing scripts, but it is not required by the app runtime.
+#### .env file loading
+
+The app loads environment variables from a `.env` file at startup. It searches for the first existing file in this order:
+
+1. `.env` in the project root
+2. `/etc/secrets/.env` (Render secret-file mount)
+3. `envs/local.env` (local development convention)
+
+**Precedence:** Process environment variables (e.g. from the Render dashboard) always override values from the file. This lets you override secrets or per-environment settings without editing the uploaded file.
+
+**Render setup:** You can upload a `.env` file as a [Render Secret File](https://render.com/docs/configure-environment-variables#secret-files) mounted at `/etc/secrets/.env`. The app will load it automatically. Alternatively, set variables in the Render dashboard; those take precedence over any file.
 
 ## API Reference
 

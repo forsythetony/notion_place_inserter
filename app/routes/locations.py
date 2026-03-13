@@ -1,15 +1,22 @@
 """Locations API routes."""
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
 from pydantic import BaseModel
 
 from app.dependencies import require_auth
-from app.queue import enqueue_location_job
 
 router = APIRouter()
 
 # Max length guard to prevent abuse
 KEYWORDS_MAX_LENGTH = 300
+
+
+def _job_id() -> str:
+    """Generate job_id in format loc_<hex>."""
+    return f"loc_{uuid.uuid4().hex}"
 
 
 class LocationRequest(BaseModel):
@@ -42,17 +49,45 @@ def create_location(request: Request, body: LocationRequest, _: None = Depends(r
         places_service = request.app.state.places_service
         return places_service.create_place_from_query(body.keywords)
 
-    job_queue = request.app.state.location_job_queue
-    if job_queue is None:
+    queue_repo = getattr(request.app.state, "supabase_queue_repository", None)
+    run_repo = getattr(request.app.state, "supabase_run_repository", None)
+    if queue_repo is None or run_repo is None:
+        logger.warning("locations_enqueue_skipped | supabase_repos_unavailable")
         raise HTTPException(
             status_code=503,
             detail="Unable to enqueue request",
         )
+
+    job_id = _job_id()
+    run_id = str(uuid.uuid4())
+    recipient_whatsapp = None
+
     try:
-        job_id, _run_id = enqueue_location_job(job_queue, body.keywords, recipient_whatsapp=None)
+        run_repo.create_job(job_id=job_id, keywords=body.keywords, status="queued")
+        run_repo.create_run(job_id=job_id, run_id=run_id, status="pending")
+        payload = {
+            "job_id": job_id,
+            "run_id": run_id,
+            "keywords": body.keywords,
+        }
+        if recipient_whatsapp is not None:
+            payload["recipient_whatsapp"] = recipient_whatsapp
+        queue_repo.send(payload, delay_seconds=0)
+        logger.info(
+            "locations_enqueued | job_id={} run_id={} keywords_preview={}",
+            job_id,
+            run_id,
+            body.keywords[:50] + "..." if len(body.keywords) > 50 else body.keywords,
+        )
     except Exception:
+        logger.exception(
+            "locations_enqueue_failed | job_id={} run_id={}",
+            job_id,
+            run_id,
+        )
         raise HTTPException(
             status_code=503,
             detail="Unable to enqueue request",
         )
+
     return {"status": "accepted", "job_id": job_id}

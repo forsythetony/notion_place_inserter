@@ -1,0 +1,20 @@
+---
+description: Log completed tickets in the decision log
+alwaysApply: true
+---
+
+# Log Completed Tickets
+
+When completing a ticket (PR, task, or work item), always add an entry to the **Log** section of:
+
+`docs/planning/multi-tenant-productization-prd/work-log.md`
+
+Add a new row at the top of the Log table with:
+- **Date** — Today's date (YYYY-MM-DD)
+- **Ticket / Task** — PR number, ticket ID, or short task name
+- **Summary** — Brief description of what was done
+
+Example:
+| Date | Ticket / Task | Summary |
+|------|---------------|---------|
+| 2026-03-12 | PR-04 | Migrated /locations to enqueue via Supabase pgmq |

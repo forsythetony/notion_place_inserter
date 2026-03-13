@@ -1,10 +1,13 @@
-.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-icon test-google-places test-random-location test-locations notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new
+.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
 BASE_URL ?= http://localhost:8000
 KEYWORDS ?= stone arch bridge minneapolis
+REMOTE_BASE_URL ?=
+REMOTE_SECRET ?=
 LOG_LEVEL ?= DEBUG
+SUPABASE_PROJECT_REF ?= ngwcqykrmlwlythbkmwn
 # Override env-imported LOG_LEVEL so Makefile default wins (env can otherwise force INFO)
 ifeq ($(origin LOG_LEVEL),environment)
   override LOG_LEVEL := DEBUG
@@ -32,6 +35,7 @@ help:
 	@echo "  make test-google-places - Test Google Places search (server must be running)"
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
+	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /locations enqueue"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
@@ -42,12 +46,18 @@ help:
 	@echo "  make supabase-status   - Show Supabase stack status"
 	@echo "  make supabase-reset    - Reset DB and reapply all migrations"
 	@echo "  make supabase-migration-new NAME=<name> - Create new migration file"
+	@echo ""
+	@echo "Supabase (remote project deploy):"
+	@echo "  make supabase-login    - Log in to Supabase CLI"
+	@echo "  make supabase-link     - Link CLI to remote project (SUPABASE_PROJECT_REF=$(SUPABASE_PROJECT_REF))"
+	@echo "  make supabase-db-push  - Push local migrations to linked remote project"
+	@echo "  make supabase-deploy   - Link project and push migrations to remote"
 
 install:
 	pip install -r requirements.txt
 
 run:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOG_LEVEL=$(LOG_LEVEL) uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=$(LOG_LEVEL) uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 rerun: install run
 
@@ -55,16 +65,16 @@ run-local:
 	@bash -c 'set -a && source envs/local.env && set +a && LOG_LEVEL=$${LOG_LEVEL:-$(LOG_LEVEL)} uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000}'
 
 run-dry-run:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOG_LEVEL=$(LOG_LEVEL) DRY_RUN=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=$(LOG_LEVEL) DRY_RUN=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 run-debug-run:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOG_LEVEL=DEBUG DRY_RUN=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=DEBUG DRY_RUN=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 run-async:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOG_LEVEL=$(LOG_LEVEL) LOCATIONS_ASYNC_ENABLED=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=1; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=$(LOG_LEVEL) LOCATIONS_ASYNC_ENABLED=1 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 run-sync:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=0; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) secret=$(SECRET) LOG_LEVEL=$(LOG_LEVEL) LOCATIONS_ASYNC_ENABLED=0 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=0; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=$(LOG_LEVEL) LOCATIONS_ASYNC_ENABLED=0 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
 
 kill-port:
 	@bash -c 'pid=$$(lsof -ti:$(PORT)); if [ -n "$$pid" ]; then kill -9 $$pid && echo "Killed process on port $(PORT)"; else echo "Nothing running on port $(PORT)"; fi'
@@ -92,7 +102,18 @@ test-random-location:
 
 test-locations:
 	@curl -s -X POST -H "Authorization: $(SECRET)" -H "Content-Type: application/json" \
-		-d '{"keywords":"$(KEYWORDS)"}' "http://localhost:$(PORT)/locations"
+		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/locations"
+
+test-remote:
+	@bash -c 'if [ -z "$(REMOTE_BASE_URL)" ]; then echo "Usage: make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> [KEYWORDS=\"...\"]"; exit 1; fi; \
+	if [ -z "$(REMOTE_SECRET)" ]; then echo "Usage: make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> [KEYWORDS=\"...\"]"; exit 1; fi; \
+	echo "Testing remote root without auth (expect 401)..."; \
+	curl -s -o /dev/null -w "HTTP %{http_code}\n" "$(REMOTE_BASE_URL)/"; \
+	echo "Testing remote root with auth (expect 200)..."; \
+	curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: $(REMOTE_SECRET)" "$(REMOTE_BASE_URL)/"; \
+	echo "Testing remote /locations enqueue (expect 200 accepted in async mode)..."; \
+	curl -s -X POST -H "Authorization: $(REMOTE_SECRET)" -H "Content-Type: application/json" \
+		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/locations"'
 
 test-whatsapp:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_whatsapp.py'
@@ -124,3 +145,15 @@ supabase-reset:
 supabase-migration-new:
 	@if [ -z "$(NAME)" ]; then echo "Usage: make supabase-migration-new NAME=<migration_name> (e.g. NAME=add_users_table)"; exit 1; fi; \
 	supabase migration new "$(NAME)"
+
+supabase-login:
+	supabase login
+
+supabase-link:
+	@if [ -z "$(SUPABASE_PROJECT_REF)" ]; then echo "Usage: make supabase-link SUPABASE_PROJECT_REF=<project_ref>"; exit 1; fi; \
+	supabase link --project-ref "$(SUPABASE_PROJECT_REF)"
+
+supabase-db-push:
+	supabase db push
+
+supabase-deploy: supabase-link supabase-db-push

@@ -29,8 +29,8 @@ The following categories were researched across official docs and widely used ma
 ### Option A: Supabase-centric stack
 
 Suggested shape:
-- Frontend: Next.js on Vercel (or similar)
-- Backend API: Supabase Edge Functions / external API service
+- Frontend: Next.js on Vercel (or similar); for this project Phase 1: Render Static Site
+- Backend API: Supabase Edge Functions / external API service; for this project Phase 1: existing Python FastAPI on Render Web Service
 - DB: Supabase Postgres
 - Auth: Supabase Auth
 - Async jobs: Supabase Queues (`pgmq`) and/or background tasks
@@ -164,7 +164,7 @@ Recommended architecture for your phases:
 
 2. Execution model
    - Use Supabase Queues for run enqueue/dequeue.
-   - Use lightweight workers (Edge/background tasks first; external worker service if job duration grows).
+   - Use lightweight workers (Edge/background tasks first; external worker service if job duration grows). For this project Phase 1: Python worker on Render Web Service.
    - Persist detailed run/step/activity events for UI observability.
 
 3. Secrets

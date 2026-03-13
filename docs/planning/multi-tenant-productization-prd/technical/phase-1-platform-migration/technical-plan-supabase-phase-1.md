@@ -6,14 +6,18 @@ Scope: PRD Phase 1 only (`platform migration`), no end-user auth UX yet
 
 ## 1) Goal of this phase
 
-Move the current single-operator `notion_place_inserter` service from Render-centric deployment to a Supabase-centered platform baseline while preserving existing runtime behavior:
+Retain Render-hosted runtime (API, worker, UI) while adopting Supabase as the durable platform/data plane. Phase 1 migrates persistence and queueing to Supabase; it does **not** move API or UI hosting off Render.
 
 - keep the core pipeline execution model (`Stage`, `Pipeline`, `PipelineStep`)
 - preserve current `/locations` behavior (accept request and process asynchronously by default)
 - stand up a minimal frontend with one button that triggers the same behavior
 - establish durable infrastructure primitives needed for later phases (auth, tenancy, persistent run history, secrets)
 
-This phase intentionally does **not** introduce user-facing authentication flows or full multi-tenant UI management.
+**Hosting model (Phase 1):**
+- **Runtime plane (Render):** FastAPI API + Python worker on Render Web Service; minimal UI on Render Static Site.
+- **Platform plane (Supabase):** Postgres (jobs, runs, events), pgmq queue, and supporting platform services.
+
+This phase intentionally does **not** introduce user-facing authentication flows or full multi-tenant UI management. Future migration of runtime hosting to Supabase (e.g. Edge Functions) may be revisited after production metrics and cost review.
 
 ## 2) Current-state findings (codebase)
 
@@ -64,14 +68,15 @@ Implication: adopt a **Supabase core + Python worker bridge** for Phase 1 to pre
 
 Rationale: avoids high-risk Python->Deno/TypeScript rewrite during platform migration.
 
-### 4.3 API + frontend baseline
+### 4.3 API + frontend baseline (Render-hosted)
 
-- API compatibility endpoint remains `POST /locations`
+- **API:** FastAPI on Render Web Service. Compatibility endpoint remains `POST /locations`
   - request contract unchanged (`{ "keywords": "..." }`)
   - response remains async accepted payload (`{status, job_id}`)
-- Minimal frontend page with one button:
-  - calls backend endpoint with test/dummy payload
+- **Frontend:** Minimal UI on Render Static Site with one button:
+  - calls backend API (env-driven `BASE_URL`) with test/dummy payload
   - displays accepted/failure status
+  - CORS / allowed-origin configured for static UI to API calls
 
 ## 5) Data model slice for Phase 1
 
@@ -143,24 +148,25 @@ Deliverables:
 - backward-compatible endpoint behavior
 - updated API docs for new platform-backed execution path
 
-### Workstream D - Minimal frontend
+### Workstream D - Minimal frontend (Render Static Site)
 
 1. Create simple frontend app with one action button (`Run Location Inserter` with dummy payload).
-2. Wire frontend call to migrated API endpoint.
-3. Display basic request state (`idle`, `submitting`, `accepted`, `error`).
+2. Deploy UI to Render Static Site; wire `BASE_URL` (API service URL) via environment.
+3. Wire frontend call to migrated API endpoint; ensure CORS allows static origin.
+4. Display basic request state (`idle`, `submitting`, `accepted`, `error`).
 
 Deliverables:
 
-- deployable frontend URL
+- deployable frontend URL (Render Static Site)
 - manually validated end-to-end trigger from UI
 
-### Workstream E - Deployment and operations
+### Workstream E - Deployment and operations (Render + Supabase hybrid)
 
-1. Remove Render-first deployment assumptions from docs and runtime config.
+1. Document Render runtime + Supabase platform deployment model (API/worker on Web Service, UI on Static Site).
 2. Define environment variable matrix for:
-   - API process
+   - API process (including `secret` for auth; `SUPABASE_URL`, `SUPABASE_SECRET_KEY` for platform)
    - worker process
-   - frontend process
+   - frontend process (e.g. `BASE_URL` for API endpoint)
 3. Add smoke checks for:
    - enqueue success
    - worker dequeue and execution
@@ -169,7 +175,7 @@ Deliverables:
 
 Deliverables:
 
-- new deployment runbook
+- deployment runbook for hybrid model
 - updated `README.md` and environment documentation
 
 ## 8) Acceptance criteria for Phase 1 completion
@@ -179,8 +185,8 @@ Phase 1 is complete when all are true:
 1. `POST /locations` no longer depends on in-memory queue for production flow.
 2. Jobs survive service restarts (durable queue).
 3. Run lifecycle is queryable from Supabase tables.
-4. Minimal frontend can trigger the endpoint successfully.
-5. Render-specific deployment is no longer the primary documented production path.
+4. Minimal frontend (Render Static Site) can trigger the endpoint successfully.
+5. Deployment runbook documents Render runtime (API/worker/UI) + Supabase platform integration.
 6. No major regressions in existing place-insertion behavior versus current baseline.
 
 ## 9) Risks and mitigations
@@ -191,8 +197,8 @@ Phase 1 is complete when all are true:
 - **Risk:** Scope creep into Phase 2 auth work  
   **Mitigation:** keep frontend access simple for this phase; only add auth scaffolding that does not block current endpoint parity.
 
-- **Risk:** Worker hosting ambiguity when moving away from Render  
-  **Mitigation:** treat worker as explicit deployable unit in this phase; select host with stable long-running process support.
+- **Risk:** Worker hosting and process stability  
+  **Mitigation:** treat worker as explicit deployable unit on Render Web Service; use stable long-running process support.
 
 - **Risk:** Secret sprawl across env files and platform settings  
   **Mitigation:** centralize secret inventory and move critical tokens to Vault/managed secrets before production cutover.

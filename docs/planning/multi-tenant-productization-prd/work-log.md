@@ -1,0 +1,44 @@
+# Decision Log
+
+A chronological record of decisions and work done during the multi-tenant productization project.
+
+---
+
+## Decisions
+
+Significant decisions with rationale, alternatives considered, and context.
+
+**Format:** Date | Title | Context | Options considered | Decision | Consequences
+
+<!-- Add new entries at the top, most recent first -->
+
+### 2026-03-12 - Select Supabase as Phase 1 platform foundation
+
+- **Date** — 2026-03-12
+- **Title** — Supabase-first platform migration (Phase 1)
+- **Context** — The PRD required establishing a durable baseline for backend APIs, datastore, async processing, and future auth/tenant isolation. The current codebase relies on shared-secret auth and in-memory queueing, which are not sufficient for productization. Phase 1 keeps the API/worker runtime on Render; Supabase provides the data/control plane.
+- **Options considered** —
+  1. Supabase-centric platform with queue + Postgres foundation
+  2. Firebase + Cloud Run + Cloud SQL
+  3. Clerk + Neon + Vercel (+ separate jobs platform)
+  4. Keep Render-centric architecture for initial productization
+- **Decision** — Use a Supabase-first architecture for Phase 1. Implement durable queueing and run persistence in Supabase Postgres (`pgmq` + SQL migrations), keep the existing Python execution engine as a worker for compatibility, and ship a minimal frontend that calls the migrated endpoint. Defer end-user auth UX and tenant policy enforcement to Phase 2. **Runtime hosting:** API and worker remain on Render Web Service; minimal UI on Render Static Site; Supabase is the platform/data plane.
+- **Consequences** —
+  - Positive: aligns with PRD direction toward one ecosystem for data/auth; enables durable async jobs, run history, and a clean path to RLS-based tenant isolation.
+  - Trade-off: introduces a hybrid architecture (Supabase control plane + Render-hosted Python API/worker/UI) instead of an immediate full rewrite to Supabase Edge Functions.
+  - Follow-up: create migration-runbook and queue adapter, then replace in-memory queue dependency in `/locations` path.
+
+---
+
+## Log
+
+Work completed. Add entries at the top, most recent first.
+
+| Date | Ticket / Task | Summary |
+|------|---------------|---------|
+| 2026-03-12 | SECRET uppercase | Auth env simplified to SECRET only; removed secret remapping; render.yaml, Makefile, docs updated |
+| 2026-03-12 | Render .env | App loads .env at startup from .env, /etc/secrets/.env, or envs/local.env; process env overrides file; SECRET→secret compat |
+| 2026-03-12 | PR-04 | In progress: `/locations` enqueue path migrated to Supabase pgmq + run persistence (uncommitted on branch `pr-04-locations-enqueue-path-migration`) |
+| 2026-03-12 | PR-03 | Backend Supabase config and client layer: `SupabaseQueueRepository`, `SupabaseRunRepository`, startup wiring in `app/main.py` |
+| 2026-03-12 | PR-02 | Phase 1 schema and queue: `platform_jobs`, `pipeline_runs`, `pipeline_run_events`, `http_triggers`, pgmq `locations_jobs` queue |
+| 2026-03-12 | PR-01 | Supabase bootstrap: `supabase/config.toml`, baseline + Phase 1 migrations, Makefile targets |

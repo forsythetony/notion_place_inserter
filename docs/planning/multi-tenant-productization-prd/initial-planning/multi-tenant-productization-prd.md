@@ -296,7 +296,7 @@ The first productized UI flow should support the current Notion Place Inserter u
 
 ### Application Architecture
 
-The current Render-based deployment is unlikely to be the best long-term fit once the product includes both frontend and backend surfaces. The new architecture should support:
+The architecture should support:
 
 - frontend hosting
 - backend API hosting
@@ -305,16 +305,9 @@ The current Render-based deployment is unlikely to be the best long-term fit onc
 - secret management
 - future observability and operational tooling
 
-The specific hosting provider does not need to be chosen in this PRD, but the architecture must assume a split frontend/backend product with durable infrastructure.
+The architecture must assume a split frontend/backend product with durable infrastructure. Phase 1 uses a hybrid model: Render hosts the runtime (API, worker, UI) while Supabase provides the platform/data plane (Postgres, queue, auth foundations). This keeps migration risk low while establishing durable primitives.
 
-One hard requirement is that the hosting platform should support managing the application end to end in one ecosystem as much as possible, including:
-
-- frontend
-- backend
-- datastore
-- user accounts / authentication
-
-A platform in the category of Supabase is a strong directional fit for this requirement, because it reduces operational fragmentation and speeds up product iteration.
+One hard requirement is that the platform layer (datastore, auth, queue) should be manageable in one ecosystem as much as possible. A platform in the category of Supabase is a strong directional fit for this requirement, because it reduces operational fragmentation and speeds up product iteration. Runtime hosting (API/worker/UI) may remain on Render in Phase 1; future migration of runtime to Supabase can be revisited after production metrics and cost review.
 
 ### Suggested Platform Capabilities
 
@@ -389,12 +382,12 @@ Likely top-level entities:
 
 ### Phase 1: Platform Migration
 
-- Migrate off `Render` to the end-to-end platform that will manage the application stack
-- Establish the new hosting baseline for frontend, backend, datastore, auth, and secrets management
+- Retain Render runtime (API and worker on Web Service, minimal UI on Static Site); migrate persistence and queue to Supabase
+- Establish durable platform primitives (Postgres, pgmq queue, run history) in Supabase
 - Preserve compatibility with the current execution engine where practical during the migration
 - Minimize behavioral regressions while moving to the new platform foundation
-- Stand up the new API with an endpoint that behaves like the current `Render` endpoint
-- Stand up a frontend with a single button that manually hits that endpoint
+- Stand up the API with an endpoint that behaves like the current `Render` endpoint
+- Stand up a frontend (Render Static Site) with a single button that manually hits that endpoint
 - Do not introduce user authentication in this phase
 
 ### Phase 2: Authentication and Segmentation

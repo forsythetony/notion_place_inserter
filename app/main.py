@@ -26,10 +26,14 @@ from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
 from app.services.whatsapp_service import WhatsAppService
 
+from app.env_bootstrap import bootstrap_env
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
+
+# Bootstrap env at import so all runtime lookups see file values (unless overridden)
+bootstrap_env()
 
 # Context keys to render when present (pipeline orchestration metadata)
 _CONTEXT_KEYS = (
@@ -242,7 +246,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Hello World API", lifespan=lifespan)
 
-SECRET = os.environ.get("secret", "")
+SECRET = os.environ.get("SECRET", "")
 
 app.include_router(locations.router)
 app.include_router(test.router)

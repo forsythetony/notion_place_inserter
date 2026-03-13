@@ -18,7 +18,7 @@ This folder breaks the Phase 1 Supabase migration into PR-sized tasks. Complete 
 - PRs 1-2 establish Supabase project and durable data/queue primitives.
 - PRs 3-5 migrate runtime behavior (`/locations` and worker) without changing product UX.
 - PR 6 adds the minimal UI only after backend API behavior is stable.
-- PRs 7-8 harden tests/docs and finalize deployment migration away from Render-first assumptions.
+- PRs 7-8 harden tests/docs and finalize deployment runbook for Render runtime + Supabase platform.
 
 ## Completion definition for this phase
 
@@ -26,5 +26,5 @@ Phase 1 is complete when PRs 1-8 are merged and validated together in a shared e
 
 - `/locations` uses durable queueing (not in-memory) in production flow
 - run lifecycle is persisted in Supabase
-- minimal frontend can trigger a run
-- docs/deploy path no longer treat Render as the primary platform
+- minimal frontend (Render Static Site) can trigger a run
+- docs/deploy path document Render runtime (API/worker/UI) + Supabase platform integration
