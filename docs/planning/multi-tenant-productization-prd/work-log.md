@@ -36,6 +36,9 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | worker-network-fd-leak-fix | Implemented primary FD leak fix: reuse single schema-scoped PostgREST client in SupabaseQueueRepository, add close() session cleanup, wire best-effort cleanup into worker_main shutdown. Tests for close() and _cleanup_queue_repo. |
+| 2026-03-13 | worker-network-fd-root-cause-findings | Replaced speculative network FD remediation notes with evidence-backed findings tying idle socket growth to repeated `client.schema("public")` queue RPC client creation and missing session cleanup. |
+| 2026-03-13 | worker-network-fd-remediation-doc | Added incident remediation playbook for suspected network FD leak, including immediate mitigations, code options, rollout sequence, and validation gates. |
 | 2026-03-13 | worker-memory-isolation-hardening | Split worker memory diagnostics from tracemalloc via new env flag, added richer heartbeat fields for root-cause isolation, and hardened terminal failure path to avoid FK persistence rethrow loops. |
 | 2026-03-13 | worker-memory-remediation-implementation | Implemented non-retriable classification (23503/23505), read_count ceiling, memory diagnostics (heartbeat, per-message delta, high-watermark tracemalloc), env wiring, and tests. Added manual validation steps to findings doc. |
 | 2026-03-13 | tech-debt-story-retry-error-propagation | Added `docs/tech-debt/` and created a backlog story to validate retry-flow error propagation and terminal handling consistency. |

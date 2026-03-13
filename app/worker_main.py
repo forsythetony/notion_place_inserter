@@ -104,6 +104,16 @@ def _configure_logger() -> None:
     )
 
 
+def _cleanup_queue_repo(queue_repo: object) -> None:
+    """Best-effort close of queue repository session. Logs errors, does not raise."""
+    close_fn = getattr(queue_repo, "close", None)
+    if callable(close_fn):
+        try:
+            close_fn()
+        except Exception:
+            logger.exception("worker_queue_repo_close_failed")
+
+
 def main() -> None:
     """Bootstrap services and run worker loop until shutdown."""
     bootstrap_env()
@@ -237,6 +247,7 @@ def main() -> None:
     except asyncio.CancelledError:
         logger.info("worker_stopped")
     finally:
+        _cleanup_queue_repo(queue_repo)
         loop.close()
 
 

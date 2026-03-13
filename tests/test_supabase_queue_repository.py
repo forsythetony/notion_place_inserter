@@ -44,7 +44,7 @@ def test_send_returns_message_id(repo, mock_client):
     )
     result = repo.send({"job_id": "loc_abc", "keywords": "coffee"})
     assert result == QueueSendResult(message_id=42)
-    mock_client.schema.assert_called_with("public")
+    mock_client.schema.assert_called_once_with("public")
     mock_client.schema.return_value.rpc.assert_called_once_with(
         "pgmq_send",
         {"queue_name": "locations_jobs", "msg": {"job_id": "loc_abc", "keywords": "coffee"}, "delay": 0},
@@ -68,7 +68,7 @@ def test_read_returns_normalized_messages(repo, mock_client):
     assert messages[0].message_id == 1
     assert messages[0].read_count == 1
     assert messages[0].payload == {"job_id": "loc_1", "keywords": "park"}
-    mock_client.schema.assert_called_with("public")
+    mock_client.schema.assert_called_once_with("public")
     mock_client.schema.return_value.rpc.assert_called_once_with(
         "pgmq_read",
         {"queue_name": "locations_jobs", "vt": 30, "qty": 1},
@@ -91,8 +91,39 @@ def test_archive_calls_rpc_and_returns_result(repo, mock_client):
     )
     result = repo.archive(message_id=99)
     assert result == QueueAckResult(archived=True)
-    mock_client.schema.assert_called_with("public")
+    mock_client.schema.assert_called_once_with("public")
     mock_client.schema.return_value.rpc.assert_called_once_with(
         "pgmq_archive",
         {"queue_name": "locations_jobs", "msg_id": 99},
     )
+
+
+def test_close_invokes_session_close(repo, mock_client):
+    """close() calls session.close() when schema client has a session."""
+    mock_session = MagicMock()
+    mock_client.schema.return_value.session = mock_session
+    repo.close()
+    mock_session.close.assert_called_once()
+
+
+def test_close_idempotent(repo, mock_client):
+    """close() is safe to call multiple times."""
+    mock_session = MagicMock()
+    mock_client.schema.return_value.session = mock_session
+    repo.close()
+    repo.close()
+    mock_session.close.assert_called()
+
+
+def test_close_no_session_does_not_raise(repo, mock_client):
+    """close() does not raise when schema client has no session."""
+    mock_client.schema.return_value.session = None
+    repo.close()  # no raise
+
+
+def test_close_session_error_logged_does_not_raise(repo, mock_client):
+    """close() logs but does not raise when session.close() raises."""
+    mock_session = MagicMock()
+    mock_session.close.side_effect = RuntimeError("connection reset")
+    mock_client.schema.return_value.session = mock_session
+    repo.close()  # no raise

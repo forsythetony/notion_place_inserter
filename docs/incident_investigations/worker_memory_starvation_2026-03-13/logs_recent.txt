@@ -83,3 +83,66 @@
 2026-03-13T23:16:35.657934798Z 2026-03-13 23:16:35.657 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=442.63 gc_counts=(984, 0, 0) gc_objects=211525 num_threads=1 open_fds=402 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
 2026-03-13T23:16:35.658039691Z 2026-03-13 23:16:35.657 | WARNING | app.queue.memory_diagnostics:_emit_high_watermark_log:192 - worker_memory_high_watermark | rss_mb=442.63 threshold_pct=85 threshold_mb=435.2 msg_id=None run_id=None | top_allocations:
 2026-03-13T23:16:35.658051121Z   (tracemalloc snapshot disabled)
+
+
+--- Deploy here
+
+
+2026-03-13T23:19:51.241707198Z 2026-03-13 23:19:51.241 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=137.8 gc_counts=(897, 0, 0) gc_objects=165778 num_threads=1 open_fds=33 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:20:51.635657155Z 2026-03-13 23:20:51.635 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=151.05 gc_counts=(1722, 0, 0) gc_objects=164789 num_threads=1 open_fds=24 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:21:41.600645527Z Deploy cancelled
+2026-03-13T23:21:52.660609376Z 2026-03-13 23:21:52.660 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=151.05 gc_counts=(738, 0, 0) gc_objects=164045 num_threads=1 open_fds=16 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:22:53.647010658Z 2026-03-13 23:22:53.646 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=162.93 gc_counts=(1722, 0, 0) gc_objects=170933 num_threads=1 open_fds=72 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:23:53.812961957Z 2026-03-13 23:23:53.812 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=209.83 gc_counts=(615, 0, 0) gc_objects=177699 num_threads=1 open_fds=127 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:24:53.887081399Z 2026-03-13 23:24:53.886 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=256.2 gc_counts=(1476, 0, 0) gc_objects=184464 num_threads=1 open_fds=182 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:25:02.530811516Z ==> Deploying...
+2026-03-13T23:25:30.345962396Z ==> Running 'python -m app.worker_main'
+2026-03-13T23:25:30.953565598Z ==> Your service is live 🎉
+2026-03-13T23:25:34.454277634Z 2026-03-13 23:25:34.454 | INFO     | app.env_bootstrap:load_env_file:73 - env_bootstrap | searching paths | /opt/render/project/src/.env, /etc/secrets/.env, /opt/render/project/src/envs/local.env
+2026-03-13T23:25:34.456455147Z 2026-03-13 23:25:34.456 | INFO     | app.env_bootstrap:load_env_file:80 - env_bootstrap | loaded env file | /opt/render/project/src/.env
+2026-03-13T23:25:34.464918951Z 2026-03-13 23:25:34.464 | INFO | __main__:_configure_logger:100 - worker_logger_configured | level=INFO file=logs/app.log
+2026-03-13T23:25:34.465089016Z 2026-03-13 23:25:34.464 | INFO | app.env_bootstrap:log_env_masked:104 - env | BASE_URL=https://hello-world-api-r7h7.onrender.com
+2026-03-13T23:25:34.465235729Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:102 - env | SECRET=********************************************
+2026-03-13T23:25:34.465346022Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:104 - env | CORS_ALLOWED_ORIGINS=https://notion-pipeliner-ui.onrender.com
+2026-03-13T23:25:34.465458295Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:104 - env | SUPABASE_PROJECT_REF=ikuxlizxjvabmyrgtnah
+2026-03-13T23:25:34.465584868Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:104 - env | SUPABASE_URL=https://ikuxlizxjvabmyrgtnah.supabase.co
+2026-03-13T23:25:34.46569906Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:104 - env | SUPABASE_PUBLISHABLE_KEY=sb_publishable_cm4mfm0PS4_PEahG1hsQJg_vYsWZuZc
+2026-03-13T23:25:34.465812233Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:102 - env | SUPABASE_SECRET_KEY=*****************************************
+2026-03-13T23:25:34.465925676Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_QUEUE_NAME=[unset]
+2026-03-13T23:25:34.466038858Z 2026-03-13 23:25:34.465 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PLATFORM_JOBS=[unset]
+2026-03-13T23:25:34.466240274Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PIPELINE_RUNS=[unset]
+2026-03-13T23:25:34.466342716Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PIPELINE_RUN_EVENTS=[unset]
+2026-03-13T23:25:34.466444398Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:102 - env | NOTION_API_KEY=**************************************************
+2026-03-13T23:25:34.46652434Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:102 - env | ANTHROPIC_TOKEN=************************************************************************************************************
+2026-03-13T23:25:34.466604462Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:102 - env | GOOGLE_PLACES_API_KEY=***************************************
+2026-03-13T23:25:34.466683864Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:102 - env | FREEPIK_API_KEY=************************************
+2026-03-13T23:25:34.466794407Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:100 - env | DRY_RUN=[unset]
+2026-03-13T23:25:34.46690043Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATIONS_ASYNC_ENABLED=[unset]
+2026-03-13T23:25:34.467010312Z 2026-03-13 23:25:34.466 | INFO | app.env_bootstrap:log_env_masked:100 - env | GOOGLE_PLACE_DETAILS_FETCH=[unset]
+2026-03-13T23:25:34.467196377Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATIONS_CACHE_TTL_SECONDS=[unset]
+2026-03-13T23:25:34.46732334Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATION_MATCH_MIN_CONFIDENCE=[unset]
+2026-03-13T23:25:34.467430252Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATION_RELATION_REQUIRED=[unset]
+2026-03-13T23:25:34.467543765Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_LEVEL=[unset]
+2026-03-13T23:25:34.467655828Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_PATH=[unset]
+2026-03-13T23:25:34.46776427Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_ROTATION=[unset]
+2026-03-13T23:25:34.467875023Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_RETENTION=[unset]
+2026-03-13T23:25:34.468004156Z 2026-03-13 23:25:34.467 | INFO | app.env_bootstrap:log_env_masked:100 - env | WORKER_RETRY_DELAYS_SECONDS=[unset]
+2026-03-13T23:25:34.468127949Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_DIAGNOSTICS_ENABLED=1
+2026-03-13T23:25:34.468262902Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_TRACEMALLOC_ENABLED=0
+2026-03-13T23:25:34.468376985Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_LIMIT_MB=512
+2026-03-13T23:25:34.468507508Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_HEARTBEAT_INTERVAL_SECONDS=60
+2026-03-13T23:25:34.468631221Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:102 - env | TWILIO_ACCOUNT_SID=**********************************
+2026-03-13T23:25:34.468775015Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:102 - env | TWILIO_AUTH_TOKEN=********************************
+2026-03-13T23:25:34.468894008Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+2026-03-13T23:25:34.469026061Z 2026-03-13 23:25:34.468 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_RECIPIENT_DEFAULT=whatsapp:+13148050127
+2026-03-13T23:25:34.469186615Z 2026-03-13 23:25:34.469 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_ENABLED=1
+2026-03-13T23:25:34.469310098Z 2026-03-13 23:25:34.469 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_MAX_ERROR_CHARS=300
+2026-03-13T23:25:36.540783955Z 2026-03-13 23:25:36.540 | INFO | __main__:main:197 - worker_starting | poll_interval=10.0 vt_seconds=300 retry_delays=(5, 30, 60) memory_diagnostics=True memory_tracemalloc=False
+2026-03-13T23:25:53.991189553Z 2026-03-13 23:25:53.990 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=303.08 gc_counts=(369, 0, 0) gc_objects=191229 num_threads=1 open_fds=237 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:26:29.633805678Z 2026-03-13 23:26:29.633 | INFO | __main__:shutdown:225 - worker_shutdown_requested
+2026-03-13T23:26:29.634076396Z 2026-03-13 23:26:29.633 | INFO | __main__:main:237 - worker_stopped
+2026-03-13T23:26:37.333647805Z 2026-03-13 23:26:37.333 | INFO | app.queue.memory_diagnostics:log_heartbeat:139 - worker_memory_heartbeat | rss_mb=122.44 gc_counts=(1954, 0, 0) gc_objects=165191 num_threads=1 open_fds=16 fd_socket=10 fd_pipe=2 fd_anon=1 fd_file=1 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:27:38.026223955Z 2026-03-13 23:27:38.025 | INFO | app.queue.memory_diagnostics:log_heartbeat:139 - worker_memory_heartbeat | rss_mb=122.44 gc_counts=(699, 0, 0) gc_objects=165931 num_threads=1 open_fds=22 fd_socket=16 fd_pipe=2 fd_anon=1 fd_file=1 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:28:38.733993351Z 2026-03-13 23:28:38.733 | INFO | app.queue.memory_diagnostics:log_heartbeat:139 - worker_memory_heartbeat | rss_mb=125.57 gc_counts=(1437, 0, 0) gc_objects=166669 num_threads=1 open_fds=28 fd_socket=22 fd_pipe=2 fd_anon=1 fd_file=1 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:29:39.506421019Z 2026-03-13 23:29:39.506 | INFO | app.queue.memory_diagnostics:log_heartbeat:139 - worker_memory_heartbeat | rss_mb=130.45 gc_counts=(247, 0, 0) gc_objects=167407 num_threads=1 open_fds=34 fd_socket=28 fd_pipe=2 fd_anon=1 fd_file=1 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:30:40.331686692Z 2026-03-13 23:30:40.331 | INFO | app.queue.memory_diagnostics:log_heartbeat:139 - worker_memory_heartbeat | rss_mb=135.45 gc_counts=(985, 0, 0) gc_objects=168145 num_threads=1 open_fds=40 fd_socket=34 fd_pipe=2 fd_anon=1 fd_file=1 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None

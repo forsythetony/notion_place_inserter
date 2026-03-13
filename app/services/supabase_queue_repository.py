@@ -39,11 +39,24 @@ class SupabaseQueueRepository:
     """
     Repository for pgmq queue operations via Supabase RPC.
     Uses public schema wrapper functions (pgmq_send, pgmq_read, pgmq_archive).
+    Reuses a single schema-scoped client to avoid socket leaks from per-call allocation.
     """
 
     def __init__(self, client: Client, config: SupabaseConfig) -> None:
-        self._client = client
         self._config = config
+        self._schema_client = client.schema("public")
+
+    def close(self) -> None:
+        """
+        Close the underlying HTTP session. Safe to call multiple times.
+        Call during process shutdown to release sockets.
+        """
+        session = getattr(self._schema_client, "session", None)
+        if session is not None and callable(getattr(session, "close", None)):
+            try:
+                session.close()
+            except Exception:
+                logger.exception("supabase_queue_close_failed | queue={}", self._config.queue_name)
 
     def send(self, payload: dict[str, Any], delay_seconds: int = 0) -> QueueSendResult:
         """
@@ -52,8 +65,7 @@ class SupabaseQueueRepository:
         """
         try:
             resp = (
-                self._client.schema("public")
-                .rpc(
+                self._schema_client.rpc(
                     "pgmq_send",
                     {
                         "queue_name": self._config.queue_name,
@@ -88,8 +100,7 @@ class SupabaseQueueRepository:
         """
         try:
             resp = (
-                self._client.schema("public")
-                .rpc(
+                self._schema_client.rpc(
                     "pgmq_read",
                     {
                         "queue_name": self._config.queue_name,
@@ -136,8 +147,7 @@ class SupabaseQueueRepository:
         """
         try:
             resp = (
-                self._client.schema("public")
-                .rpc(
+                self._schema_client.rpc(
                     "pgmq_archive",
                     {
                         "queue_name": self._config.queue_name,
