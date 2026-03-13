@@ -40,9 +40,13 @@ class EventBus:
                 logger.exception("Failure subscriber error: {}", e)
 
 
-def _on_success(_event: PipelineSuccessEvent) -> None:
-    """Default success subscriber: log exactly as specified."""
-    logger.info("Pipeline executed successfully!")
+def _on_success(event: PipelineSuccessEvent) -> None:
+    """Default success subscriber: log with job_id and run_id for correlation."""
+    logger.info(
+        "pipeline_success | job_id={} run_id={}",
+        event.job_id,
+        event.run_id,
+    )
 
 
 def _on_failure(event: PipelineFailureEvent) -> None:
@@ -58,6 +62,6 @@ def _on_failure(event: PipelineFailureEvent) -> None:
 
 
 def subscribe_to_success(bus: EventBus) -> None:
-    """Register the success subscriber that logs 'Pipeline executed successfully!'."""
+    """Register the default success subscriber that logs with job_id and run_id for correlation."""
     bus.subscribe_success(_on_success)
     bus.subscribe_failure(_on_failure)

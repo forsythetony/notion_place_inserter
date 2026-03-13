@@ -38,7 +38,9 @@ paths:
         Creates a place entry in the Places to Visit Notion database by running a
         pipeline (query rewrite, Google Places lookup, property resolution).
         When async is enabled (default, LOCATIONS_ASYNC_ENABLED=1), the request is
-        enqueued and returns immediately with job_id; the pipeline runs in the background.
+        enqueued to a durable Supabase-backed queue and returns immediately with job_id.
+        A separate worker process consumes the queue and runs the pipeline; job and run
+        lifecycle states (queued, running, succeeded, failed) are persisted.
         When async is disabled (LOCATIONS_ASYNC_ENABLED=0), the pipeline runs
         synchronously and returns the created Notion page.
       operationId: createLocation
@@ -53,7 +55,7 @@ paths:
       responses:
         "200":
           description: |
-            Async mode: request accepted and enqueued.
+            Async mode: request accepted and enqueued to durable queue; returns job_id.
             Sync mode: place entry created successfully (Notion page object).
           content:
             application/json:
@@ -72,7 +74,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
-          description: Unable to enqueue request (queue unavailable; async mode only)
+          description: Unable to enqueue request (queue or persistence layer unavailable; async mode only)
           content:
             application/json:
               schema:
@@ -198,7 +200,11 @@ components:
 
     LocationAcceptedResponse:
       type: object
-      description: Returned when async mode is enabled and the job was successfully enqueued
+      description: |
+        Returned when async mode is enabled and the job was successfully enqueued to the
+        durable Supabase queue. A worker process will process the job; lifecycle states
+        (queued, running, succeeded, failed) are persisted for observability. No
+        status-polling endpoint is currently exposed.
       required:
         - status
         - job_id

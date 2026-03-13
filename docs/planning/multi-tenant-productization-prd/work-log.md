@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | PR-07 | Tests, observability, API docs: enqueue persistence-failure tests; worker idempotency (failed-run), queue-read and persist-error resilience; correlation logging (job_id+run_id) in worker/subscriber/communicator; openapi.yaml durable queue wording. |
 | 2026-03-13 | Keywords textbox UI | Replaced hardcoded locations keywords with user-editable textbox; trim/non-empty and max-300 validation; Run disabled when invalid/loading. |
 | 2026-03-13 | PR-06 Blueprint migration | Backend render.yaml: notion-pipeliner-api + notion-pipeliner-worker, fromGroup notion-pipeliner-backend; deploy doc migration steps and manual checklist; README aligned. |
 | 2026-03-13 | PR-06 | Minimal frontend trigger UI: finalized error handling (401, network/CORS, VITE_BASE_URL), render.yaml for Render Static Site, env/deploy docs, Phase-1 doc consistency (VITE_BASE_URL/VITE_SECRET). |

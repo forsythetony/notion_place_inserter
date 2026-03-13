@@ -1,7 +1,36 @@
 """Unit tests for queue event bus and success subscriber."""
 
+from loguru import logger
+
 from app.queue.events import EventBus, subscribe_to_success
 from app.queue.models import PipelineSuccessEvent
+
+
+def test_subscribe_to_success_logs_job_id_run_id():
+    """Default success subscriber logs job_id and run_id for correlation."""
+    output = []
+
+    def sink(msg):
+        output.append(msg.record["message"])
+
+    handler_id = logger.add(sink, level="INFO", format="{message}")
+    try:
+        bus = EventBus()
+        subscribe_to_success(bus)
+        bus.publish_success(
+            PipelineSuccessEvent(
+                job_id="loc_abc",
+                run_id="run-xyz",
+                keywords="cafe",
+                result={"id": "page-1"},
+            )
+        )
+        logged = " ".join(output)
+        assert "pipeline_success" in logged
+        assert "loc_abc" in logged
+        assert "run-xyz" in logged
+    finally:
+        logger.remove(handler_id)
 
 
 def test_subscriber_logs_success():

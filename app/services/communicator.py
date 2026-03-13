@@ -55,10 +55,18 @@ class Communicator:
         """Send success notification with Notion page link when recipient available."""
         recipient = event.recipient_whatsapp or self._default_recipient
         if not recipient:
-            logger.warning("notification_skipped_no_recipient", job_id=event.job_id)
+            logger.warning(
+                "notification_skipped_no_recipient | job_id={} run_id={}",
+                event.job_id,
+                event.run_id,
+            )
             return
         if not self._enabled:
-            logger.debug("notification_skipped_disabled", job_id=event.job_id)
+            logger.debug(
+                "notification_skipped_disabled | job_id={} run_id={}",
+                event.job_id,
+                event.run_id,
+            )
             return
 
         url = event.result.get("url") if isinstance(event.result, dict) else None
@@ -69,19 +77,28 @@ class Communicator:
             self._whatsapp.send_message(to_number=recipient, body=body)
         except WhatsAppServiceError as e:
             logger.warning(
-                "communicator_send_failed",
-                job_id=event.job_id,
-                error=str(e),
+                "communicator_send_failed | job_id={} run_id={} error={}",
+                event.job_id,
+                event.run_id,
+                str(e),
             )
 
     def notify_pipeline_failure(self, event: PipelineFailureEvent) -> None:
         """Send failure notification with truncated, sanitized error when recipient available."""
         recipient = event.recipient_whatsapp or self._default_recipient
         if not recipient:
-            logger.warning("notification_skipped_no_recipient", job_id=event.job_id)
+            logger.warning(
+                "notification_skipped_no_recipient | job_id={} run_id={}",
+                event.job_id,
+                event.run_id,
+            )
             return
         if not self._enabled:
-            logger.debug("notification_skipped_disabled", job_id=event.job_id)
+            logger.debug(
+                "notification_skipped_disabled | job_id={} run_id={}",
+                event.job_id,
+                event.run_id,
+            )
             return
 
         err_text = str(event.error) if isinstance(event.error, Exception) else event.error
@@ -93,7 +110,8 @@ class Communicator:
             self._whatsapp.send_message(to_number=recipient, body=body)
         except WhatsAppServiceError as e:
             logger.warning(
-                "communicator_send_failed",
-                job_id=event.job_id,
-                error=str(e),
+                "communicator_send_failed | job_id={} run_id={} error={}",
+                event.job_id,
+                event.run_id,
+                str(e),
             )

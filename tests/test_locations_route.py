@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from loguru import logger
 
 from app.main import app
 
@@ -163,3 +164,109 @@ def test_post_locations_async_503_when_send_raises(client):
     )
     assert resp.status_code == 503
     assert "enqueue" in resp.json()["detail"].lower()
+
+
+def test_post_locations_async_503_when_create_job_raises(client):
+    """POST /locations when create_job raises returns 503; send is never called."""
+    mock_queue_repo = MagicMock()
+    mock_run_repo = MagicMock()
+    mock_run_repo.create_job.side_effect = RuntimeError("Supabase unavailable")
+
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 503
+    mock_run_repo.create_job.assert_called_once()
+    mock_run_repo.create_run.assert_not_called()
+    mock_queue_repo.send.assert_not_called()
+
+
+def test_post_locations_async_503_when_create_run_raises(client):
+    """POST /locations when create_run raises returns 503; send is never called."""
+    mock_queue_repo = MagicMock()
+    mock_run_repo = MagicMock()
+    mock_run_repo.create_run.side_effect = RuntimeError("Supabase unavailable")
+
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 503
+    mock_run_repo.create_job.assert_called_once()
+    mock_run_repo.create_run.assert_called_once()
+    mock_queue_repo.send.assert_not_called()
+
+
+@pytest.fixture
+def captured_logs():
+    """Capture loguru output for assertions."""
+    output = []
+
+    def sink(message):
+        record = message.record
+        output.append({"message": record["message"]})
+
+    handler_id = logger.add(sink, level="DEBUG", format="{message}")
+    yield output
+    logger.remove(handler_id)
+
+
+def test_post_locations_async_logs_correlation_on_success(client, captured_logs):
+    """Enqueue success logs include job_id and run_id for correlation."""
+    mock_queue_repo = MagicMock()
+    mock_queue_repo.send.return_value = MagicMock(message_id=1)
+    mock_run_repo = MagicMock()
+
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    run_id = mock_run_repo.create_run.call_args[1]["run_id"]
+
+    enqueued = next((e for e in captured_logs if "locations_enqueued" in e["message"]), None)
+    assert enqueued is not None
+    assert job_id in enqueued["message"]
+    assert run_id in enqueued["message"]
+
+
+def test_post_locations_async_logs_correlation_on_failure(client, captured_logs):
+    """Enqueue failure logs include job_id and run_id for correlation."""
+    mock_queue_repo = MagicMock()
+    mock_queue_repo.send.side_effect = RuntimeError("pgmq down")
+    mock_run_repo = MagicMock()
+
+    app.state.locations_async_enabled = True
+    app.state.supabase_queue_repository = mock_queue_repo
+    app.state.supabase_run_repository = mock_run_repo
+
+    resp = client.post(
+        "/locations",
+        headers={"Authorization": os.environ.get("SECRET", "dev-secret")},
+        json={"keywords": "park"},
+    )
+    assert resp.status_code == 503
+    job_id = mock_run_repo.create_job.call_args[1]["job_id"]
+    run_id = mock_run_repo.create_run.call_args[1]["run_id"]
+
+    failed = next((e for e in captured_logs if "locations_enqueue_failed" in e["message"]), None)
+    assert failed is not None
+    assert job_id in failed["message"]
+    assert run_id in failed["message"]

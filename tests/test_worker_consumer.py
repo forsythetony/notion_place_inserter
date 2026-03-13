@@ -174,3 +174,111 @@ def test_worker_malformed_payload_archives(
     mock_run_repo.insert_event.assert_not_called()
     mock_places_service.create_place_from_query.assert_not_called()
     mock_queue_repo.archive.assert_called_once_with(2)
+
+
+def test_worker_idempotency_skip_failed_run(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """Idempotency: run already failed causes skip + archive, no pipeline execution."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    mock_run_repo.get_run_status.return_value = "failed"
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_run_repo.update_job_status.assert_not_called()
+    mock_run_repo.update_run.assert_not_called()
+    mock_run_repo.insert_event.assert_not_called()
+    mock_places_service.create_place_from_query.assert_not_called()
+    mock_queue_repo.archive.assert_called_once_with(1)
+
+
+def test_worker_queue_read_error_continues(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """Queue read exception: worker logs, sleeps, and continues without crashing."""
+    mock_queue_repo.read.side_effect = [
+        RuntimeError("pgmq_read failed"),
+        [],
+        [],
+    ]
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    # Worker should have called read multiple times (retries after error)
+    assert mock_queue_repo.read.call_count >= 2
+    mock_queue_repo.archive.assert_not_called()
+
+
+def test_worker_persist_running_failed_no_archive(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When persist-running fails, message is not archived (reappears after vt)."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    mock_run_repo.update_job_status.side_effect = RuntimeError("DB write failed")
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_not_called()
+    mock_places_service.create_place_from_query.assert_not_called()
+
+
+def test_worker_persist_failure_failed_no_archive(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When pipeline fails but persist-failure raises, message is not archived."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    mock_places_service.create_place_from_query.side_effect = ValueError("API error")
+    # update_job_status for "running" succeeds; for "failed" we make it raise
+    call_count = [0]
+
+    def update_job_status_side_effect(job_id, status, **kw):
+        call_count[0] += 1
+        if status == "failed":
+            raise RuntimeError("persist failed")
+
+    mock_run_repo.update_job_status.side_effect = update_job_status_side_effect
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_not_called()
+
+
+def test_worker_persist_success_failed_no_archive(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When pipeline succeeds but persist-success raises, message is not archived."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+    call_count = [0]
+
+    def update_job_status_side_effect(job_id, status, **kw):
+        call_count[0] += 1
+        if status == "succeeded":
+            raise RuntimeError("persist success failed")
+
+    mock_run_repo.update_job_status.side_effect = update_job_status_side_effect
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_not_called()

@@ -143,7 +143,11 @@ async def _process_message(
         run_repo.update_run(run_id, status="running")
         run_repo.insert_event(run_id, "pipeline_started", {"keywords_preview": keywords[:80]})
     except Exception:
-        logger.exception("worker_persist_running_failed | run_id={}", run_id)
+        logger.exception(
+            "worker_persist_running_failed | job_id={} run_id={}",
+            job_id,
+            run_id,
+        )
         raise
 
     # Execute pipeline
@@ -154,7 +158,12 @@ async def _process_message(
         )
     except Exception as e:
         err_msg = _normalize_error(e)
-        logger.exception("Pipeline failed for job {}", job_id)
+        logger.exception(
+            "worker_pipeline_failed | job_id={} run_id={} error={}",
+            job_id,
+            run_id,
+            err_msg,
+        )
         try:
             run_repo.update_job_status(
                 job_id, "failed", completed_at=now, error_message=err_msg
@@ -167,7 +176,8 @@ async def _process_message(
             )
         except Exception as persist_err:
             logger.exception(
-                "worker_persist_failure_failed | run_id={}",
+                "worker_persist_failure_failed | job_id={} run_id={}",
+                job_id,
                 run_id,
             )
             raise persist_err from e
@@ -203,7 +213,11 @@ async def _process_message(
             {"result_preview": result_meta},
         )
     except Exception:
-        logger.exception("worker_persist_success_failed | run_id={}", run_id)
+        logger.exception(
+            "worker_persist_success_failed | job_id={} run_id={}",
+            job_id,
+            run_id,
+        )
         raise
 
     event_bus.publish_success(
