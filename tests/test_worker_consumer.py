@@ -335,3 +335,68 @@ def test_worker_retry_exhausted_marks_failed_and_archives(
     mock_queue_repo.archive.assert_called_once_with(1)
     status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
     assert "failed" in status_calls
+
+
+def test_worker_non_retriable_fk_violation_archives_immediately(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When persist-running fails with FK violation (23503), worker archives immediately without retry."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+
+    class APIErrorWithCode(Exception):
+        def __init__(self, code: str, message: str):
+            super().__init__(message)
+            self.code = code
+
+    def insert_event_raises_fk(*args, **kwargs):
+        raise APIErrorWithCode(
+            "23503",
+            "insert or update on table pipeline_run_events violates foreign key constraint",
+        )
+
+    mock_run_repo.insert_event.side_effect = insert_event_raises_fk
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_called_once_with(1)
+    mock_places_service.create_place_from_query.assert_not_called()
+    mock_run_repo.increment_job_retry_count.assert_not_called()
+    status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
+    assert "failed" in status_calls
+
+
+def test_worker_read_count_ceiling_forces_terminal(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When message read_count exceeds ceiling, worker forces terminal without retry."""
+    high_read_count_msg = QueueMessage(
+        message_id=3,
+        read_count=25,
+        enqueued_at=datetime.now(),
+        payload={
+            "job_id": "loc_abc",
+            "run_id": "run-xyz",
+            "keywords": "coffee shop",
+        },
+    )
+    mock_queue_repo.read.side_effect = [
+        [high_read_count_msg],
+        [],
+    ]
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_called_once_with(3)
+    mock_places_service.create_place_from_query.assert_not_called()
+    event_types = [c[0][1] for c in mock_run_repo.insert_event.call_args_list]
+    assert "pipeline_started" not in event_types
+    assert "pipeline_failed" in event_types
+    status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
+    assert "failed" in status_calls

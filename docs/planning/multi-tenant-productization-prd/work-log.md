@@ -36,6 +36,9 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | worker-memory-remediation-implementation | Implemented non-retriable classification (23503/23505), read_count ceiling, memory diagnostics (heartbeat, per-message delta, high-watermark tracemalloc), env wiring, and tests. Added manual validation steps to findings doc. |
+| 2026-03-13 | tech-debt-story-retry-error-propagation | Added `docs/tech-debt/` and created a backlog story to validate retry-flow error propagation and terminal handling consistency. |
+| 2026-03-13 | worker-memory-starvation-investigation-update | Updated incident findings with new log evidence, ranked hypotheses, added memory telemetry plan, and additional mitigation/validation steps. |
 | 2026-03-13 | p2_pr02 validation | Manual validation complete: missing/invalid auth → 401, valid token → 200 with user_type, stability across repeated calls, API docs verified. |
 | 2026-03-13 | worker-retry-backoff | Bounded worker retries with configurable backoff (5,30,60s default); platform_jobs.retry_count migration; final failure marks job/run failed and archives; WORKER_RETRY_DELAYS_SECONDS env; tests. |
 | 2026-03-13 | worker-memory-starvation-investigation | Investigated worker memory starvation using Render chart and runtime logs; documented evidence, likely poison-message retry loop root cause, and remediation plan. |

@@ -1,12 +1,19 @@
 """Supabase-backed queue consumer and worker loop for location processing."""
 
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from app.queue.events import EventBus
+from app.queue.memory_diagnostics import (
+    get_memory_snapshot,
+    log_heartbeat,
+    log_message_delta,
+    maybe_log_high_watermark,
+)
 from app.queue.models import PipelineFailureEvent, PipelineSuccessEvent
 from app.services.supabase_queue_repository import QueueMessage, SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
@@ -22,6 +29,31 @@ _DEFAULT_VT_SECONDS = 300
 
 # Default poll interval when queue is empty
 _DEFAULT_POLL_INTERVAL_SECONDS = 1.0
+
+# SQLSTATE codes that are deterministic and should never be retried
+_NON_RETRIABLE_SQLSTATES = frozenset({"23503", "23505"})  # FK violation, unique violation
+
+# Queue read_count ceiling: force terminal if message has been read too many times
+_READ_COUNT_CEILING = 20
+
+
+def _extract_sqlstate(error: BaseException) -> str | None:
+    """Extract PostgreSQL SQLSTATE/code from error. Returns None if not found."""
+    code = getattr(error, "code", None)
+    if code is not None and isinstance(code, str):
+        return code.strip()
+    if hasattr(error, "args") and error.args:
+        first = error.args[0]
+        if isinstance(first, dict) and "code" in first:
+            c = first["code"]
+            return str(c).strip() if c is not None else None
+    return None
+
+
+def _is_non_retriable(error: BaseException) -> bool:
+    """True if error is deterministic and should not be retried (e.g. FK violation)."""
+    code = _extract_sqlstate(error)
+    return code in _NON_RETRIABLE_SQLSTATES if code else False
 
 
 def _run_pipeline_sync(places_service: "PlacesService", keywords: str) -> dict:
@@ -78,6 +110,9 @@ async def run_worker_loop(
     poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS,
     vt_seconds: int = _DEFAULT_VT_SECONDS,
     retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
+    memory_diagnostics_enabled: bool = False,
+    memory_limit_mb: float = 512.0,
+    memory_heartbeat_interval_seconds: float = 60.0,
 ) -> None:
     """
     Consume messages from Supabase queue and run the pipeline.
@@ -86,6 +121,9 @@ async def run_worker_loop(
     Runs until cancelled; use asyncio.create_task and cancel on shutdown.
     """
     loop = asyncio.get_event_loop()
+    last_heartbeat = time.monotonic()
+    crossed_thresholds: set[float] = set()
+
     while True:
         try:
             messages = queue_repo.read(batch_size=1, vt_seconds=vt_seconds)
@@ -95,10 +133,51 @@ async def run_worker_loop(
             continue
 
         if not messages:
+            # Idle heartbeat
+            if memory_diagnostics_enabled:
+                now_mono = time.monotonic()
+                if now_mono - last_heartbeat >= memory_heartbeat_interval_seconds:
+                    last_heartbeat = now_mono
+                    snap = get_memory_snapshot()
+                    log_heartbeat(
+                        rss_mb=snap["rss_mb"],
+                        gc_counts=snap["gc_counts"],
+                        active_msg_id=None,
+                        active_run_id=None,
+                    )
+                    crossed_thresholds = maybe_log_high_watermark(
+                        snap["rss_mb"],
+                        memory_limit_mb,
+                        crossed_thresholds,
+                        None,
+                        None,
+                    )
             await asyncio.sleep(poll_interval_seconds)
             continue
 
         for msg in messages:
+            # Heartbeat before processing
+            if memory_diagnostics_enabled:
+                now_mono = time.monotonic()
+                if now_mono - last_heartbeat >= memory_heartbeat_interval_seconds:
+                    last_heartbeat = now_mono
+                    snap = get_memory_snapshot()
+                    log_heartbeat(
+                        rss_mb=snap["rss_mb"],
+                        gc_counts=snap["gc_counts"],
+                        active_msg_id=msg.message_id,
+                        active_run_id=(
+                            (msg.payload or {}).get("run_id")
+                            if msg.payload else None
+                        ),
+                    )
+                    crossed_thresholds = maybe_log_high_watermark(
+                        snap["rss_mb"],
+                        memory_limit_mb,
+                        crossed_thresholds,
+                        msg.message_id,
+                        (msg.payload or {}).get("run_id") if msg.payload else None,
+                    )
             try:
                 await _process_message(
                     msg,
@@ -108,6 +187,9 @@ async def run_worker_loop(
                     event_bus,
                     loop,
                     retry_delays_seconds=retry_delays_seconds,
+                    memory_diagnostics_enabled=memory_diagnostics_enabled,
+                    memory_limit_mb=memory_limit_mb,
+                    memory_crossed_thresholds_ref=crossed_thresholds,
                 )
             except Exception as e:
                 logger.exception(
@@ -174,8 +256,37 @@ async def _process_message(
     loop: asyncio.AbstractEventLoop,
     *,
     retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
+    memory_diagnostics_enabled: bool = False,
+    memory_limit_mb: float = 512.0,
+    memory_crossed_thresholds_ref: set[float] | None = None,
 ) -> None:
     """Process a single queue message: validate, idempotency check, bounded retries, execute, persist, archive."""
+    mem_before_mb = get_memory_snapshot()["rss_mb"] if memory_diagnostics_enabled else 0.0
+
+    def _log_delta(result: str, attempt: int, error_code: str | None = None) -> None:
+        if memory_diagnostics_enabled and extracted is not None:
+            mem_after_mb = get_memory_snapshot()["rss_mb"]
+            log_message_delta(
+                mem_before_mb=mem_before_mb,
+                mem_after_mb=mem_after_mb,
+                msg_id=msg.message_id,
+                run_id=extracted[1],
+                job_id=extracted[0],
+                attempt=attempt,
+                result=result,
+                error_code=error_code,
+            )
+            if memory_crossed_thresholds_ref is not None:
+                crossed = maybe_log_high_watermark(
+                    mem_after_mb,
+                    memory_limit_mb,
+                    memory_crossed_thresholds_ref,
+                    msg.message_id,
+                    extracted[1],
+                )
+                memory_crossed_thresholds_ref.clear()
+                memory_crossed_thresholds_ref.update(crossed)
+
     extracted = _extract_payload(msg)
     if extracted is None:
         logger.warning(
@@ -202,12 +313,38 @@ async def _process_message(
             job_id,
             current_status,
         )
+        _log_delta("duplicate_skip", 0)
         queue_repo.archive(msg.message_id)
         return
 
     # Bounded retry loop
     retry_count = run_repo.get_job_retry_count(job_id)
     max_retries = len(retry_delays_seconds)
+
+    # Defense-in-depth: force terminal if queue read_count exceeds ceiling
+    if msg.read_count >= _READ_COUNT_CEILING:
+        logger.warning(
+            "worker_read_count_ceiling | msg_id={} run_id={} read_count={} ceiling={}",
+            msg.message_id,
+            run_id,
+            msg.read_count,
+            _READ_COUNT_CEILING,
+        )
+        _log_delta("failed_terminal", retry_count, "read_count_ceiling")
+        _mark_failed_and_archive(
+            msg,
+            queue_repo,
+            run_repo,
+            event_bus,
+            job_id,
+            run_id,
+            keywords,
+            recipient_whatsapp,
+            "read_count exceeded ceiling; forcing terminal",
+            datetime.now(timezone.utc),
+            RuntimeError("read_count exceeded ceiling"),
+        )
+        return
 
     while True:
         now = datetime.now(timezone.utc)
@@ -220,16 +357,38 @@ async def _process_message(
             run_repo.insert_event(
                 run_id, "pipeline_started", {"keywords_preview": keywords[:80]}
             )
-        except Exception:
+        except Exception as e:
             logger.exception(
                 "worker_persist_running_failed | job_id={} run_id={}",
                 job_id,
                 run_id,
             )
-            err = RuntimeError("persist running failed")
+            err_msg = _normalize_error(e)
+            if _is_non_retriable(e):
+                logger.info(
+                    "worker_non_retriable_terminal | job_id={} run_id={} sqlstate={}",
+                    job_id,
+                    run_id,
+                    _extract_sqlstate(e),
+                )
+                _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
+                _mark_failed_and_archive(
+                    msg,
+                    queue_repo,
+                    run_repo,
+                    event_bus,
+                    job_id,
+                    run_id,
+                    keywords,
+                    recipient_whatsapp,
+                    err_msg,
+                    datetime.now(timezone.utc),
+                    e,
+                )
+                return
             new_retry_count = retry_count + 1
             if new_retry_count <= max_retries and _persist_retry_and_schedule(
-                run_repo, job_id, run_id, new_retry_count, _normalize_error(err)
+                run_repo, job_id, run_id, new_retry_count, err_msg
             ):
                 delay = retry_delays_seconds[retry_count]
                 logger.info(
@@ -242,6 +401,7 @@ async def _process_message(
                 await asyncio.sleep(delay)
                 retry_count = new_retry_count
                 continue
+            _log_delta("failed_terminal", retry_count + 1)
             _mark_failed_and_archive(
                 msg,
                 queue_repo,
@@ -251,9 +411,9 @@ async def _process_message(
                 run_id,
                 keywords,
                 recipient_whatsapp,
-                _normalize_error(err),
+                err_msg,
                 datetime.now(timezone.utc),
-                err,
+                e,
             )
             return
 
@@ -272,6 +432,28 @@ async def _process_message(
                 err_msg,
                 retry_count + 1,
             )
+            if _is_non_retriable(e):
+                logger.info(
+                    "worker_non_retriable_terminal | job_id={} run_id={} sqlstate={}",
+                    job_id,
+                    run_id,
+                    _extract_sqlstate(e),
+                )
+                _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
+                _mark_failed_and_archive(
+                    msg,
+                    queue_repo,
+                    run_repo,
+                    event_bus,
+                    job_id,
+                    run_id,
+                    keywords,
+                    recipient_whatsapp,
+                    err_msg,
+                    datetime.now(timezone.utc),
+                    e,
+                )
+                return
             new_retry_count = retry_count + 1
             if new_retry_count <= max_retries and _persist_retry_and_schedule(
                 run_repo, job_id, run_id, new_retry_count, err_msg
@@ -287,6 +469,7 @@ async def _process_message(
                 await asyncio.sleep(delay)
                 retry_count = new_retry_count
                 continue
+            _log_delta("failed_terminal", retry_count + 1)
             _mark_failed_and_archive(
                 msg,
                 queue_repo,
@@ -323,16 +506,38 @@ async def _process_message(
                 "pipeline_succeeded",
                 {"result_preview": result_meta},
             )
-        except Exception:
+        except Exception as e:
             logger.exception(
                 "worker_persist_success_failed | job_id={} run_id={}",
                 job_id,
                 run_id,
             )
-            err = RuntimeError("persist success failed")
+            err_msg = _normalize_error(e)
+            if _is_non_retriable(e):
+                logger.info(
+                    "worker_non_retriable_terminal | job_id={} run_id={} sqlstate={}",
+                    job_id,
+                    run_id,
+                    _extract_sqlstate(e),
+                )
+                _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
+                _mark_failed_and_archive(
+                    msg,
+                    queue_repo,
+                    run_repo,
+                    event_bus,
+                    job_id,
+                    run_id,
+                    keywords,
+                    recipient_whatsapp,
+                    err_msg,
+                    datetime.now(timezone.utc),
+                    e,
+                )
+                return
             new_retry_count = retry_count + 1
             if new_retry_count <= max_retries and _persist_retry_and_schedule(
-                run_repo, job_id, run_id, new_retry_count, _normalize_error(err)
+                run_repo, job_id, run_id, new_retry_count, err_msg
             ):
                 delay = retry_delays_seconds[retry_count]
                 logger.info(
@@ -345,6 +550,7 @@ async def _process_message(
                 await asyncio.sleep(delay)
                 retry_count = new_retry_count
                 continue
+            _log_delta("failed_terminal", retry_count + 1)
             _mark_failed_and_archive(
                 msg,
                 queue_repo,
@@ -354,12 +560,13 @@ async def _process_message(
                 run_id,
                 keywords,
                 recipient_whatsapp,
-                _normalize_error(err),
+                err_msg,
                 datetime.now(timezone.utc),
-                err,
+                e,
             )
             return
 
+        _log_delta("success", retry_count + 1)
         event_bus.publish_success(
             PipelineSuccessEvent(
                 job_id=job_id,

@@ -12,6 +12,12 @@ from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.queue.events import EventBus, subscribe_to_success
+from app.queue.memory_diagnostics import (
+    parse_diagnostics_enabled,
+    parse_heartbeat_interval_seconds,
+    parse_memory_limit_mb,
+    start_tracemalloc_if_enabled,
+)
 from app.queue.worker import _parse_retry_delays, run_worker_loop
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
@@ -31,6 +37,8 @@ _WORKER_VT_SECONDS = int(os.environ.get("WORKER_VT_SECONDS", "300"))
 # Reuse main's log format for consistency
 _CONTEXT_KEYS = (
     "run_id", "global_pipeline", "stage", "keywords_preview", "error",
+    "rss_mb", "gc_counts", "mem_before_mb", "mem_after_mb", "mem_delta_mb",
+    "msg_id", "job_id", "attempt", "result", "error_code",
 )
 
 
@@ -168,11 +176,23 @@ def main() -> None:
     retry_delays = _parse_retry_delays(
         os.environ.get("WORKER_RETRY_DELAYS_SECONDS", "")
     )
+    memory_diagnostics_enabled = parse_diagnostics_enabled(
+        os.environ.get("WORKER_MEMORY_DIAGNOSTICS_ENABLED", "")
+    )
+    memory_limit_mb = parse_memory_limit_mb(
+        os.environ.get("WORKER_MEMORY_LIMIT_MB", "")
+    )
+    memory_heartbeat_interval = parse_heartbeat_interval_seconds(
+        os.environ.get("WORKER_MEMORY_HEARTBEAT_INTERVAL_SECONDS", "")
+    )
+    start_tracemalloc_if_enabled(memory_diagnostics_enabled)
+
     logger.info(
-        "worker_starting | poll_interval={} vt_seconds={} retry_delays={}",
+        "worker_starting | poll_interval={} vt_seconds={} retry_delays={} memory_diagnostics={}",
         _WORKER_POLL_INTERVAL,
         _WORKER_VT_SECONDS,
         retry_delays,
+        memory_diagnostics_enabled,
     )
 
     loop = asyncio.new_event_loop()
@@ -186,6 +206,9 @@ def main() -> None:
             poll_interval_seconds=_WORKER_POLL_INTERVAL,
             vt_seconds=_WORKER_VT_SECONDS,
             retry_delays_seconds=retry_delays,
+            memory_diagnostics_enabled=memory_diagnostics_enabled,
+            memory_limit_mb=memory_limit_mb,
+            memory_heartbeat_interval_seconds=memory_heartbeat_interval,
         )
     )
 
