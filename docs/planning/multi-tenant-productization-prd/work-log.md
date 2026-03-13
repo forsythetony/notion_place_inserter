@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | env_bootstrap static env key list | Replaced regex/template parsing with a static ordered key list from `envs/env.template` for startup env logging |
 | 2026-03-12 | SECRET uppercase | Auth env simplified to SECRET only; removed secret remapping; render.yaml, Makefile, docs updated |
 | 2026-03-12 | Render .env | App loads .env at startup from .env, /etc/secrets/.env, or envs/local.env; process env overrides file; SECRET→secret compat |
 | 2026-03-12 | PR-04 | In progress: `/locations` enqueue path migrated to Supabase pgmq + run persistence (uncommitted on branch `pr-04-locations-enqueue-path-migration`) |

@@ -26,7 +26,7 @@ from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
 from app.services.whatsapp_service import WhatsAppService
 
-from app.env_bootstrap import bootstrap_env
+from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.services.supabase_queue_repository import SupabaseQueueRepository
@@ -145,6 +145,7 @@ def _configure_logger() -> None:
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
     _configure_logger()
+    log_env_masked()
 
     notion_key = os.environ.get("NOTION_API_KEY")
     if not notion_key:
