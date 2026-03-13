@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | p2_pr02 validation | Manual validation complete: missing/invalid auth → 401, valid token → 200 with user_type, stability across repeated calls, API docs verified. |
 | 2026-03-13 | worker-retry-backoff | Bounded worker retries with configurable backoff (5,30,60s default); platform_jobs.retry_count migration; final failure marks job/run failed and archives; WORKER_RETRY_DELAYS_SECONDS env; tests. |
 | 2026-03-13 | worker-memory-starvation-investigation | Investigated worker memory starvation using Render chart and runtime logs; documented evidence, likely poison-message retry loop root cause, and remediation plan. |
 | 2026-03-13 | p2_pr02 | Backend auth context: Bearer validation, AuthContext, GET /auth/context, SupabaseAuthRepository wiring, tests, OpenAPI BearerAuth, deprecation notes. |

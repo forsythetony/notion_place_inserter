@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-echo auth-token supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -41,6 +41,11 @@ help:
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
+	@echo ""
+	@echo "Environment:"
+	@echo "  make env-source       - Start a shell with envs/local.env sourced (vars available in that shell)"
+	@echo "  make env-echo         - Echo relevant env vars (sensitive values masked)"
+	@echo "  make auth-token       - Get Supabase access token (password from clipboard, for forsythetony@gmail.com)"
 	@echo ""
 	@echo "Supabase (local stack, migrations):"
 	@echo "  make supabase-start    - Start local Supabase stack (Docker required)"
@@ -139,6 +144,24 @@ test-api-%:
 
 notion-pull:
 	LOG_LEVEL=$(LOG_LEVEL) python scripts/notion_puller/main.py
+
+# Start a subshell with envs/local.env sourced. Use when you need env vars in your shell.
+env-source:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && exec $${SHELL:-bash}'
+
+# Echo relevant env vars (sensitive ones masked). Loads from envs/local.env if present.
+env-echo:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a; \
+		for k in BASE_URL SECRET CORS_ALLOWED_ORIGINS SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SECRET_KEY SUPABASE_QUEUE_NAME NOTION_API_KEY ANTHROPIC_TOKEN GOOGLE_PLACES_API_KEY FREEPIK_API_KEY DRY_RUN LOCATIONS_ASYNC_ENABLED LOG_LEVEL; do \
+			v="$${!k}"; \
+			case "$$k" in SECRET|SUPABASE_SECRET_KEY|NOTION_API_KEY|ANTHROPIC_TOKEN|GOOGLE_PLACES_API_KEY|FREEPIK_API_KEY) [ -n "$$v" ] && v="***";; esac; \
+			echo "$$k=$${v:-<unset>}"; \
+		done'
+
+# Get Supabase access token. Password read from clipboard (pbpaste). Requires envs/local.env with SUPABASE_PUBLISHABLE_KEY.
+auth-token:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
+		./helper_scripts/get_auth_token.sh forsythetony@gmail.com "$$(pbpaste)"'
 
 tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \
