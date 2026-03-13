@@ -77,7 +77,7 @@ During normal (non-dry-run) page creation, if `FREEPIK_API_KEY` is not set or Fr
 
 ### Supabase (Local Stack and Migrations)
 
-The project uses Supabase for local database and migration-driven schema management. This is required for Phase 1 platform migration work.
+The project uses Supabase for local database and migration-driven schema management. This is required for Phase 1 platform migration work. Phase 2 adds `user_type_enum`, `user_profiles`, and `invitation_codes` tables for auth segmentation.
 
 **Prerequisites:** [Supabase CLI](https://supabase.com/docs/guides/cli) and [Docker](https://docs.docker.com/get-docker/) (for local Postgres, Auth, etc.).
 

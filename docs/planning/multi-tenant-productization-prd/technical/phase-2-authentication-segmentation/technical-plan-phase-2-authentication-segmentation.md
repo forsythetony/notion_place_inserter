@@ -2,7 +2,13 @@
 
 ## Status
 
-- Planned
+- In progress (PR-01 schema implemented)
+
+## Schema (PR-01)
+
+- **Enum:** `user_type_enum` — `ADMIN`, `STANDARD`, `BETA_TESTER`
+- **Table:** `user_profiles` — `user_id` (PK, FK auth.users), `user_type`, `invitation_code_id` (FK invitation_codes), `created_at`, `updated_at`
+- **Table:** `invitation_codes` — `id`, `code` (unique, 20 chars), `date_issued`, `date_claimed`, `issued_to`, `platform_issued_on`, `claimed`, `claimed_at`, `user_type`, `claimed_by_user_id` (FK auth.users), `created_at`; constraints: code uniqueness, length, claim-integrity (claimed ↔ timestamps)
 
 ## Objective
 

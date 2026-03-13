@@ -22,6 +22,8 @@ def config():
         table_platform_jobs="platform_jobs",
         table_pipeline_runs="pipeline_runs",
         table_pipeline_run_events="pipeline_run_events",
+        table_user_profiles="user_profiles",
+        table_invitation_codes="invitation_codes",
     )
 
 

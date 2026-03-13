@@ -15,6 +15,8 @@ class SupabaseConfig:
     table_platform_jobs: str
     table_pipeline_runs: str
     table_pipeline_run_events: str
+    table_user_profiles: str
+    table_invitation_codes: str
 
 
 def _require_non_empty(value: str, env_var: str) -> str:
@@ -87,5 +89,9 @@ def load_supabase_config() -> SupabaseConfig:
         table_pipeline_runs=_default_table("pipeline_runs", "pipeline_runs"),
         table_pipeline_run_events=_default_table(
             "pipeline_run_events", "pipeline_run_events"
+        ),
+        table_user_profiles=_default_table("user_profiles", "user_profiles"),
+        table_invitation_codes=_default_table(
+            "invitation_codes", "invitation_codes"
         ),
     )

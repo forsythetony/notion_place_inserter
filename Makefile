@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -47,6 +47,7 @@ help:
 	@echo "  make supabase-stop     - Stop local Supabase stack"
 	@echo "  make supabase-status   - Show Supabase stack status"
 	@echo "  make supabase-reset    - Reset DB and reapply all migrations"
+	@echo "  make supabase-dashboard - Open local Supabase Studio in browser"
 	@echo "  make supabase-migration-new NAME=<name> - Create new migration file"
 	@echo ""
 	@echo "Supabase (remote project deploy):"
@@ -156,6 +157,9 @@ supabase-status:
 
 supabase-reset:
 	supabase db reset
+
+supabase-dashboard:
+	@python -m webbrowser http://localhost:54323
 
 supabase-migration-new:
 	@if [ -z "$(NAME)" ]; then echo "Usage: make supabase-migration-new NAME=<migration_name> (e.g. NAME=add_users_table)"; exit 1; fi; \

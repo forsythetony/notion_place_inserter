@@ -25,6 +25,8 @@ def test_load_supabase_config_success():
     assert cfg.table_platform_jobs == "platform_jobs"
     assert cfg.table_pipeline_runs == "pipeline_runs"
     assert cfg.table_pipeline_run_events == "pipeline_run_events"
+    assert cfg.table_user_profiles == "user_profiles"
+    assert cfg.table_invitation_codes == "invitation_codes"
 
 
 def test_load_supabase_config_with_overrides():
@@ -36,6 +38,8 @@ def test_load_supabase_config_with_overrides():
             "SUPABASE_SECRET_KEY": "key",
             "SUPABASE_QUEUE_NAME": "custom_queue",
             "SUPABASE_TABLE_PLATFORM_JOBS": "jobs",
+            "SUPABASE_TABLE_USER_PROFILES": "profiles",
+            "SUPABASE_TABLE_INVITATION_CODES": "invites",
         },
         clear=False,
     ):
@@ -43,6 +47,8 @@ def test_load_supabase_config_with_overrides():
     assert cfg.queue_name == "custom_queue"
     assert cfg.table_platform_jobs == "jobs"
     assert cfg.table_pipeline_runs == "pipeline_runs"
+    assert cfg.table_user_profiles == "profiles"
+    assert cfg.table_invitation_codes == "invites"
 
 
 def test_load_supabase_config_missing_url():

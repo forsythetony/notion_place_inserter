@@ -36,6 +36,10 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | Supabase local auth runtime fix | Upgraded Supabase CLI (2.75.0 -> 2.78.1), restarted local stack, verified `/auth/v1/admin/users` succeeds, and cleaned diagnostic test users from `auth.users`. |
+| 2026-03-13 | Supabase local auth config hardening | Standardized local auth/studio host usage to `localhost` (`supabase-dashboard`, `auth.site_url`, redirect allow-list), restarted stack, and re-verified behavior. |
+| 2026-03-13 | Supabase local auth troubleshooting | Investigated local user-creation failures; confirmed `/auth/v1/admin/users` `bad_jwt` rejection while `/auth/v1/signup` succeeds; documented findings and remediation suggestions. |
+| 2026-03-13 | PR-01 | Phase 2 auth schema: user_type_enum, user_profiles, invitation_codes tables; migration, SupabaseAuthRepository, config/env defaults, tests, schema docs. |
 | 2026-03-13 | Phase 2 manual validation steps | Added explicit "Manual validation steps (after implementation)" and verification checklists to each Phase 2 PR story doc (`pr-01` through `pr-07`). |
 | 2026-03-13 | Phase 2 story breakdown | Created Phase 2 PR-sized technical story set (`pr-01` to `pr-07`) with ordered dependency index and retained a phase technical-plan document in `technical/phase-2-authentication-segmentation/`. |
 | 2026-03-13 | Phase 2 auth planning updates | Expanded Phase 2 scope with landing/auth/dashboard UX, user-type enum (`ADMIN`, `STANDARD`, `BETA_TESTER`), invite-code lifecycle/data model, and manual code-generation script requirement; added dedicated Phase 2 technical plan doc. |
