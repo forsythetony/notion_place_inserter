@@ -10,7 +10,6 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.routes import locations, test
 from app.services.claude_service import ClaudeService
 from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
@@ -20,8 +19,10 @@ from app.services.places_service import PlacesService
 from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
+from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
+from app.routes import auth_context, locations, test
 
 # Bootstrap env at import so all runtime lookups see file values (unless overridden)
 bootstrap_env()
@@ -157,6 +158,9 @@ async def lifespan(app: FastAPI):
     app.state.supabase_run_repository = SupabaseRunRepository(
         supabase_client, supabase_config
     )
+    app.state.supabase_auth_repository = SupabaseAuthRepository(
+        supabase_client, supabase_config
+    )
 
     notion_svc = NotionService(api_key=notion_key)
     notion_svc.initialize()
@@ -209,6 +213,7 @@ if _cors_origins:
         allow_headers=["Authorization", "Content-Type"],
     )
 
+app.include_router(auth_context.router)
 app.include_router(locations.router)
 app.include_router(test.router)
 

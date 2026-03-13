@@ -4,7 +4,8 @@ info:
   title: Notion Place Inserter API
   description: |
     API for inserting place entries into a Notion "Places to Visit" database.
-    All endpoints require secret-based authorization via the Authorization header.
+    Endpoints use either secret-based authorization (SECRET header) or Supabase
+    Bearer token authentication. See per-endpoint security for details.
   version: 1.0.0
 
 servers:
@@ -28,6 +29,40 @@ paths:
                 $ref: "#/components/schemas/HelloResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /auth/context:
+    get:
+      summary: Dashboard bootstrap / auth context
+      description: |
+        Returns authenticated user context for dashboard bootstrap. Requires a valid
+        Supabase access token (Bearer) and an existing user profile. Used by the
+        frontend to determine auth state and user_type for routing.
+      operationId: getAuthContext
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Authenticated context returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthContextResponse"
+              example:
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+                email: "user@example.com"
+                user_type: "STANDARD"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Profile not found or incomplete (user not provisioned)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              example:
+                detail: Profile not found
         "500":
           $ref: "#/components/responses/ServerError"
 
@@ -176,6 +211,11 @@ components:
       in: header
       name: Authorization
       description: The shared secret configured via the SECRET environment variable. Send the secret as the raw Authorization header value.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase access token. Send as `Authorization: Bearer <access_token>`.
 
   schemas:
     HelloResponse:
@@ -186,6 +226,26 @@ components:
         message:
           type: string
           example: "Hello there!"
+
+    AuthContextResponse:
+      type: object
+      description: Authenticated user context for dashboard bootstrap.
+      required:
+        - user_id
+        - user_type
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Supabase auth user ID
+        email:
+          type: string
+          nullable: true
+          description: User email from auth (may be null)
+        user_type:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+          description: User type from profile for routing and feature gating
 
     LocationRequest:
       type: object
@@ -250,6 +310,14 @@ components:
           type: string
 
   responses:
+    Forbidden:
+      description: Profile not found or incomplete
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorDetail"
+          example:
+            detail: Profile not found
     Unauthorized:
       description: Missing or invalid Authorization header
       content:

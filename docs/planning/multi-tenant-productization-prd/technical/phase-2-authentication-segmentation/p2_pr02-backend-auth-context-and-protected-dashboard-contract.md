@@ -53,3 +53,21 @@ Introduce backend authentication context handling and a minimal protected contra
 - [ ] Valid auth returns protected payload.
 - [ ] `user_type` is present in authenticated context/response.
 - [ ] API docs match actual auth behavior.
+
+---
+
+## Secret-only endpoint deprecation (future phase)
+
+**Planned migration:** Endpoints that currently accept only a shared secret (`SecretAuth`) in the `Authorization` header will eventually be deprecated in favor of user-scoped, HTTP-trigger-gated access.
+
+**Current state:** Endpoints `/`, `/locations`, and `/test/*` accept the raw `SECRET` value as the Authorization header. This pattern is retained for Phase 1 compatibility and integration/automation use cases.
+
+**Target state (later phase):** Trigger-style endpoints (e.g. `/locations`) will be exposed only when an authenticated user has configured an HTTP trigger endpoint for their tenant. Unauthenticated or secret-only calls will be rejected. The backend will validate Bearer tokens and scope operations by user/tenant.
+
+**Migration steps (to be executed in a dedicated future PR):**
+
+1. Document all endpoints still using `SecretAuth` and their callers.
+2. Introduce HTTP trigger configuration model (user/tenant → webhook URL or similar).
+3. Add policy checks so trigger endpoints require authenticated user + configured trigger.
+4. Deprecate and remove bare secret-only access for trigger endpoints.
+5. Retain secret-based auth only for administrative or internal automation where appropriate.
