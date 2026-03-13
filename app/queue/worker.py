@@ -146,6 +146,10 @@ async def run_worker_loop(
                         gc_objects=snap["gc_objects"],
                         num_threads=snap["num_threads"],
                         open_fds=snap["open_fds"],
+                        fd_socket=snap.get("fd_socket", 0),
+                        fd_pipe=snap.get("fd_pipe", 0),
+                        fd_anon=snap.get("fd_anon", 0),
+                        fd_file=snap.get("fd_file", 0),
                         traced_current_mb=snap["traced_current_mb"],
                         traced_peak_mb=snap["traced_peak_mb"],
                         active_msg_id=None,
@@ -158,6 +162,10 @@ async def run_worker_loop(
                         None,
                         None,
                         include_tracemalloc_snapshot=memory_tracemalloc_enabled,
+                        fd_socket=snap.get("fd_socket", 0),
+                        fd_pipe=snap.get("fd_pipe", 0),
+                        fd_anon=snap.get("fd_anon", 0),
+                        fd_file=snap.get("fd_file", 0),
                     )
             await asyncio.sleep(poll_interval_seconds)
             continue
@@ -175,6 +183,10 @@ async def run_worker_loop(
                         gc_objects=snap["gc_objects"],
                         num_threads=snap["num_threads"],
                         open_fds=snap["open_fds"],
+                        fd_socket=snap.get("fd_socket", 0),
+                        fd_pipe=snap.get("fd_pipe", 0),
+                        fd_anon=snap.get("fd_anon", 0),
+                        fd_file=snap.get("fd_file", 0),
                         traced_current_mb=snap["traced_current_mb"],
                         traced_peak_mb=snap["traced_peak_mb"],
                         active_msg_id=msg.message_id,
@@ -190,6 +202,10 @@ async def run_worker_loop(
                         msg.message_id,
                         (msg.payload or {}).get("run_id") if msg.payload else None,
                         include_tracemalloc_snapshot=memory_tracemalloc_enabled,
+                        fd_socket=snap.get("fd_socket", 0),
+                        fd_pipe=snap.get("fd_pipe", 0),
+                        fd_anon=snap.get("fd_anon", 0),
+                        fd_file=snap.get("fd_file", 0),
                     )
             try:
                 await _process_message(
@@ -280,7 +296,8 @@ async def _process_message(
 
     def _log_delta(result: str, attempt: int, error_code: str | None = None) -> None:
         if memory_diagnostics_enabled and extracted is not None:
-            mem_after_mb = get_memory_snapshot()["rss_mb"]
+            snap = get_memory_snapshot()
+            mem_after_mb = snap["rss_mb"]
             log_message_delta(
                 mem_before_mb=mem_before_mb,
                 mem_after_mb=mem_after_mb,
@@ -299,6 +316,10 @@ async def _process_message(
                     msg.message_id,
                     extracted[1],
                     include_tracemalloc_snapshot=memory_tracemalloc_enabled,
+                    fd_socket=snap.get("fd_socket", 0),
+                    fd_pipe=snap.get("fd_pipe", 0),
+                    fd_anon=snap.get("fd_anon", 0),
+                    fd_file=snap.get("fd_file", 0),
                 )
                 memory_crossed_thresholds_ref.clear()
                 memory_crossed_thresholds_ref.update(crossed)

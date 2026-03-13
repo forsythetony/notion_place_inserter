@@ -39,6 +39,7 @@ _WORKER_VT_SECONDS = int(os.environ.get("WORKER_VT_SECONDS", "300"))
 _CONTEXT_KEYS = (
     "run_id", "global_pipeline", "stage", "keywords_preview", "error",
     "rss_mb", "gc_counts", "gc_objects", "num_threads", "open_fds",
+    "fd_socket", "fd_pipe", "fd_anon", "fd_file",
     "traced_current_mb", "traced_peak_mb",
     "mem_before_mb", "mem_after_mb", "mem_delta_mb",
     "msg_id", "job_id", "attempt", "result", "error_code",

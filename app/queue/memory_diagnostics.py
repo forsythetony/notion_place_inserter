@@ -54,6 +54,44 @@ def _get_open_fds() -> int:
         return 0
 
 
+def _get_fd_type_counts() -> dict[str, int]:
+    """
+    Best-effort FD type breakdown from /proc/self/fd (Linux).
+    Returns counts for socket, pipe, anon, file, dev, other.
+    """
+    counts: dict[str, int] = {
+        "socket": 0,
+        "pipe": 0,
+        "anon": 0,
+        "file": 0,
+        "dev": 0,
+        "other": 0,
+    }
+    try:
+        fd_dir = "/proc/self/fd"
+        for name in os.listdir(fd_dir):
+            if name.isdigit():
+                try:
+                    target = os.readlink(os.path.join(fd_dir, name))
+                    if target.startswith("socket:"):
+                        counts["socket"] += 1
+                    elif target.startswith("pipe:"):
+                        counts["pipe"] += 1
+                    elif target.startswith("anon_inode:"):
+                        counts["anon"] += 1
+                    elif target.startswith("/dev/"):
+                        counts["dev"] += 1
+                    elif target.startswith("/"):
+                        counts["file"] += 1
+                    else:
+                        counts["other"] += 1
+                except (OSError, ValueError):
+                    counts["other"] += 1
+    except Exception:
+        pass
+    return counts
+
+
 def _get_traced_memory_mb() -> tuple[float, float]:
     """Return tracemalloc current/peak MB if tracing; otherwise zeros."""
     if not tracemalloc.is_tracing():
@@ -65,12 +103,17 @@ def _get_traced_memory_mb() -> tuple[float, float]:
 def get_memory_snapshot() -> dict[str, Any]:
     """Best-effort snapshot for correlating process growth."""
     traced_current_mb, traced_peak_mb = _get_traced_memory_mb()
+    fd_counts = _get_fd_type_counts()
     return {
         "rss_mb": round(_get_rss_mb(), 2),
         "gc_counts": _get_gc_counts(),
         "gc_objects": len(gc.get_objects()),
         "num_threads": _get_num_threads(),
         "open_fds": _get_open_fds(),
+        "fd_socket": fd_counts["socket"],
+        "fd_pipe": fd_counts["pipe"],
+        "fd_anon": fd_counts["anon"],
+        "fd_file": fd_counts["file"],
         "traced_current_mb": traced_current_mb,
         "traced_peak_mb": traced_peak_mb,
     }
@@ -83,20 +126,29 @@ def log_heartbeat(
     gc_objects: int,
     num_threads: int,
     open_fds: int,
-    traced_current_mb: float,
-    traced_peak_mb: float,
+    fd_socket: int = 0,
+    fd_pipe: int = 0,
+    fd_anon: int = 0,
+    fd_file: int = 0,
+    traced_current_mb: float = 0.0,
+    traced_peak_mb: float = 0.0,
     active_msg_id: int | None = None,
     active_run_id: str | None = None,
 ) -> None:
     """Emit structured heartbeat log."""
     logger.info(
         "worker_memory_heartbeat | rss_mb={} gc_counts={} gc_objects={} num_threads={} "
-        "open_fds={} traced_current_mb={} traced_peak_mb={} msg_id={} run_id={}",
+        "open_fds={} fd_socket={} fd_pipe={} fd_anon={} fd_file={} traced_current_mb={} traced_peak_mb={} "
+        "msg_id={} run_id={}",
         rss_mb,
         gc_counts,
         gc_objects,
         num_threads,
         open_fds,
+        fd_socket,
+        fd_pipe,
+        fd_anon,
+        fd_file,
         traced_current_mb,
         traced_peak_mb,
         active_msg_id,
@@ -149,6 +201,10 @@ def maybe_log_high_watermark(
     msg_id: int | None,
     run_id: str | None,
     include_tracemalloc_snapshot: bool = True,
+    fd_socket: int = 0,
+    fd_pipe: int = 0,
+    fd_anon: int = 0,
+    fd_file: int = 0,
 ) -> set[float]:
     """
     If RSS crosses a threshold fraction, log once per threshold.
@@ -166,6 +222,10 @@ def maybe_log_high_watermark(
                 msg_id=msg_id,
                 run_id=run_id,
                 include_tracemalloc_snapshot=include_tracemalloc_snapshot,
+                fd_socket=fd_socket,
+                fd_pipe=fd_pipe,
+                fd_anon=fd_anon,
+                fd_file=fd_file,
             )
     return new_crossed
 
@@ -178,6 +238,10 @@ def _emit_high_watermark_log(
     msg_id: int | None,
     run_id: str | None,
     include_tracemalloc_snapshot: bool,
+    fd_socket: int = 0,
+    fd_pipe: int = 0,
+    fd_anon: int = 0,
+    fd_file: int = 0,
 ) -> None:
     """Emit one-time snapshot when crossing threshold."""
     top_stats = ""
@@ -189,14 +253,16 @@ def _emit_high_watermark_log(
         top_stats = "  (tracemalloc snapshot disabled)"
     else:
         top_stats = "  (tracemalloc not started)"
+    fd_breakdown = f"fd_socket={fd_socket} fd_pipe={fd_pipe} fd_anon={fd_anon} fd_file={fd_file}"
     logger.warning(
         "worker_memory_high_watermark | rss_mb={} threshold_pct={} threshold_mb={} "
-        "msg_id={} run_id={} | top_allocations:\n{}",
+        "msg_id={} run_id={} {} | top_allocations:\n{}",
         rss_mb,
         int(threshold_frac * 100),
         threshold_mb,
         msg_id,
         run_id,
+        fd_breakdown,
         top_stats,
     )
 

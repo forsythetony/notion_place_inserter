@@ -30,3 +30,56 @@
 2026-03-13T22:56:14.074549817Z   8. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/hpack/table.py:114
 2026-03-13T22:56:14.074552167Z   9. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:140
 2026-03-13T22:56:14.074554257Z   10. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:139
+
+--- Deployed again here
+
+2026-03-13T23:06:30.314535836Z 2026-03-13 23:06:30.314 | INFO | app.env_bootstrap:log_env_masked:104 - env | SUPABASE_URL=https://ikuxlizxjvabmyrgtnah.supabase.co
+2026-03-13T23:06:30.31468002Z 2026-03-13 23:06:30.314 | INFO | app.env_bootstrap:log_env_masked:104 - env | SUPABASE_PUBLISHABLE_KEY=sb_publishable_cm4mfm0PS4_PEahG1hsQJg_vYsWZuZc
+2026-03-13T23:06:30.314826284Z 2026-03-13 23:06:30.314 | INFO | app.env_bootstrap:log_env_masked:102 - env | SUPABASE_SECRET_KEY=*****************************************
+2026-03-13T23:06:30.314994029Z 2026-03-13 23:06:30.314 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_QUEUE_NAME=[unset]
+2026-03-13T23:06:30.315151294Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PLATFORM_JOBS=[unset]
+2026-03-13T23:06:30.315270857Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PIPELINE_RUNS=[unset]
+2026-03-13T23:06:30.315401741Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:100 - env | SUPABASE_TABLE_PIPELINE_RUN_EVENTS=[unset]
+2026-03-13T23:06:30.315539705Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:102 - env | NOTION_API_KEY=**************************************************
+2026-03-13T23:06:30.315661979Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:102 - env | ANTHROPIC_TOKEN=************************************************************************************************************
+2026-03-13T23:06:30.315798683Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:102 - env | GOOGLE_PLACES_API_KEY=***************************************
+2026-03-13T23:06:30.315935447Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:102 - env | FREEPIK_API_KEY=************************************
+2026-03-13T23:06:30.316070421Z 2026-03-13 23:06:30.315 | INFO | app.env_bootstrap:log_env_masked:100 - env | DRY_RUN=[unset]
+2026-03-13T23:06:30.316188614Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATIONS_ASYNC_ENABLED=[unset]
+2026-03-13T23:06:30.316297867Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | GOOGLE_PLACE_DETAILS_FETCH=[unset]
+2026-03-13T23:06:30.316417751Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATIONS_CACHE_TTL_SECONDS=[unset]
+2026-03-13T23:06:30.316528104Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATION_MATCH_MIN_CONFIDENCE=[unset]
+2026-03-13T23:06:30.316648208Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOCATION_RELATION_REQUIRED=[unset]
+2026-03-13T23:06:30.316771632Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_LEVEL=[unset]
+2026-03-13T23:06:30.316903745Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_PATH=[unset]
+2026-03-13T23:06:30.317029219Z 2026-03-13 23:06:30.316 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_ROTATION=[unset]
+2026-03-13T23:06:30.317138842Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:100 - env | LOG_FILE_RETENTION=[unset]
+2026-03-13T23:06:30.317280556Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:100 - env | WORKER_RETRY_DELAYS_SECONDS=[unset]
+2026-03-13T23:06:30.317370289Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_DIAGNOSTICS_ENABLED=1
+2026-03-13T23:06:30.317484712Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_TRACEMALLOC_ENABLED=0
+2026-03-13T23:06:30.317609096Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_LIMIT_MB=512
+2026-03-13T23:06:30.31772728Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:104 - env | WORKER_MEMORY_HEARTBEAT_INTERVAL_SECONDS=60
+2026-03-13T23:06:30.317852773Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:102 - env | TWILIO_ACCOUNT_SID=**********************************
+2026-03-13T23:06:30.317989697Z 2026-03-13 23:06:30.317 | INFO | app.env_bootstrap:log_env_masked:102 - env | TWILIO_AUTH_TOKEN=********************************
+2026-03-13T23:06:30.318099111Z 2026-03-13 23:06:30.318 | INFO | app.env_bootstrap:log_env_masked:104 - env | TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+2026-03-13T23:06:30.318230974Z 2026-03-13 23:06:30.318 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_RECIPIENT_DEFAULT=whatsapp:+13148050127
+2026-03-13T23:06:30.318344838Z 2026-03-13 23:06:30.318 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_ENABLED=1
+2026-03-13T23:06:30.318470151Z 2026-03-13 23:06:30.318 | INFO | app.env_bootstrap:log_env_masked:104 - env | WHATSAPP_STATUS_MAX_ERROR_CHARS=300
+2026-03-13T23:06:31.842686799Z 2026-03-13 23:06:31.842 | INFO | __main__:main:196 - worker_starting | poll_interval=1.0 vt_seconds=300 retry_delays=(5, 30, 60) memory_diagnostics=True memory_tracemalloc=False
+2026-03-13T23:07:15.937200688Z 2026-03-13 23:07:15.936 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=510.1 gc_counts=(738, 0, 0) msg_id=None run_id=None
+2026-03-13T23:07:24.127982407Z 2026-03-13 23:07:24.126 | INFO | __main__:shutdown:216 - worker_shutdown_requested
+2026-03-13T23:07:24.128117821Z 2026-03-13 23:07:24.127 | INFO | __main__:main:228 - worker_stopped
+2026-03-13T23:07:32.253056405Z 2026-03-13 23:07:32.252 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=137.95 gc_counts=(897, 0, 0) gc_objects=165777 num_threads=1 open_fds=33 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:08:32.441818541Z 2026-03-13 23:08:32.441 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=151.2 gc_counts=(1722, 0, 0) gc_objects=164790 num_threads=1 open_fds=24 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:09:33.489270942Z 2026-03-13 23:09:33.489 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=151.2 gc_counts=(738, 0, 0) gc_objects=164046 num_threads=1 open_fds=16 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:10:33.54854652Z 2026-03-13 23:10:33.548 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=162.57 gc_counts=(1599, 0, 0) gc_objects=170811 num_threads=1 open_fds=71 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:11:34.254938749Z 2026-03-13 23:11:34.254 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=209.13 gc_counts=(492, 0, 0) gc_objects=177577 num_threads=1 open_fds=126 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:12:34.339458818Z 2026-03-13 23:12:34.339 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=255.63 gc_counts=(1353, 0, 0) gc_objects=184342 num_threads=1 open_fds=181 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:13:34.464936931Z 2026-03-13 23:13:34.464 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=301.88 gc_counts=(246, 0, 0) gc_objects=191107 num_threads=1 open_fds=236 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:14:34.516659306Z 2026-03-13 23:14:34.516 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=348.63 gc_counts=(1107, 0, 0) gc_objects=197872 num_threads=1 open_fds=291 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:15:34.620287774Z 2026-03-13 23:15:34.620 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=395.25 gc_counts=(0, 0, 0) gc_objects=204637 num_threads=1 open_fds=346 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:15:34.620409777Z 2026-03-13 23:15:34.620 | WARNING | app.queue.memory_diagnostics:_emit_high_watermark_log:192 - worker_memory_high_watermark | rss_mb=395.25 threshold_pct=70 threshold_mb=358.4 msg_id=None run_id=None | top_allocations:
+2026-03-13T23:15:34.620416058Z   (tracemalloc snapshot disabled)
+2026-03-13T23:16:35.657934798Z 2026-03-13 23:16:35.657 | INFO | app.queue.memory_diagnostics:log_heartbeat:92 - worker_memory_heartbeat | rss_mb=442.63 gc_counts=(984, 0, 0) gc_objects=211525 num_threads=1 open_fds=402 traced_current_mb=0.0 traced_peak_mb=0.0 msg_id=None run_id=None
+2026-03-13T23:16:35.658039691Z 2026-03-13 23:16:35.657 | WARNING | app.queue.memory_diagnostics:_emit_high_watermark_log:192 - worker_memory_high_watermark | rss_mb=442.63 threshold_pct=85 threshold_mb=435.2 msg_id=None run_id=None | top_allocations:
+2026-03-13T23:16:35.658051121Z   (tracemalloc snapshot disabled)
