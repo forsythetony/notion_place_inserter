@@ -16,6 +16,7 @@ from app.queue.memory_diagnostics import (
     parse_diagnostics_enabled,
     parse_heartbeat_interval_seconds,
     parse_memory_limit_mb,
+    parse_tracemalloc_enabled,
     start_tracemalloc_if_enabled,
 )
 from app.queue.worker import _parse_retry_delays, run_worker_loop
@@ -37,7 +38,9 @@ _WORKER_VT_SECONDS = int(os.environ.get("WORKER_VT_SECONDS", "300"))
 # Reuse main's log format for consistency
 _CONTEXT_KEYS = (
     "run_id", "global_pipeline", "stage", "keywords_preview", "error",
-    "rss_mb", "gc_counts", "mem_before_mb", "mem_after_mb", "mem_delta_mb",
+    "rss_mb", "gc_counts", "gc_objects", "num_threads", "open_fds",
+    "traced_current_mb", "traced_peak_mb",
+    "mem_before_mb", "mem_after_mb", "mem_delta_mb",
     "msg_id", "job_id", "attempt", "result", "error_code",
 )
 
@@ -179,20 +182,25 @@ def main() -> None:
     memory_diagnostics_enabled = parse_diagnostics_enabled(
         os.environ.get("WORKER_MEMORY_DIAGNOSTICS_ENABLED", "")
     )
+    memory_tracemalloc_enabled = parse_tracemalloc_enabled(
+        os.environ.get("WORKER_MEMORY_TRACEMALLOC_ENABLED", "")
+    )
     memory_limit_mb = parse_memory_limit_mb(
         os.environ.get("WORKER_MEMORY_LIMIT_MB", "")
     )
     memory_heartbeat_interval = parse_heartbeat_interval_seconds(
         os.environ.get("WORKER_MEMORY_HEARTBEAT_INTERVAL_SECONDS", "")
     )
-    start_tracemalloc_if_enabled(memory_diagnostics_enabled)
+    start_tracemalloc_if_enabled(memory_tracemalloc_enabled)
 
     logger.info(
-        "worker_starting | poll_interval={} vt_seconds={} retry_delays={} memory_diagnostics={}",
+        "worker_starting | poll_interval={} vt_seconds={} retry_delays={} "
+        "memory_diagnostics={} memory_tracemalloc={}",
         _WORKER_POLL_INTERVAL,
         _WORKER_VT_SECONDS,
         retry_delays,
         memory_diagnostics_enabled,
+        memory_tracemalloc_enabled,
     )
 
     loop = asyncio.new_event_loop()
@@ -207,6 +215,7 @@ def main() -> None:
             vt_seconds=_WORKER_VT_SECONDS,
             retry_delays_seconds=retry_delays,
             memory_diagnostics_enabled=memory_diagnostics_enabled,
+            memory_tracemalloc_enabled=memory_tracemalloc_enabled,
             memory_limit_mb=memory_limit_mb,
             memory_heartbeat_interval_seconds=memory_heartbeat_interval,
         )

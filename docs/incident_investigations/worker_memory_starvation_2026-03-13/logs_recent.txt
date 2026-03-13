@@ -1,0 +1,32 @@
+2026-03-13T22:47:08.91468331Z 2026-03-13 22:47:08.914 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=275.69 gc_counts=(1230, 0, 0) msg_id=None run_id=None
+2026-03-13T22:48:09.27283649Z 2026-03-13 22:48:09.272 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=323.94 gc_counts=(123, 0, 0) msg_id=None run_id=None
+2026-03-13T22:49:09.458082821Z 2026-03-13 22:49:09.457 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=371.56 gc_counts=(861, 0, 0) msg_id=None run_id=None
+2026-03-13T22:49:10.862057125Z 2026-03-13 22:49:10.861 | WARNING | app.queue.memory_diagnostics:_emit_high_watermark_log:144 - worker_memory_high_watermark | rss_mb=371.56 threshold_pct=70 threshold_mb=358.4 msg_id=None run_id=None | top_allocations:
+2026-03-13T22:49:10.862084236Z   1. 6.24 MB: <frozen importlib._bootstrap>:491
+2026-03-13T22:49:10.862089046Z   2. 1.38 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/httpx/_models.py:162
+2026-03-13T22:49:10.862093096Z   3. 1.26 MB: <frozen importlib._bootstrap_external>:528
+2026-03-13T22:49:10.862096576Z   4. 0.67 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:152
+2026-03-13T22:49:10.862100056Z   5. 0.57 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/hpack/table.py:161
+2026-03-13T22:49:10.862103566Z   6. 0.41 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/httpcore/_models.py:72
+2026-03-13T22:49:10.862107656Z   7. 0.41 MB: /opt/render/project/python/Python-3.14.3/lib/python3.14/threading.py:307
+2026-03-13T22:49:10.862111156Z   8. 0.40 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/hpack/table.py:114
+2026-03-13T22:49:10.862114616Z   9. 0.40 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:140
+2026-03-13T22:49:10.862118157Z   10. 0.40 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:139
+2026-03-13T22:50:09.88651904Z 2026-03-13 22:50:09.886 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=406.69 gc_counts=(738, 0, 0) msg_id=None run_id=None
+2026-03-13T22:51:10.821163237Z 2026-03-13 22:51:10.820 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=406.69 gc_counts=(1599, 0, 0) msg_id=None run_id=None
+2026-03-13T22:52:11.152294333Z 2026-03-13 22:52:11.151 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=406.69 gc_counts=(492, 0, 0) msg_id=None run_id=None
+2026-03-13T22:53:11.340126074Z 2026-03-13 22:53:11.339 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=406.69 gc_counts=(1353, 0, 0) msg_id=None run_id=None
+2026-03-13T22:54:11.564245181Z 2026-03-13 22:54:11.563 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=406.69 gc_counts=(246, 0, 0) msg_id=None run_id=None
+2026-03-13T22:55:11.826351386Z 2026-03-13 22:55:11.826 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=420.98 gc_counts=(1107, 0, 0) msg_id=None run_id=None
+2026-03-13T22:56:12.043616149Z 2026-03-13 22:56:12.043 | INFO | app.queue.memory_diagnostics:log_heartbeat:55 - worker_memory_heartbeat | rss_mb=467.85 gc_counts=(0, 0, 0) msg_id=None run_id=None
+2026-03-13T22:56:14.074473895Z 2026-03-13 22:56:14.073 | WARNING | app.queue.memory_diagnostics:_emit_high_watermark_log:144 - worker_memory_high_watermark | rss_mb=467.85 threshold_pct=85 threshold_mb=435.2 msg_id=None run_id=None | top_allocations:
+2026-03-13T22:56:14.074508876Z   1. 6.24 MB: <frozen importlib._bootstrap>:491
+2026-03-13T22:56:14.074516296Z   2. 1.87 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/httpx/_models.py:162
+2026-03-13T22:56:14.074522576Z   3. 1.26 MB: <frozen importlib._bootstrap_external>:528
+2026-03-13T22:56:14.074526186Z   4. 0.94 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:152
+2026-03-13T22:56:14.074529647Z   5. 0.80 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/hpack/table.py:161
+2026-03-13T22:56:14.074533176Z   6. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/httpcore/_models.py:72
+2026-03-13T22:56:14.074547507Z   7. 0.56 MB: /opt/render/project/python/Python-3.14.3/lib/python3.14/threading.py:307
+2026-03-13T22:56:14.074549817Z   8. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/hpack/table.py:114
+2026-03-13T22:56:14.074552167Z   9. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:140
+2026-03-13T22:56:14.074554257Z   10. 0.56 MB: /opt/render/project/src/.venv/lib/python3.14/site-packages/h2/settings.py:139

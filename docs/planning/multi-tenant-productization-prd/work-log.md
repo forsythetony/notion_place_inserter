@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | worker-memory-isolation-hardening | Split worker memory diagnostics from tracemalloc via new env flag, added richer heartbeat fields for root-cause isolation, and hardened terminal failure path to avoid FK persistence rethrow loops. |
 | 2026-03-13 | worker-memory-remediation-implementation | Implemented non-retriable classification (23503/23505), read_count ceiling, memory diagnostics (heartbeat, per-message delta, high-watermark tracemalloc), env wiring, and tests. Added manual validation steps to findings doc. |
 | 2026-03-13 | tech-debt-story-retry-error-propagation | Added `docs/tech-debt/` and created a backlog story to validate retry-flow error propagation and terminal handling consistency. |
 | 2026-03-13 | worker-memory-starvation-investigation-update | Updated incident findings with new log evidence, ranked hypotheses, added memory telemetry plan, and additional mitigation/validation steps. |

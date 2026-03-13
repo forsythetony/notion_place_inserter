@@ -1,6 +1,7 @@
-"""Low-overhead memory diagnostics for worker loop. Gated by env; log-first only."""
+"""Memory diagnostics helpers for worker loop."""
 
 import gc
+import os
 import sys
 import tracemalloc
 from typing import Any
@@ -36,11 +37,42 @@ def _get_gc_counts() -> tuple[int, int, int]:
     return gc.get_count()
 
 
+def _get_num_threads() -> int:
+    """Best-effort process thread count."""
+    try:
+        import threading
+        return len(threading.enumerate())
+    except Exception:
+        return 0
+
+
+def _get_open_fds() -> int:
+    """Best-effort open fd count on Linux-like systems."""
+    try:
+        return len(os.listdir("/proc/self/fd"))
+    except Exception:
+        return 0
+
+
+def _get_traced_memory_mb() -> tuple[float, float]:
+    """Return tracemalloc current/peak MB if tracing; otherwise zeros."""
+    if not tracemalloc.is_tracing():
+        return (0.0, 0.0)
+    current, peak = tracemalloc.get_traced_memory()
+    return (round(current / (1024 * 1024), 2), round(peak / (1024 * 1024), 2))
+
+
 def get_memory_snapshot() -> dict[str, Any]:
-    """Cheap snapshot: rss_mb, gc_counts. No tracemalloc."""
+    """Best-effort snapshot for correlating process growth."""
+    traced_current_mb, traced_peak_mb = _get_traced_memory_mb()
     return {
         "rss_mb": round(_get_rss_mb(), 2),
         "gc_counts": _get_gc_counts(),
+        "gc_objects": len(gc.get_objects()),
+        "num_threads": _get_num_threads(),
+        "open_fds": _get_open_fds(),
+        "traced_current_mb": traced_current_mb,
+        "traced_peak_mb": traced_peak_mb,
     }
 
 
@@ -48,14 +80,25 @@ def log_heartbeat(
     *,
     rss_mb: float,
     gc_counts: tuple[int, int, int],
+    gc_objects: int,
+    num_threads: int,
+    open_fds: int,
+    traced_current_mb: float,
+    traced_peak_mb: float,
     active_msg_id: int | None = None,
     active_run_id: str | None = None,
 ) -> None:
     """Emit structured heartbeat log."""
     logger.info(
-        "worker_memory_heartbeat | rss_mb={} gc_counts={} msg_id={} run_id={}",
+        "worker_memory_heartbeat | rss_mb={} gc_counts={} gc_objects={} num_threads={} "
+        "open_fds={} traced_current_mb={} traced_peak_mb={} msg_id={} run_id={}",
         rss_mb,
         gc_counts,
+        gc_objects,
+        num_threads,
+        open_fds,
+        traced_current_mb,
+        traced_peak_mb,
         active_msg_id,
         active_run_id,
     )
@@ -105,6 +148,7 @@ def maybe_log_high_watermark(
     crossed: set[float],
     msg_id: int | None,
     run_id: str | None,
+    include_tracemalloc_snapshot: bool = True,
 ) -> set[float]:
     """
     If RSS crosses a threshold fraction, log once per threshold.
@@ -121,6 +165,7 @@ def maybe_log_high_watermark(
                 threshold_mb=threshold_mb,
                 msg_id=msg_id,
                 run_id=run_id,
+                include_tracemalloc_snapshot=include_tracemalloc_snapshot,
             )
     return new_crossed
 
@@ -132,13 +177,16 @@ def _emit_high_watermark_log(
     threshold_mb: float,
     msg_id: int | None,
     run_id: str | None,
+    include_tracemalloc_snapshot: bool,
 ) -> None:
     """Emit one-time snapshot when crossing threshold."""
     top_stats = ""
-    if tracemalloc.is_tracing():
+    if include_tracemalloc_snapshot and tracemalloc.is_tracing():
         snapshot = tracemalloc.take_snapshot()
         top = snapshot.statistics("lineno")
         top_stats = _format_tracemalloc_top(top)
+    elif not include_tracemalloc_snapshot:
+        top_stats = "  (tracemalloc snapshot disabled)"
     else:
         top_stats = "  (tracemalloc not started)"
     logger.warning(
@@ -154,7 +202,7 @@ def _emit_high_watermark_log(
 
 
 def start_tracemalloc_if_enabled(enabled: bool) -> None:
-    """Start tracemalloc when diagnostics enabled and threshold logging will be used."""
+    """Start tracemalloc when explicitly enabled."""
     if enabled:
         if not tracemalloc.is_tracing():
             tracemalloc.start()
@@ -174,6 +222,13 @@ def parse_memory_limit_mb(raw: str) -> float:
 
 def parse_diagnostics_enabled(raw: str) -> bool:
     """Parse WORKER_MEMORY_DIAGNOSTICS_ENABLED env; default 0 (off)."""
+    if not raw or not raw.strip():
+        return False
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
+def parse_tracemalloc_enabled(raw: str) -> bool:
+    """Parse WORKER_MEMORY_TRACEMALLOC_ENABLED env; default 0 (off)."""
     if not raw or not raw.strip():
         return False
     return raw.strip().lower() in ("1", "true", "yes")

@@ -111,6 +111,7 @@ async def run_worker_loop(
     vt_seconds: int = _DEFAULT_VT_SECONDS,
     retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
     memory_diagnostics_enabled: bool = False,
+    memory_tracemalloc_enabled: bool = False,
     memory_limit_mb: float = 512.0,
     memory_heartbeat_interval_seconds: float = 60.0,
 ) -> None:
@@ -142,6 +143,11 @@ async def run_worker_loop(
                     log_heartbeat(
                         rss_mb=snap["rss_mb"],
                         gc_counts=snap["gc_counts"],
+                        gc_objects=snap["gc_objects"],
+                        num_threads=snap["num_threads"],
+                        open_fds=snap["open_fds"],
+                        traced_current_mb=snap["traced_current_mb"],
+                        traced_peak_mb=snap["traced_peak_mb"],
                         active_msg_id=None,
                         active_run_id=None,
                     )
@@ -151,6 +157,7 @@ async def run_worker_loop(
                         crossed_thresholds,
                         None,
                         None,
+                        include_tracemalloc_snapshot=memory_tracemalloc_enabled,
                     )
             await asyncio.sleep(poll_interval_seconds)
             continue
@@ -165,6 +172,11 @@ async def run_worker_loop(
                     log_heartbeat(
                         rss_mb=snap["rss_mb"],
                         gc_counts=snap["gc_counts"],
+                        gc_objects=snap["gc_objects"],
+                        num_threads=snap["num_threads"],
+                        open_fds=snap["open_fds"],
+                        traced_current_mb=snap["traced_current_mb"],
+                        traced_peak_mb=snap["traced_peak_mb"],
                         active_msg_id=msg.message_id,
                         active_run_id=(
                             (msg.payload or {}).get("run_id")
@@ -177,6 +189,7 @@ async def run_worker_loop(
                         crossed_thresholds,
                         msg.message_id,
                         (msg.payload or {}).get("run_id") if msg.payload else None,
+                        include_tracemalloc_snapshot=memory_tracemalloc_enabled,
                     )
             try:
                 await _process_message(
@@ -188,6 +201,7 @@ async def run_worker_loop(
                     loop,
                     retry_delays_seconds=retry_delays_seconds,
                     memory_diagnostics_enabled=memory_diagnostics_enabled,
+                    memory_tracemalloc_enabled=memory_tracemalloc_enabled,
                     memory_limit_mb=memory_limit_mb,
                     memory_crossed_thresholds_ref=crossed_thresholds,
                 )
@@ -257,6 +271,7 @@ async def _process_message(
     *,
     retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
     memory_diagnostics_enabled: bool = False,
+    memory_tracemalloc_enabled: bool = False,
     memory_limit_mb: float = 512.0,
     memory_crossed_thresholds_ref: set[float] | None = None,
 ) -> None:
@@ -283,6 +298,7 @@ async def _process_message(
                     memory_crossed_thresholds_ref,
                     msg.message_id,
                     extracted[1],
+                    include_tracemalloc_snapshot=memory_tracemalloc_enabled,
                 )
                 memory_crossed_thresholds_ref.clear()
                 memory_crossed_thresholds_ref.update(crossed)
@@ -615,7 +631,7 @@ def _mark_failed_and_archive(
     now: datetime,
     error: BaseException,
 ) -> None:
-    """Persist failed status, emit event, archive."""
+    """Best-effort persist failed status, emit event, and archive."""
     try:
         run_repo.update_job_status(
             job_id, "failed", completed_at=now, error_message=err_msg
@@ -628,14 +644,20 @@ def _mark_failed_and_archive(
             job_id,
             run_id,
         )
-        raise
-    event_bus.publish_failure(
-        PipelineFailureEvent(
-            job_id=job_id,
-            run_id=run_id,
-            keywords=keywords,
-            error=error,
-            recipient_whatsapp=recipient_whatsapp,
+    try:
+        event_bus.publish_failure(
+            PipelineFailureEvent(
+                job_id=job_id,
+                run_id=run_id,
+                keywords=keywords,
+                error=error,
+                recipient_whatsapp=recipient_whatsapp,
+            )
         )
-    )
-    queue_repo.archive(msg.message_id)
+    except Exception:
+        logger.exception("worker_failure_event_publish_failed | job_id={}", job_id)
+    try:
+        queue_repo.archive(msg.message_id)
+    except Exception:
+        logger.exception("worker_failure_archive_failed | msg_id={}", msg.message_id)
+        raise

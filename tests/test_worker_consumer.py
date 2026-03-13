@@ -370,6 +370,44 @@ def test_worker_non_retriable_fk_violation_archives_immediately(
     assert "failed" in status_calls
 
 
+def test_worker_non_retriable_terminal_persist_failure_still_archives_once(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """Non-retriable FK should still archive even if pipeline_failed event persist also fails."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message()],
+        [],
+    ]
+
+    class APIErrorWithCode(Exception):
+        def __init__(self, code: str, message: str):
+            super().__init__(message)
+            self.code = code
+
+    call_count = {"n": 0}
+
+    def insert_event_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise APIErrorWithCode("23503", "fk violation pipeline_started")
+        if call_count["n"] == 2:
+            raise APIErrorWithCode("23503", "fk violation pipeline_failed")
+        return None
+
+    mock_run_repo.insert_event.side_effect = insert_event_side_effect
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    mock_queue_repo.archive.assert_called_once_with(1)
+    failed_status_calls = [
+        c for c in mock_run_repo.update_job_status.call_args_list if c[0][1] == "failed"
+    ]
+    assert len(failed_status_calls) == 1
+    mock_run_repo.increment_job_retry_count.assert_not_called()
+
+
 def test_worker_read_count_ceiling_forces_terminal(
     mock_queue_repo, mock_run_repo, mock_places_service, event_bus
 ):
