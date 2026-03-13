@@ -11,7 +11,7 @@ Add backend infrastructure code needed to talk to Supabase safely from FastAPI a
   - service credential/key for trusted backend contexts
   - queue/table names
 - Create a small service/repository layer for:
-  - queue operations (send/pop/ack abstraction)
+  - queue operations (send/read/archive via public wrapper RPC abstraction)
   - job/run/event persistence operations
 - Add startup validation for required Supabase env vars (similar to existing required provider keys).
 
@@ -96,7 +96,7 @@ Before closing this PR, confirm:
 
 - [ ] `app/integrations/supabase_config.py` exists with typed config and validation.
 - [ ] `app/integrations/supabase_client.py` exists with client factory.
-- [ ] `app/services/supabase_queue_repository.py` exists with send/read/archive methods.
+- [ ] `app/services/supabase_queue_repository.py` exists with send/read/archive methods (calls public wrapper RPC).
 - [ ] `app/services/supabase_run_repository.py` exists with job/run/event persistence methods.
 - [ ] App startup validates `SUPABASE_URL` and `SUPABASE_SECRET_KEY`; clear errors when missing/malformed.
 - [ ] Supabase adapters are stored on `app.state`; no route/worker logic uses them yet.

@@ -123,7 +123,7 @@ Deliverables:
 
 - `supabase/config.toml`
 - initial SQL migrations in `supabase/migrations`
-- queue created and testable via SQL/RPC
+- queue created and exposed via public wrapper RPC (`pgmq_send`, `pgmq_read`, `pgmq_archive`) for PostgREST access
 
 ### Workstream B - Queue and run-persistence integration (backend)
 

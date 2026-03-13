@@ -73,7 +73,7 @@ Run these once after merging this PR to validate the enqueue path migration:
    - **pipeline_runs**: Row exists with same `job_id`, `status = 'pending'`, and a `run_id` (UUID).
    - **pgmq queue**: Message in `locations_jobs` contains `job_id`, `run_id`, and `keywords` in payload.
      ```sql
-     SELECT * FROM pgmq.read('locations_jobs', 5, 1);
+     SELECT * FROM public.pgmq_read('locations_jobs', 5, 1);
      ```
 
 7. **Negative checks**:

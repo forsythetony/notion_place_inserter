@@ -81,12 +81,13 @@ Run these once after merging this PR to validate the schema and queue:
    ```
    Expect extension installed and `locations_jobs` queue present.
 
-6. **Queue send/pop smoke test**:
+6. **Queue send/read smoke test** (via public wrapper RPC):
+
    ```sql
-   SELECT * FROM pgmq.send('locations_jobs', '{"test": "payload"}');
-   SELECT * FROM pgmq.read('locations_jobs', 5, 1);
+   SELECT public.pgmq_send('locations_jobs', '{"test": "payload"}', 0);
+   SELECT * FROM public.pgmq_read('locations_jobs', 5, 1);
    ```
-   Expect one message sent and one message read with matching payload. Optionally `pgmq.archive()` or `pgmq.delete()` to clean up.
+   Expect one message sent (returns msg_id) and one message read with matching payload. Optionally `public.pgmq_archive('locations_jobs', <msg_id>)` to clean up.
 
 7. **Duplicate constraint smoke test**:
    ```sql
@@ -115,6 +116,6 @@ Before closing this PR, confirm:
 - [ ] `make supabase-reset` applies migrations cleanly on local Supabase.
 - [ ] Four Phase 1 tables exist: `platform_jobs`, `pipeline_runs`, `pipeline_run_events`, `http_triggers`.
 - [ ] `pgmq` extension is enabled and `locations_jobs` queue exists.
-- [ ] Queue supports send and read (manual smoke test passes).
+- [ ] Queue supports send and read via public wrapper RPC (manual smoke test passes).
 - [ ] Duplicate `job_id` and `run_id` inserts are rejected by constraints.
 - [ ] No API route or worker logic changes were introduced (PR-02 scope).

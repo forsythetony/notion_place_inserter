@@ -1,4 +1,4 @@
-"""Queue operations via Supabase RPC to pgmq."""
+"""Queue operations via Supabase RPC to public pgmq wrapper functions."""
 
 import json
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ class QueueAckResult:
 class SupabaseQueueRepository:
     """
     Repository for pgmq queue operations via Supabase RPC.
-    Uses pgmq schema (send, read, archive).
+    Uses public schema wrapper functions (pgmq_send, pgmq_read, pgmq_archive).
     """
 
     def __init__(self, client: Client, config: SupabaseConfig) -> None:
@@ -48,13 +48,13 @@ class SupabaseQueueRepository:
     def send(self, payload: dict[str, Any], delay_seconds: int = 0) -> QueueSendResult:
         """
         Send a message to the queue.
-        Returns the message ID from pgmq.send.
+        Returns the message ID from pgmq_send.
         """
         try:
             resp = (
-                self._client.schema("pgmq")
+                self._client.schema("public")
                 .rpc(
-                    "send",
+                    "pgmq_send",
                     {
                         "queue_name": self._config.queue_name,
                         "msg": payload,
@@ -69,11 +69,11 @@ class SupabaseQueueRepository:
 
         data = resp.data
         if data is None or (isinstance(data, list) and len(data) == 0):
-            raise RuntimeError("pgmq.send returned no message ID")
+            raise RuntimeError("pgmq_send returned no message ID")
 
         msg_id = data[0] if isinstance(data, list) else data
         if isinstance(msg_id, dict):
-            msg_id = msg_id.get("send", msg_id.get("msg_id"))
+            msg_id = msg_id.get("pgmq_send", msg_id.get("send", msg_id.get("msg_id")))
 
         return QueueSendResult(message_id=int(msg_id))
 
@@ -88,9 +88,9 @@ class SupabaseQueueRepository:
         """
         try:
             resp = (
-                self._client.schema("pgmq")
+                self._client.schema("public")
                 .rpc(
-                    "read",
+                    "pgmq_read",
                     {
                         "queue_name": self._config.queue_name,
                         "vt": vt_seconds,
@@ -136,9 +136,9 @@ class SupabaseQueueRepository:
         """
         try:
             resp = (
-                self._client.schema("pgmq")
+                self._client.schema("public")
                 .rpc(
-                    "archive",
+                    "pgmq_archive",
                     {
                         "queue_name": self._config.queue_name,
                         "msg_id": message_id,

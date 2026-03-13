@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | Public pgmq RPC wrappers | Switched queue RPC from direct pgmq schema to public wrapper functions (pgmq_send, pgmq_read, pgmq_archive); migration, repo, tests, docs updated |
 | 2026-03-13 | PR-06 UI scaffold | Scaffolded notion_pipeliner_ui: Vite React+TS, Run Location Inserter button, POST /locations client, idle/submitting/accepted/error states, .env.example, README, Makefile |
 | 2026-03-13 | Frontend deployment decision docs | Documented that frontend uses Vite, deploys to Render Static Site, and lives in a separate repository |
 | 2026-03-13 | env_bootstrap static env key list | Replaced regex/template parsing with a static ordered key list from `envs/env.template` for startup env logging |

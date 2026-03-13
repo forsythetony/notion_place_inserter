@@ -192,7 +192,7 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 | `GOOGLE_PLACES_API_KEY` | Yes | None (must be set) | `AIza...` | Enables Google Places search/details lookups used for place enrichment. |
 | `FREEPIK_API_KEY` | No | Unset | `fpk_...` | Enables Freepik icon lookup; if missing, icon may be blank in non-dry-run mode. |
 | `DRY_RUN` | No | Disabled (`0`/false) | `1` or `0` | When truthy (`1/true/yes`), returns preview payloads instead of writing to Notion. |
-| `LOCATIONS_ASYNC_ENABLED` | No | `1` (async) | `1` or `0` | When `1`, POST `/locations` enqueues and returns immediately with `job_id`; pipeline runs in background. When `0`, runs synchronously (waits for pipeline). **In-memory queue**: single-instance, non-durable; jobs lost on restart. |
+| `LOCATIONS_ASYNC_ENABLED` | No | `1` (async) | `1` or `0` | When `1`, POST `/locations` enqueues and returns immediately with `job_id`; pipeline runs in background. When `0`, runs synchronously (waits for pipeline). With Supabase configured, queue is durable (pgmq via public wrapper RPC); otherwise in-memory, non-durable. |
 | `GOOGLE_PLACE_DETAILS_FETCH` | No | `1` | `1` | Set `0` to skip optional Place Details requests (fewer API calls, less rich notes). |
 | `LOCATIONS_CACHE_TTL_SECONDS` | No | `1800` | `1800` | TTL for cached existing-location index used in relation matching. |
 | `LOCATION_MATCH_MIN_CONFIDENCE` | No | `0.85` | `0.85` | Minimum similarity score required before linking to an existing location. |
@@ -250,7 +250,7 @@ app/
   app_global_pipelines/     # PlacesGlobalPipeline
   custom_pipelines/          # Per-property pipelines (title, type, etc.)
   routes/
-  queue/                    # In-memory async: job queue, worker, event bus, subscriber
+  queue/                    # Async job queue, worker loop, event bus (durable via Supabase pgmq when configured)
 supabase/
   config.toml               # Supabase CLI config (ports, auth, etc.)
   migrations/               # Versioned SQL migrations (schema changes via PR only)
