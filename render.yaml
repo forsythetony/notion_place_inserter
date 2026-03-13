@@ -12,10 +12,10 @@ services:
       - key: LOCATIONS_ASYNC_ENABLED
         value: "1"
 
-  - type: web
+  - type: worker
     name: notion-pipeliner-worker
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.worker_main
     envVars:

@@ -60,7 +60,7 @@ Ensure backend `render.yaml` includes both services:
 - API service:
   - Build Command: `pip install -r requirements.txt`
   - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Worker service:
+- Worker service (`type: worker`, not web — workers do not bind to a port; Render free plan does not support workers, use `starter`):
   - Build Command: `pip install -r requirements.txt`
   - Start Command: `python -m app.worker_main`
 
@@ -192,6 +192,7 @@ If jobs are not dequeued:
    - `LOCATIONS_ASYNC_ENABLED=1`
 7. Confirm no typo in env var names (`SECRET`, not `secret`).
 8. Confirm backend `render.yaml` includes both API and worker services (and Blueprint sync succeeded).
+9. If worker deploy stays "In Progress" with "No open ports detected": worker must use `type: worker` (not `type: web`). Web services expect port binding; workers do not. Update `render.yaml` and re-sync.
 
 ## 9) Rollback strategy
 
