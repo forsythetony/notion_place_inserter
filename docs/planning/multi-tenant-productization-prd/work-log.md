@@ -36,6 +36,10 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | Phase 2 manual validation steps | Added explicit "Manual validation steps (after implementation)" and verification checklists to each Phase 2 PR story doc (`pr-01` through `pr-07`). |
+| 2026-03-13 | Phase 2 story breakdown | Created Phase 2 PR-sized technical story set (`pr-01` to `pr-07`) with ordered dependency index and retained a phase technical-plan document in `technical/phase-2-authentication-segmentation/`. |
+| 2026-03-13 | Phase 2 auth planning updates | Expanded Phase 2 scope with landing/auth/dashboard UX, user-type enum (`ADMIN`, `STANDARD`, `BETA_TESTER`), invite-code lifecycle/data model, and manual code-generation script requirement; added dedicated Phase 2 technical plan doc. |
+| 2026-03-13 | PR-08 | Deployment runbook and Render exit: canonical PR-08 runbook with env matrix, cutover/rollback/Render-exit steps; README points to PR-08; PR-06/technical-plan aligned; Phase 1 docs consistent. |
 | 2026-03-13 | PR-07 | Tests, observability, API docs: enqueue persistence-failure tests; worker idempotency (failed-run), queue-read and persist-error resilience; correlation logging (job_id+run_id) in worker/subscriber/communicator; openapi.yaml durable queue wording. |
 | 2026-03-13 | Keywords textbox UI | Replaced hardcoded locations keywords with user-editable textbox; trim/non-empty and max-300 validation; Run disabled when invalid/loading. |
 | 2026-03-13 | PR-06 Blueprint migration | Backend render.yaml: notion-pipeliner-api + notion-pipeliner-worker, fromGroup notion-pipeliner-backend; deploy doc migration steps and manual checklist; README aligned. |

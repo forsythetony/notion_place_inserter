@@ -176,6 +176,34 @@ From `Pipelines`, a user can:
 - The system must support secure credential storage for connected integrations.
 - V1 should use a managed authentication solution rather than framework-native or fully custom auth.
 - A managed auth platform in the category of `Supabase Auth` is the preferred direction because it aligns with the goal of managing the application end to end within one ecosystem.
+- Phase 2 onboarding UX must include:
+  - a barebones public landing page
+  - a `Sign In / Sign Up` entry point in the upper-right header area
+  - a dedicated basic auth page for sign-in and sign-up
+- After successful authentication, users must be redirected to the dashboard landing page.
+- The system must support user types in V1 with exactly these values:
+  - `ADMIN`
+  - `STANDARD`
+  - `BETA_TESTER`
+- Sign-up in Phase 2 should be invite-code-gated for non-admin onboarding, with user type assignment determined by the claimed invitation code.
+
+### 1a. Invitation Codes and Access Gating
+
+- The system must introduce an invitation code model stored in the backend and linked to user profile information.
+- Each invitation code record must include:
+  - `code` (random 20-character string)
+  - `date_issued` (datetime)
+  - `date_claimed` (datetime, nullable)
+  - `issued_to` (free-text field; email or username)
+  - `platform_issued_on` (free-text field)
+  - `claimed` (boolean)
+  - `claimed_at` (datetime, nullable)
+  - `user_type` (enum: `ADMIN`, `STANDARD`, `BETA_TESTER`)
+- Claim semantics:
+  - Invitation codes must be single-use.
+  - A claimed code must be marked claimed and timestamped.
+  - The newly created user must be assigned the `user_type` on the invitation code.
+- The backend must provide a manual operational path to generate invitation codes (script/CLI for operator use).
 
 ### 2. Data Target Abstraction
 
@@ -342,6 +370,9 @@ Likely top-level entities:
 - Pipeline Run
 - Step Run
 - Activity Event
+- Invitation Code
+
+User profile shape for Phase 2 should include a `user_type` enum (`ADMIN`, `STANDARD`, `BETA_TESTER`) and optional reference to the invitation code used during onboarding.
 
 ### Execution Model
 
@@ -393,11 +424,16 @@ Likely top-level entities:
 
 ### Phase 2: Authentication and Segmentation
 
-- Add authentication
-- Introduce user-based segmentation and ownership boundaries
-- Keep the UI intentionally minimal at this stage
-- Once logged in, the only user-facing action in the UI should be `Run Location Inserter (with dummy data)`
-- Do not introduce broader pipeline-management functionality yet
+- Add authentication with basic sign-in/sign-up pages.
+- Introduce user-based segmentation and ownership boundaries.
+- Add a barebones public landing page with `Sign In / Sign Up` link in the upper-right.
+- Keep the UI intentionally minimal at this stage.
+- Add invite-code onboarding support and persistent invitation code records.
+- Support user types (`ADMIN`, `STANDARD`, `BETA_TESTER`) with type assignment from claimed invite code.
+- Add a manual script/CLI for operators to generate invitation codes.
+- Redirect authenticated users to a dashboard landing page.
+- Once logged in, the only user-facing action in the dashboard should be `Run Location Inserter (with dummy data)`.
+- Do not introduce broader pipeline-management functionality yet.
 
 ### Phase 3: YAML-Backed Product Model
 
