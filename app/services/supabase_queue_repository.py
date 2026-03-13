@@ -63,7 +63,7 @@ class SupabaseQueueRepository:
                 )
                 .execute()
             )
-        except Exception as e:
+        except Exception:
             logger.exception("supabase_queue_send_failed | queue={}", self._config.queue_name)
             raise
 
@@ -99,7 +99,7 @@ class SupabaseQueueRepository:
                 )
                 .execute()
             )
-        except Exception as e:
+        except Exception:
             logger.exception("supabase_queue_read_failed | queue={}", self._config.queue_name)
             raise
 
@@ -146,7 +146,7 @@ class SupabaseQueueRepository:
                 )
                 .execute()
             )
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_queue_archive_failed | queue={} msg_id={}",
                 self._config.queue_name,

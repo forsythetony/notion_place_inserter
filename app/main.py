@@ -102,6 +102,15 @@ def _log_format(record: dict) -> str:
     if ctx_parts:
         parts.append("|")
         parts.append(" ".join(ctx_parts))
+    exc = record.get("exception")
+    if exc is not None:
+        exc_type = getattr(exc, "type", None)
+        exc_type_name = exc_type.__name__ if exc_type is not None else "Exception"
+        exc_value = getattr(exc, "value", "")
+        parts.append("|")
+        parts.append(
+            f"exception={_escape_braces(exc_type_name)}:{_escape_braces(exc_value)}"
+        )
     return " ".join(parts) + "\n"
 
 

@@ -34,7 +34,7 @@ class SupabaseRunRepository:
                     "status": status,
                 }
             ).execute()
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_create_job_failed | job_id={}",
                 job_id,
@@ -63,7 +63,7 @@ class SupabaseRunRepository:
             self._client.table(self._config.table_platform_jobs).update(payload).eq(
                 "job_id", job_id
             ).execute()
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_update_job_status_failed | job_id={} status={}",
                 job_id,
@@ -86,7 +86,7 @@ class SupabaseRunRepository:
                     "status": status,
                 }
             ).execute()
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_create_run_failed | job_id={} run_id={}",
                 job_id,
@@ -118,7 +118,7 @@ class SupabaseRunRepository:
             self._client.table(self._config.table_pipeline_runs).update(payload).eq(
                 "run_id", run_id
             ).execute()
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_update_run_failed | run_id={}",
                 run_id,
@@ -143,7 +143,7 @@ class SupabaseRunRepository:
             self._client.table(self._config.table_pipeline_run_events).insert(
                 payload
             ).execute()
-        except Exception as e:
+        except Exception:
             logger.exception(
                 "supabase_insert_event_failed | run_id={} event_type={}",
                 run_id,
