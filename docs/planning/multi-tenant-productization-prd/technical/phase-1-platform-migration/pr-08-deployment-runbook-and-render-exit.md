@@ -8,8 +8,9 @@ Finalize Phase 1 by documenting and validating the hybrid deployment baseline: R
 
 - Document Render + Supabase hybrid deployment model:
   - API and worker on Render Web Service
-  - Minimal UI on Render Static Site
+  - Minimal Vite UI on Render Static Site
   - Supabase for Postgres, pgmq queue, and platform primitives
+- Capture frontend repository split: UI code lives in a separate frontend repository from backend runtime code.
 - Add environment variable matrix for:
   - API process (including `SECRET` for auth header validation; `SUPABASE_URL`, `SUPABASE_SECRET_KEY`)
   - worker process
@@ -55,10 +56,11 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 ### 4) Create UI service (Static Site)
 
 1. In Render dashboard: **New -> Static Site**.
-2. Configure build/publish settings for the frontend app path added in PR 06.
-3. Add frontend env var:
+2. Connect the separate frontend repository and branch.
+3. Configure Vite build/publish settings for that repository (typically `npm run build` and publish `dist`).
+4. Add frontend env var:
    - `BASE_URL=https://<api-service>.onrender.com`
-4. Deploy and record static-site URL.
+5. Deploy and record static-site URL.
 
 ### 5) Wire CORS and validate browser-to-API path
 

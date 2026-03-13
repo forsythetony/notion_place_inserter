@@ -387,7 +387,8 @@ Likely top-level entities:
 - Preserve compatibility with the current execution engine where practical during the migration
 - Minimize behavioral regressions while moving to the new platform foundation
 - Stand up the API with an endpoint that behaves like the current `Render` endpoint
-- Stand up a frontend (Render Static Site) with a single button that manually hits that endpoint
+- Stand up a frontend using Vite, deployed to Render Static Site, with a single button that manually hits that endpoint
+- Maintain frontend code in a separate repository from the backend/runtime repository
 - Do not introduce user authentication in this phase
 
 ### Phase 2: Authentication and Segmentation

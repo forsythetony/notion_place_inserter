@@ -86,12 +86,12 @@ def log_env_masked() -> None:
     """
     Log env variables declared in ENV_TEMPLATE_KEYS. Sensitive keys (SENSITIVE_ENV_KEYS)
     are masked with length-preserving asterisks; others are logged as-is.
-    Unset keys are logged as <unset>.
+    Unset keys are logged as [unset].
     """
     for key in ENV_TEMPLATE_KEYS:
         value = os.environ.get(key)
         if value is None or value == "":
-            logger.info("env | {}={}", key, "<unset>")
+            logger.info("env | {}={}", key, "[unset]")
         elif key in SENSITIVE_ENV_KEYS:
             logger.info("env | {}={}", key, "*" * len(value))
         else:

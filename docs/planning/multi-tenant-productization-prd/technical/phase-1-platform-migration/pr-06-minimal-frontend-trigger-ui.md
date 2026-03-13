@@ -6,8 +6,9 @@ Ship the Phase 1 frontend baseline: a minimal page with one button that triggers
 
 ## Scope
 
-- Create frontend surface (or minimal app route/page if frontend already exists).
+- Create frontend surface using Vite (or minimal app route/page if frontend already exists).
 - **Hosting:** Deploy UI to Render Static Site; API remains on Render Web Service.
+- **Repository:** Frontend lives in a separate repository from this backend/runtime repo.
 - Add one action button: `Run Location Inserter`.
 - Submit a dummy/test keywords payload to backend endpoint.
 - Show simple UI states: idle, submitting, accepted, error.
@@ -15,7 +16,7 @@ Ship the Phase 1 frontend baseline: a minimal page with one button that triggers
 
 ## Expected changes
 
-- New frontend app files and minimal styling.
+- New Vite frontend app files and minimal styling in the dedicated frontend repository.
 - Environment wiring for backend base URL.
 - Basic request handling and status rendering.
 - Render Static Site deployment config.

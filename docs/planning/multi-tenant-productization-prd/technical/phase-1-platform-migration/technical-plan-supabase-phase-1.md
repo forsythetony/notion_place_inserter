@@ -16,6 +16,7 @@ Retain Render-hosted runtime (API, worker, UI) while adopting Supabase as the du
 **Hosting model (Phase 1):**
 - **Runtime plane (Render):** FastAPI API + Python worker on Render Web Service; minimal UI on Render Static Site.
 - **Platform plane (Supabase):** Postgres (jobs, runs, events), pgmq queue, and supporting platform services.
+- **Repository split:** Frontend UI is maintained in a separate repository and deployed independently as a Render Static Site.
 
 This phase intentionally does **not** introduce user-facing authentication flows or full multi-tenant UI management. Future migration of runtime hosting to Supabase (e.g. Edge Functions) may be revisited after production metrics and cost review.
 
@@ -73,7 +74,8 @@ Rationale: avoids high-risk Python->Deno/TypeScript rewrite during platform migr
 - **API:** FastAPI on Render Web Service. Compatibility endpoint remains `POST /locations`
   - request contract unchanged (`{ "keywords": "..." }`)
   - response remains async accepted payload (`{status, job_id}`)
-- **Frontend:** Minimal UI on Render Static Site with one button:
+- **Frontend:** Minimal Vite UI on Render Static Site with one button:
+  - frontend code lives in a separate frontend repository
   - calls backend API (env-driven `BASE_URL`) with test/dummy payload
   - displays accepted/failure status
   - CORS / allowed-origin configured for static UI to API calls
@@ -150,10 +152,11 @@ Deliverables:
 
 ### Workstream D - Minimal frontend (Render Static Site)
 
-1. Create simple frontend app with one action button (`Run Location Inserter` with dummy payload).
-2. Deploy UI to Render Static Site; wire `BASE_URL` (API service URL) via environment.
-3. Wire frontend call to migrated API endpoint; ensure CORS allows static origin.
-4. Display basic request state (`idle`, `submitting`, `accepted`, `error`).
+1. Create simple Vite frontend app with one action button (`Run Location Inserter` with dummy payload).
+2. Maintain frontend in a separate repository from backend runtime code.
+3. Deploy UI to Render Static Site; wire `BASE_URL` (API service URL) via environment.
+4. Wire frontend call to migrated API endpoint; ensure CORS allows static origin.
+5. Display basic request state (`idle`, `submitting`, `accepted`, `error`).
 
 Deliverables:
 
