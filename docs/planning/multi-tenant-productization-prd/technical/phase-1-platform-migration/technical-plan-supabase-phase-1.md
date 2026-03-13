@@ -76,7 +76,7 @@ Rationale: avoids high-risk Python->Deno/TypeScript rewrite during platform migr
   - response remains async accepted payload (`{status, job_id}`)
 - **Frontend:** Minimal Vite UI on Render Static Site with one button:
   - frontend code lives in a separate frontend repository
-  - calls backend API (env-driven `BASE_URL`) with test/dummy payload
+  - calls backend API (env-driven `VITE_BASE_URL`) with test/dummy payload
   - displays accepted/failure status
   - CORS / allowed-origin configured for static UI to API calls
 
@@ -154,7 +154,7 @@ Deliverables:
 
 1. Create simple Vite frontend app with one action button (`Run Location Inserter` with dummy payload).
 2. Maintain frontend in a separate repository from backend runtime code.
-3. Deploy UI to Render Static Site; wire `BASE_URL` (API service URL) via environment.
+3. Deploy UI to Render Static Site; wire `VITE_BASE_URL` (API service URL) and `VITE_SECRET` via environment.
 4. Wire frontend call to migrated API endpoint; ensure CORS allows static origin.
 5. Display basic request state (`idle`, `submitting`, `accepted`, `error`).
 
@@ -169,7 +169,7 @@ Deliverables:
 2. Define environment variable matrix for:
    - API process (including `secret` for auth; `SUPABASE_URL`, `SUPABASE_SECRET_KEY` for platform)
    - worker process
-   - frontend process (e.g. `BASE_URL` for API endpoint)
+   - frontend process (`VITE_BASE_URL`, `VITE_SECRET` for API endpoint)
 3. Add smoke checks for:
    - enqueue success
    - worker dequeue and execution

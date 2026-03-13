@@ -12,12 +12,12 @@ Ship the Phase 1 frontend baseline: a minimal page with one button that triggers
 - Add one action button: `Run Location Inserter`.
 - Submit a dummy/test keywords payload to backend endpoint.
 - Show simple UI states: idle, submitting, accepted, error.
-- Environment wiring: `BASE_URL` for API endpoint; CORS configured so static UI can call API.
+- Environment wiring: `VITE_BASE_URL` for API endpoint (Vite convention); CORS configured so static UI can call API (`CORS_ALLOWED_ORIGINS` on backend must include static-site origin).
 
 ## Expected changes
 
 - New Vite frontend app files and minimal styling in the dedicated frontend repository.
-- Environment wiring for backend base URL.
+- Environment wiring for backend base URL (`VITE_BASE_URL`, `VITE_SECRET`).
 - Basic request handling and status rendering.
 - Render Static Site deployment config.
 

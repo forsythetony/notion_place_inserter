@@ -14,7 +14,7 @@ Finalize Phase 1 by documenting and validating the hybrid deployment baseline: R
 - Add environment variable matrix for:
   - API process (including `SECRET` for auth header validation; `SUPABASE_URL`, `SUPABASE_SECRET_KEY`)
   - worker process
-  - frontend process (e.g. `BASE_URL` for API endpoint)
+  - frontend process (`VITE_BASE_URL` for API endpoint, `VITE_SECRET` for Authorization header)
 - Add migration/cutover runbook:
   - pre-cutover checklist
   - cutover steps
@@ -30,7 +30,7 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 1. Ensure Supabase migrations are applied to target project (`platform_jobs`, `pipeline_runs`, `pipeline_run_events`, queue setup).
 2. Confirm secret inventory is ready for deploy:
    - API/worker: `SECRET`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, provider keys (`NOTION_API_KEY`, `ANTHROPIC_TOKEN`, `GOOGLE_PLACES_API_KEY`, optional `FREEPIK_API_KEY`)
-   - frontend: `BASE_URL` (points to deployed API URL)
+   - frontend: `VITE_BASE_URL` (points to deployed API URL), `VITE_SECRET` (matches backend `SECRET`)
 3. Confirm backend supports static-site origin in CORS for the frontend domain you will assign in Render.
 
 ### 2) Create or update Render API service (Web Service)
@@ -88,14 +88,14 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 
 1. Deploy API with Supabase config.
 2. Deploy worker and verify dequeue loop health.
-3. Deploy static site and set `BASE_URL`.
+3. Deploy static site and set `VITE_BASE_URL` (and `VITE_SECRET`).
 4. Run smoke tests.
 5. Announce cutover once all checks pass.
 
 ### 8) Rollback plan
 
 1. If API/worker regressions occur, roll back Render services to previous known-good deploy.
-2. Disable frontend traffic to new API path (temporary maintenance page or revert `BASE_URL` to previous endpoint).
+2. Disable frontend traffic to new API path (temporary maintenance page or revert `VITE_BASE_URL` to previous endpoint).
 3. Keep failed run artifacts for diagnosis; do not drop Supabase data during incident response.
 4. Re-run smoke tests on rollback target before declaring recovery.
 
