@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | PR-06 Blueprint migration | Backend render.yaml: notion-pipeliner-api + notion-pipeliner-worker, fromGroup notion-pipeliner-backend; deploy doc migration steps and manual checklist; README aligned. |
 | 2026-03-13 | PR-06 | Minimal frontend trigger UI: finalized error handling (401, network/CORS, VITE_BASE_URL), render.yaml for Render Static Site, env/deploy docs, Phase-1 doc consistency (VITE_BASE_URL/VITE_SECRET). |
 | 2026-03-13 | PR-05 | Worker consumer and run lifecycle persistence: Supabase queue read/archive, pipeline execution, queued→running→succeeded/failed transitions, pipeline_run_events, idempotency guardrails, dedicated worker_main entrypoint. Validated end-to-end. |
 | 2026-03-13 | PR-04 | Completed `/locations` enqueue path migration to Supabase pgmq + run persistence; validated job enqueue from UI |

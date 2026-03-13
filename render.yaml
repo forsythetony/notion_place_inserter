@@ -1,8 +1,22 @@
+# Backend API + worker for Notion Place Inserter (Phase 1).
+# Create env group "notion-pipeliner-backend" in Render with secret file .env and link to both services.
 services:
   - type: web
-    name: hello-world-api
+    name: notion-pipeliner-api
     runtime: python
     plan: free
-
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - fromGroup: notion-pipeliner-backend
+      - key: LOCATIONS_ASYNC_ENABLED
+        value: "1"
+
+  - type: web
+    name: notion-pipeliner-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.worker_main
+    envVars:
+      - fromGroup: notion-pipeliner-backend

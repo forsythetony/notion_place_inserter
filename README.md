@@ -164,25 +164,25 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 
 5. **Create the Render service from Blueprint**
    - Open [dashboard.render.com](https://dashboard.render.com)
+   - Create an environment group `notion-pipeliner-backend` with a secret file `.env` containing your production env (see [.env file loading](#env-file-loading) below)
    - Click **New** -> **Blueprint**
-   - Select this repo; Render reads `render.yaml`
-   - Confirm build/start commands:
-     - Build: `pip install -r requirements.txt`
-     - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - Select this repo; Render reads `render.yaml` and creates `notion-pipeliner-api` and `notion-pipeliner-worker`
+   - Both services link to `notion-pipeliner-backend` (Blueprint uses `fromGroup` in `render.yaml`)
+   - Scale worker to at least 1 instance
 
-6. **Set environment variables in Render**
-   - In Render: **Service** -> **Environment**
-   - Add all required variables from the table below (or upload a `.env` file; see [.env file loading](#env-file-loading) below)
-   - Use `SECRET` for auth (uppercase)
-   - Redeploy after saving env vars
+6. **Set environment variables**
+
+   All required vars (SECRET, SUPABASE_*, provider keys, CORS_ALLOWED_ORIGINS, etc.) go in the env group or in the secret file. See the table below.
 
 7. **Verify the deployed API**
    ```bash
-   export BASE_URL="https://YOUR-SERVICE-NAME.onrender.com"
+   export BASE_URL="https://notion-pipeliner-api.onrender.com"
    export SECRET="YOUR_RENDER_SECRET"
    curl -H "Authorization: $SECRET" "$BASE_URL/"
    ```
    Expected response: `{"message":"Hello there!"}`.
+
+   For full deployment steps, see [PR-06 Detailed Deploy Steps](docs/planning/multi-tenant-productization-prd/technical/phase-1-platform-migration/pr-06-detailed-deploy-steps.md).
 
 #### Render Environment Variables
 
@@ -221,7 +221,7 @@ The app loads environment variables from a `.env` file at startup. It searches f
 
 **Precedence:** Process environment variables (e.g. from the Render dashboard) always override values from the file. This lets you override secrets or per-environment settings without editing the uploaded file.
 
-**Render setup:** You can upload a `.env` file as a [Render Secret File](https://render.com/docs/configure-environment-variables#secret-files) mounted at `/etc/secrets/.env`. The app will load it automatically. Alternatively, set variables in the Render dashboard; those take precedence over any file.
+**Render setup:** Create an environment group (e.g. `notion-pipeliner-backend`) and add a secret file with filename `.env`; its contents are mounted at `/etc/secrets/.env`. The app loads it automatically. Link the env group to both `notion-pipeliner-api` and `notion-pipeliner-worker`, or set variables in the Render dashboard; those take precedence over any file.
 
 ## API Reference
 
