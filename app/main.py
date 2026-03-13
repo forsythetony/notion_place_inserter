@@ -1,6 +1,5 @@
 """FastAPI application with secret-based authorization."""
 
-import asyncio
 import hmac
 import os
 import sys
@@ -11,22 +10,13 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.queue import (
-    create_location_queue,
-    subscribe_to_success,
-    run_worker_loop,
-    EventBus,
-)
 from app.routes import locations, test
 from app.services.claude_service import ClaudeService
-from app.services.communicator import Communicator
 from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
 from app.services.location_service import LocationService
 from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
-from app.services.whatsapp_service import WhatsAppService
-
 from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
@@ -200,59 +190,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.locations_async_enabled = async_enabled
 
-    if async_enabled:
-        job_queue = create_location_queue()
-        event_bus = EventBus()
-        subscribe_to_success(event_bus)
-
-        twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
-        twilio_token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
-        twilio_from = os.environ.get("TWILIO_WHATSAPP_NUMBER", "").strip()
-        if twilio_sid and twilio_token and twilio_from:
-            whatsapp_svc = WhatsAppService(
-                account_sid=twilio_sid,
-                auth_token=twilio_token,
-                from_number=twilio_from,
-            )
-            status_enabled = os.environ.get("WHATSAPP_STATUS_ENABLED", "1").strip().lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-            default_recipient = os.environ.get("WHATSAPP_STATUS_RECIPIENT_DEFAULT", "").strip() or None
-            max_error_chars = int(os.environ.get("WHATSAPP_STATUS_MAX_ERROR_CHARS", "300"))
-            communicator = Communicator(
-                whatsapp_service=whatsapp_svc,
-                enabled=status_enabled,
-                default_recipient=default_recipient,
-                max_error_chars=max_error_chars,
-            )
-            event_bus.subscribe_success(communicator.notify_pipeline_success)
-            event_bus.subscribe_failure(communicator.notify_pipeline_failure)
-        else:
-            logger.info(
-                "whatsapp_status_skipped | twilio credentials not configured; run-status notifications disabled"
-            )
-
-        app.state.location_job_queue = job_queue
-        app.state.location_event_bus = event_bus
-        worker_task = asyncio.create_task(
-            run_worker_loop(job_queue, app.state.places_service, event_bus)
-        )
-        app.state.location_worker_task = worker_task
-    else:
-        app.state.location_job_queue = None
-        app.state.location_event_bus = None
-        app.state.location_worker_task = None
-
     yield
-
-    if async_enabled and app.state.location_worker_task:
-        app.state.location_worker_task.cancel()
-        try:
-            await app.state.location_worker_task
-        except asyncio.CancelledError:
-            pass
 
 
 app = FastAPI(title="Hello World API", lifespan=lifespan)

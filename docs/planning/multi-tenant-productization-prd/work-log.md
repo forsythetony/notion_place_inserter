@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-13 | PR-05 | Worker consumer and run lifecycle persistence: Supabase queue read/archive, pipeline execution, queued→running→succeeded/failed transitions, pipeline_run_events, idempotency guardrails, dedicated worker_main entrypoint. Validated end-to-end. |
 | 2026-03-13 | PR-04 | Completed `/locations` enqueue path migration to Supabase pgmq + run persistence; validated job enqueue from UI |
 | 2026-03-13 | Public pgmq RPC wrappers | Switched queue RPC from direct pgmq schema to public wrapper functions (pgmq_send, pgmq_read, pgmq_archive); migration, repo, tests, docs updated |
 | 2026-03-13 | PR-06 UI scaffold | Scaffolded notion_pipeliner_ui: Vite React+TS, Run Location Inserter button, POST /locations client, idle/submitting/accepted/error states, .env.example, README, Makefile |

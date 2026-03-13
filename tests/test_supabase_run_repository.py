@@ -88,6 +88,29 @@ def test_update_run_patches_by_run_id(repo, mock_client):
     )
 
 
+def test_get_run_status_returns_status_when_found(repo, mock_client):
+    """get_run_status returns status when run exists."""
+    mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"status": "succeeded"}]
+    )
+    status = repo.get_run_status("run_xyz")
+    assert status == "succeeded"
+    mock_client.table.assert_called_with("pipeline_runs")
+    mock_client.table.return_value.select.assert_called_with("status")
+    mock_client.table.return_value.select.return_value.eq.assert_called_with(
+        "run_id", "run_xyz"
+    )
+
+
+def test_get_run_status_returns_none_when_not_found(repo, mock_client):
+    """get_run_status returns None when run does not exist."""
+    mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    status = repo.get_run_status("run_missing")
+    assert status is None
+
+
 def test_insert_event_inserts_into_pipeline_run_events(repo, mock_client):
     """Insert event adds row with run_id, event_type, optional payload."""
     repo.insert_event(

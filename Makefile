@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag supabase-start supabase-stop supabase-status supabase-reset supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -26,6 +26,7 @@ help:
 	@echo "  make run-debug-run     - Same as run-dry-run with LOG_LEVEL=DEBUG forced"
 	@echo "  make run-async         - Start the server with async locations (default)"
 	@echo "  make run-sync          - Start the server with sync locations (LOCATIONS_ASYNC_ENABLED=0)"
+	@echo "  make run-worker        - Start the Supabase queue consumer (run alongside API for async locations)"
 	@echo "  make kill-port         - Kill process on port $(PORT)"
 	@echo "  make clear-logs        - Remove log files from logs/"
 	@echo "  make test              - Quick smoke test (curl health check)"
@@ -76,6 +77,9 @@ run-async:
 
 run-sync:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; LOCATIONS_ASYNC_ENABLED=0; set +a && . env/bin/activate 2>/dev/null || true; PORT=$(PORT) LOG_LEVEL=$(LOG_LEVEL) LOCATIONS_ASYNC_ENABLED=0 uvicorn app.main:app --host 0.0.0.0 --port $(PORT)'
+
+run-worker:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && . env/bin/activate 2>/dev/null || true; LOG_LEVEL=$(LOG_LEVEL) python -m app.worker_main'
 
 kill-port:
 	@bash -c 'pid=$$(lsof -ti:$(PORT)); if [ -n "$$pid" ]; then kill -9 $$pid && echo "Killed process on port $(PORT)"; else echo "Nothing running on port $(PORT)"; fi'

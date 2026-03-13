@@ -1,8 +1,7 @@
-"""Unit tests for queue worker and success subscriber."""
+"""Unit tests for queue event bus and success subscriber."""
 
 from app.queue.events import EventBus, subscribe_to_success
 from app.queue.models import PipelineSuccessEvent
-from app.queue.worker import enqueue_location_job, create_location_queue
 
 
 def test_subscriber_logs_success():
@@ -39,29 +38,3 @@ def test_subscribe_to_success_registers_default_handler():
             result={},
         )
     )
-
-
-def test_enqueue_returns_job_id_and_run_id():
-    """enqueue_location_job returns (job_id, run_id) and job is in queue."""
-    queue = create_location_queue()
-    job_id, run_id = enqueue_location_job(queue, "stone arch bridge")
-    assert job_id.startswith("loc_")
-    assert len(run_id) == 36  # uuid4 hex
-    assert queue.qsize() == 1
-    job = queue.get_nowait()
-    assert job.job_id == job_id
-    assert job.run_id == run_id
-    assert job.keywords == "stone arch bridge"
-    assert job.recipient_whatsapp is None
-
-
-def test_enqueue_passes_recipient_through():
-    """enqueue_location_job carries recipient_whatsapp when provided."""
-    queue = create_location_queue()
-    job_id, _ = enqueue_location_job(
-        queue,
-        "test place",
-        recipient_whatsapp="whatsapp:+15551234567",
-    )
-    job = queue.get_nowait()
-    assert job.recipient_whatsapp == "whatsapp:+15551234567"

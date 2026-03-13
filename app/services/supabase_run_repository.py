@@ -125,6 +125,26 @@ class SupabaseRunRepository:
             )
             raise
 
+    def get_run_status(self, run_id: str) -> str | None:
+        """Fetch run status by run_id. Returns None if run not found."""
+        try:
+            resp = (
+                self._client.table(self._config.table_pipeline_runs)
+                .select("status")
+                .eq("run_id", run_id)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_run_status_failed | run_id={}", run_id)
+            raise
+
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return str(row.get("status", "")) if isinstance(row, dict) else None
+
     def insert_event(
         self,
         run_id: str,

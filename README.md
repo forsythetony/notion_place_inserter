@@ -67,6 +67,8 @@ During normal (non-dry-run) page creation, if `FREEPIK_API_KEY` is not set or Fr
    ```
    The app will be available at `http://localhost:8000`. By default, POST `/locations` returns immediately with `{status: "accepted", job_id: "..."}`; the pipeline runs in a background worker. Use `make run-sync` for synchronous behavior.
 
+   **Async locations (dual process):** When `LOCATIONS_ASYNC_ENABLED=1` (default) and Supabase is configured, run both the API and the worker process. In one terminal: `make run` (or `make run-async`). In another: `make run-worker`. The worker consumes from the Supabase queue and persists run lifecycle transitions. Optional env: `WORKER_POLL_INTERVAL_SECONDS` (default 1), `WORKER_VT_SECONDS` (default 300).
+
 6. **Dry-run mode** (optional) — validate property values without creating Notion pages:
    ```bash
    make run-dry-run
@@ -192,7 +194,9 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 | `GOOGLE_PLACES_API_KEY` | Yes | None (must be set) | `AIza...` | Enables Google Places search/details lookups used for place enrichment. |
 | `FREEPIK_API_KEY` | No | Unset | `fpk_...` | Enables Freepik icon lookup; if missing, icon may be blank in non-dry-run mode. |
 | `DRY_RUN` | No | Disabled (`0`/false) | `1` or `0` | When truthy (`1/true/yes`), returns preview payloads instead of writing to Notion. |
-| `LOCATIONS_ASYNC_ENABLED` | No | `1` (async) | `1` or `0` | When `1`, POST `/locations` enqueues and returns immediately with `job_id`; pipeline runs in background. When `0`, runs synchronously (waits for pipeline). With Supabase configured, queue is durable (pgmq via public wrapper RPC); otherwise in-memory, non-durable. |
+| `LOCATIONS_ASYNC_ENABLED` | No | `1` (async) | `1` or `0` | When `1`, POST `/locations` enqueues to Supabase and returns immediately with `job_id`; pipeline runs in worker process (run `make run-worker` alongside API). When `0`, runs synchronously. |
+| `WORKER_POLL_INTERVAL_SECONDS` | No | `1` | `1` | Worker poll interval when queue is empty. |
+| `WORKER_VT_SECONDS` | No | `300` | `300` | Queue message visibility timeout (seconds); pipeline can take several minutes. |
 | `GOOGLE_PLACE_DETAILS_FETCH` | No | `1` | `1` | Set `0` to skip optional Place Details requests (fewer API calls, less rich notes). |
 | `LOCATIONS_CACHE_TTL_SECONDS` | No | `1800` | `1800` | TTL for cached existing-location index used in relation matching. |
 | `LOCATION_MATCH_MIN_CONFIDENCE` | No | `0.85` | `0.85` | Minimum similarity score required before linking to an existing location. |
