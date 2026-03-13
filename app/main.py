@@ -26,6 +26,11 @@ from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
 from app.services.whatsapp_service import WhatsAppService
 
+from app.integrations.supabase_config import load_supabase_config
+from app.integrations.supabase_client import create_supabase_client
+from app.services.supabase_queue_repository import SupabaseQueueRepository
+from app.services.supabase_run_repository import SupabaseRunRepository
+
 # Context keys to render when present (pipeline orchestration metadata)
 _CONTEXT_KEYS = (
     "run_id",
@@ -137,6 +142,16 @@ async def lifespan(app: FastAPI):
     google_places_key = os.environ.get("GOOGLE_PLACES_API_KEY")
     if not google_places_key:
         raise RuntimeError("GOOGLE_PLACES_API_KEY environment variable is required")
+
+    supabase_config = load_supabase_config()
+    supabase_client = create_supabase_client(supabase_config)
+    app.state.supabase_client = supabase_client
+    app.state.supabase_queue_repository = SupabaseQueueRepository(
+        supabase_client, supabase_config
+    )
+    app.state.supabase_run_repository = SupabaseRunRepository(
+        supabase_client, supabase_config
+    )
 
     notion_svc = NotionService(api_key=notion_key)
     notion_svc.initialize()
