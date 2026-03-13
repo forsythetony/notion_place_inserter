@@ -1,4 +1,4 @@
--- PR-02: Phase 1 Schema and Queue Foundation
+-- p1_pr02: Schema and Queue Foundation
 -- Durable persistence tables and pgmq queue for async processing and run tracking.
 
 -- ---------------------------------------------------------------------------

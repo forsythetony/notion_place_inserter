@@ -1,4 +1,4 @@
-# PR 07 - Tests, Observability, and Phase 2 Docs
+# p2_pr07 - Tests, Observability, and Phase 2 Docs
 
 ## Objective
 
@@ -37,7 +37,7 @@ Harden Phase 2 auth/invite functionality with targeted tests, logging, and opera
 
 ## Dependencies
 
-- Requires PR 01 through PR 06.
+- Requires p2_pr01 through p2_pr06.
 
 ---
 

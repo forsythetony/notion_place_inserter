@@ -1,4 +1,4 @@
--- PR-01: Phase 2 Auth Schema, User Profile, and Invite Codes
+-- p2_pr01: Auth Schema, User Profile, and Invite Codes
 -- Enum, user_profiles, invitation_codes with uniqueness and claim-integrity constraints.
 
 -- ---------------------------------------------------------------------------

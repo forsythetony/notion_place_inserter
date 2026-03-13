@@ -1,4 +1,4 @@
-# PR 04 - `/locations` Enqueue Path Migration
+# p1_pr04 - `/locations` Enqueue Path Migration
 
 ## Objective
 
@@ -38,7 +38,7 @@ Migrate `POST /locations` from in-memory enqueueing to durable Supabase queue en
 
 Run these once after merging this PR to validate the enqueue path migration:
 
-1. **Ensure PR-02 and PR-03 are complete** (Phase 1 schema, queue, and Supabase config). If not, follow their manual steps first.
+1. **Ensure p1_pr02 and p1_pr03 are complete** (Phase 1 schema, queue, and Supabase config). If not, follow their manual steps first.
 
 2. **Configure Supabase env vars** in `envs/local.env`:
    - `SUPABASE_URL` — API URL (e.g. `https://<project-ref>.supabase.co` or `http://127.0.0.1:54321` for local)

@@ -1,4 +1,4 @@
-# PR 04 - Manual Invitation Code Generation Script
+# p2_pr04 - Manual Invitation Code Generation Script
 
 ## Objective
 
@@ -36,7 +36,7 @@ Provide an operator-friendly manual script/CLI to generate invitation codes for 
 
 ## Dependencies
 
-- Requires PR 01 and PR 03.
+- Requires p2_pr01 and p2_pr03.
 
 ---
 

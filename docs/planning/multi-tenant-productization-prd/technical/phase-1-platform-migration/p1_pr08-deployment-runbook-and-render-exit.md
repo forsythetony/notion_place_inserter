@@ -1,4 +1,4 @@
-# PR 08 - Deployment Runbook and Render Exit
+# p1_pr08 - Deployment Runbook and Render Exit
 
 ## Objective
 
@@ -47,7 +47,7 @@ Use this checklist to stand up Phase 1 runtime on Render with Supabase backing s
 
 1. Create a second Render Web Service for worker consumption (same repo/branch).
 2. Use same build command as API service.
-3. Set start command to the worker entrypoint introduced in PR 05 for Supabase queue consumption.
+3. Set start command to the worker entrypoint introduced in p1_pr05 for Supabase queue consumption.
 4. Set worker env vars:
    - `SECRET`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`
    - same provider keys needed by pipeline execution

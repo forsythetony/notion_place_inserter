@@ -2,9 +2,9 @@
 
 ## Status
 
-- In progress (PR-01 schema implemented)
+- In progress (p2_pr01 schema implemented)
 
-## Schema (PR-01)
+## Schema (p2_pr01)
 
 - **Enum:** `user_type_enum` — `ADMIN`, `STANDARD`, `BETA_TESTER`
 - **Table:** `user_profiles` — `user_id` (PK, FK auth.users), `user_type`, `invitation_code_id` (FK invitation_codes), `created_at`, `updated_at`

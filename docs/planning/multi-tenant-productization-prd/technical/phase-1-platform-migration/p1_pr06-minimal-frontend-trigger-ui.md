@@ -1,4 +1,4 @@
-# PR 06 - Minimal Frontend Trigger UI
+# p1_pr06 - Minimal Frontend Trigger UI
 
 ## Objective
 

@@ -1,4 +1,4 @@
-# PR-06 Worker Service Findings
+# p1_pr06 Worker Service Findings
 
 Date: 2026-03-13
 
@@ -16,7 +16,7 @@ Short answer: **Yes, for the architecture we selected and documented for Phase 1
 - The dequeue/poll loop exists in a separate worker loop:
   - `app/queue/worker.py` continuously reads queue messages and processes lifecycle transitions.
 - The deploy runbook also instructs creation of a second Render Web Service for the worker:
-  - `docs/planning/.../pr-08-deployment-runbook-and-render-exit.md`
+  - `docs/planning/.../p1_pr08-deployment-runbook-and-render-exit.md`
 
 ### Could polling run in the same API service?
 

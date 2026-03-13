@@ -1,4 +1,4 @@
-# PR-06 Detailed Deploy Steps (Render + Supabase)
+# p1_pr06 Detailed Deploy Steps (Render + Supabase)
 
 Date: 2026-03-13
 

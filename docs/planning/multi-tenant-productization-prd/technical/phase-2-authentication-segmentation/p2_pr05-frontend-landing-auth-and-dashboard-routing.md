@@ -1,4 +1,4 @@
-# PR 05 - Frontend Landing, Auth, and Dashboard Routing
+# p2_pr05 - Frontend Landing, Auth, and Dashboard Routing
 
 ## Objective
 
@@ -36,7 +36,7 @@ Ship the minimal Phase 2 frontend route structure: public landing page, auth pag
 
 ## Dependencies
 
-- Requires PR 02.
+- Requires p2_pr02.
 
 ---
 

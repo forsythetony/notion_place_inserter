@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual verification script for PR-05: query job/run/events by job_id."""
+"""Manual verification script for p1_pr05: query job/run/events by job_id."""
 
 import os
 import sys

@@ -1,4 +1,6 @@
-# PR 01 - Phase 2 Auth Schema, User Profile, and Invite Codes
+# p2_pr01 - Auth Schema, User Profile, and Invite Codes
+
+**Status: Complete** (2026-03-13)
 
 ## Objective
 
@@ -58,8 +60,8 @@ Establish the Phase 2 data-model foundation for authentication segmentation: use
 
 ## Verification checklist
 
-- [ ] Migration applies cleanly from a fresh checkout.
-- [ ] `user_type` enum allows only supported values.
-- [ ] Invitation code uniqueness is enforced.
-- [ ] Unclaimed and claimed field states are representable.
-- [ ] Schema docs reflect final table/enum definitions.
+- [x] Migration applies cleanly from a fresh checkout.
+- [x] `user_type` enum allows only supported values.
+- [x] Invitation code uniqueness is enforced.
+- [x] Unclaimed and claimed field states are representable.
+- [x] Schema docs reflect final table/enum definitions.

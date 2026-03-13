@@ -1,4 +1,4 @@
-# PR 03 - Invitation Code Issuance and Claim Service
+# p2_pr03 - Invitation Code Issuance and Claim Service
 
 ## Objective
 
@@ -35,7 +35,7 @@ Implement backend invitation-code issuance and claim lifecycle logic, including 
 
 ## Dependencies
 
-- Requires PR 01 and PR 02.
+- Requires p2_pr01 and p2_pr02.
 
 ---
 

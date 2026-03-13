@@ -1,4 +1,4 @@
-# PR 02 - Backend Auth Context and Protected Dashboard Contract
+# p2_pr02 - Backend Auth Context and Protected Dashboard Contract
 
 ## Objective
 
@@ -33,7 +33,7 @@ Introduce backend authentication context handling and a minimal protected contra
 
 ## Dependencies
 
-- Requires PR 01.
+- Requires p2_pr01.
 
 ---
 

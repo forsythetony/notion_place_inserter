@@ -1,4 +1,4 @@
-# PR 01 - Supabase Bootstrap and Migrations
+# p1_pr01 - Supabase Bootstrap and Migrations
 
 ## Objective
 
@@ -94,4 +94,4 @@ Before closing this PR, confirm:
 - [ ] `make supabase-start` brings up the local stack without errors.
 - [ ] `make supabase-reset` applies migrations cleanly.
 - [ ] A fresh clone can follow the README Supabase section end-to-end.
-- [ ] No product tables, queue setup, or API code changes were introduced (PR-02 scope).
+- [ ] No product tables, queue setup, or API code changes were introduced (p1_pr02 scope).

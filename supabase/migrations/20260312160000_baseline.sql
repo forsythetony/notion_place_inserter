@@ -1,3 +1,3 @@
 -- Baseline migration for notion_place_inserter Supabase project.
 -- No app tables or schema changes yet. Phase 1 schema (platform_jobs, pipeline_runs, etc.)
--- will be added in PR-02.
+-- will be added in p1_pr02.

@@ -17,4 +17,4 @@ Add a new row at the top of the Log table with:
 Example:
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
-| 2026-03-12 | PR-04 | Migrated /locations to enqueue via Supabase pgmq |
+| 2026-03-12 | p1_pr04 | Migrated /locations to enqueue via Supabase pgmq |

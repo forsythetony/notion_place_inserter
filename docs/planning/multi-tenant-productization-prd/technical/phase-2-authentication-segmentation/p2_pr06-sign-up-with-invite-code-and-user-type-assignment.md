@@ -1,4 +1,4 @@
-# PR 06 - Sign Up with Invite Code and User Type Assignment
+# p2_pr06 - Sign Up with Invite Code and User Type Assignment
 
 ## Objective
 
@@ -36,7 +36,7 @@ Connect signup UX to invitation-code claim flow so invited users are provisioned
 
 ## Dependencies
 
-- Requires PR 03, PR 04, and PR 05.
+- Requires p2_pr03, p2_pr04, and p2_pr05.
 
 ---
 

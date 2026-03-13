@@ -182,7 +182,7 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
    ```
    Expected response: `{"message":"Hello there!"}`.
 
-   For full deployment steps, see [PR-06 Detailed Deploy Steps](docs/planning/multi-tenant-productization-prd/technical/phase-1-platform-migration/pr-06-detailed-deploy-steps.md).
+   For full deployment steps, see [p1_pr06 Detailed Deploy Steps](docs/planning/multi-tenant-productization-prd/technical/phase-1-platform-migration/p1_pr06-detailed-deploy-steps.md).
 
 #### Render Environment Variables
 

@@ -1,4 +1,4 @@
-# PR 03 - Backend Supabase Config and Client Layer
+# p1_pr03 - Backend Supabase Config and Client Layer
 
 ## Objective
 
@@ -41,7 +41,7 @@ Add backend infrastructure code needed to talk to Supabase safely from FastAPI a
 
 Run these once after merging this PR to validate the Supabase config and client layer:
 
-1. **Ensure PR-02 is complete** (Phase 1 schema and queue exist). If not, follow PR-02 manual steps first.
+1. **Ensure p1_pr02 is complete** (Phase 1 schema and queue exist). If not, follow p1_pr02 manual steps first.
 
 2. **Configure Supabase env vars** in `envs/local.env`:
    - `SUPABASE_URL` — API URL (e.g. `https://<project-ref>.supabase.co`)

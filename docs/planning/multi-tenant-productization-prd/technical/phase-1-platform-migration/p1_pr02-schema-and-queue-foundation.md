@@ -1,4 +1,4 @@
-# PR 02 - Phase 1 Schema and Queue Foundation
+# p1_pr02 - Schema and Queue Foundation
 
 ## Objective
 
@@ -54,7 +54,7 @@ All tables include nullable `owner_user_id` and `tenant_id` for Phase 2 multi-te
 
 Run these once after merging this PR to validate the schema and queue:
 
-1. **Ensure PR-01 bootstrap is complete** (Supabase stack runs, migrations apply). If not, follow PR-01 manual steps first.
+1. **Ensure p1_pr01 bootstrap is complete** (Supabase stack runs, migrations apply). If not, follow p1_pr01 manual steps first.
 
 2. **Start the local Supabase stack** (if not already running):
    ```bash
@@ -118,4 +118,4 @@ Before closing this PR, confirm:
 - [ ] `pgmq` extension is enabled and `locations_jobs` queue exists.
 - [ ] Queue supports send and read via public wrapper RPC (manual smoke test passes).
 - [ ] Duplicate `job_id` and `run_id` inserts are rejected by constraints.
-- [ ] No API route or worker logic changes were introduced (PR-02 scope).
+- [ ] No API route or worker logic changes were introduced (p1_pr02 scope).
