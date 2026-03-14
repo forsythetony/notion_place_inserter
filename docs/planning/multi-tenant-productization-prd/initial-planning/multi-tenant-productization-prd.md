@@ -437,6 +437,9 @@ User profile shape for Phase 2 should include a `user_type` enum (`ADMIN`, `STAN
 
 ### Phase 3: YAML-Backed Product Model
 
+- Original scope for this phase: define the canonical product model and make triggers, targets, pipelines, stages, and steps load from local YAML instead of code.
+- Standalone architecture document: [`technical/phase-3-yaml-backed-product-model/index.md`](../technical/phase-3-yaml-backed-product-model/)
+
 - Define the core data model for triggers, data sources, targets, pipelines, stages, and pipeline steps
 - Build logic to load triggers, data sources, targets, pipelines, and pipeline steps from a local YAML definition
 - Preserve local YAML as the source of truth during this phase

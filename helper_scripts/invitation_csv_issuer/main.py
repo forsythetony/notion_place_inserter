@@ -171,6 +171,19 @@ def run(
     ),
 ) -> None:
     """Issue invitation codes from CSV via backend API."""
+    logger.info(
+        "Config: csv_path={} api_base_url={} supabase_url={} username={} "
+        "timeout_seconds={} dry_run={} output_path={} password={} apikey={}",
+        csv_path,
+        api_base_url,
+        supabase_url,
+        username,
+        timeout_seconds,
+        dry_run,
+        output_path if output_path else "<default>",
+        "***" if password else "<unset>",
+        "***" if (supabase_publishable_key or os.environ.get("SUPABASE_PUBLISHABLE_KEY")) else "<unset>",
+    )
     rows = _load_rows(csv_path)
     if not rows:
         typer.echo("No rows in CSV.", err=True)

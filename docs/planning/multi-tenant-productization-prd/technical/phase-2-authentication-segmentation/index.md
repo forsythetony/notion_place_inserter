@@ -1,5 +1,7 @@
 # Phase 2 PR Task Index
 
+**Status: Complete** — p2_pr01–p2_pr07 implemented and validated in prod (2026-03-14).
+
 This folder breaks Phase 2 authentication and segmentation into PR-sized stories. Complete them in order to avoid coupling frontend auth UX to unfinished backend and data-model foundations.
 
 ## Required order

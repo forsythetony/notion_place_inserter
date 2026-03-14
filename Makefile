@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -44,7 +44,8 @@ help:
 	@echo ""
 	@echo "Environment:"
 	@echo "  make env-source       - Start a shell with envs/local.env sourced (vars available in that shell)"
-	@echo "  make env-echo         - Echo relevant env vars (sensitive values masked)"
+	@echo "  make env-source-prod  - Start a shell with envs/prod.env sourced (production vars, no rc files)"
+	@echo "  make env-echo         - Echo relevant env vars from current environment (sensitive values masked)"
 	@echo "  make auth-token       - Get Supabase access token (password from clipboard, for forsythetony@gmail.com)"
 	@echo "  make invite-issue     - Issue BETA_TESTER invitation code (token from clipboard)"
 	@echo "  make invite-validate CODE=<20-char> - Validate invitation code (token from clipboard)"
@@ -153,14 +154,18 @@ notion-pull:
 env-source:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && exec $${SHELL:-bash}'
 
-# Echo relevant env vars (sensitive ones masked). Loads from envs/local.env if present.
+# Start a subshell with envs/prod.env sourced (production environment variables).
+# Uses bash --norc so .zshrc/.bashrc don't override with local.env.
+env-source-prod:
+	@bash -c 'cd "$(CURDIR)" && set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && exec bash --norc'
+
+# Echo relevant env vars from current environment (sensitive ones masked). No sourcing.
 env-echo:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a; \
-		for k in BASE_URL SECRET CORS_ALLOWED_ORIGINS SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SECRET_KEY SUPABASE_QUEUE_NAME NOTION_API_KEY ANTHROPIC_TOKEN GOOGLE_PLACES_API_KEY FREEPIK_API_KEY DRY_RUN LOCATIONS_ASYNC_ENABLED LOG_LEVEL; do \
-			v="$${!k}"; \
-			case "$$k" in SECRET|SUPABASE_SECRET_KEY|NOTION_API_KEY|ANTHROPIC_TOKEN|GOOGLE_PLACES_API_KEY|FREEPIK_API_KEY) [ -n "$$v" ] && v="***";; esac; \
-			echo "$$k=$${v:-<unset>}"; \
-		done'
+	@bash -c 'for k in BASE_URL SECRET CORS_ALLOWED_ORIGINS SUPABASE_PROJECT_REF SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SECRET_KEY SUPABASE_QUEUE_NAME NOTION_API_KEY ANTHROPIC_TOKEN GOOGLE_PLACES_API_KEY FREEPIK_API_KEY DRY_RUN LOCATIONS_ASYNC_ENABLED LOG_LEVEL; do \
+		v="$${!k}"; \
+		case "$$k" in SECRET|SUPABASE_SECRET_KEY|NOTION_API_KEY|ANTHROPIC_TOKEN|GOOGLE_PLACES_API_KEY|FREEPIK_API_KEY) [ -n "$$v" ] && v="***";; esac; \
+		echo "$$k=$${v:-<unset>}"; \
+	done'
 
 # Get Supabase access token. Password read from clipboard (pbpaste). Requires envs/local.env with SUPABASE_PUBLISHABLE_KEY.
 auth-token:
