@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-echo auth-token supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -46,6 +46,10 @@ help:
 	@echo "  make env-source       - Start a shell with envs/local.env sourced (vars available in that shell)"
 	@echo "  make env-echo         - Echo relevant env vars (sensitive values masked)"
 	@echo "  make auth-token       - Get Supabase access token (password from clipboard, for forsythetony@gmail.com)"
+	@echo "  make invite-issue     - Issue BETA_TESTER invitation code (token from clipboard)"
+	@echo "  make invite-validate CODE=<20-char> - Validate invitation code (token from clipboard)"
+	@echo "  make invite-issue-csv-help        - Show CSV invitation issuer usage"
+	@echo "  make invite-issue-csv CSV_PATH=... PASSWORD=... - Issue invitations from CSV"
 	@echo ""
 	@echo "Supabase (local stack, migrations):"
 	@echo "  make supabase-start    - Start local Supabase stack (Docker required)"
@@ -162,6 +166,41 @@ env-echo:
 auth-token:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		./helper_scripts/get_auth_token.sh forsythetony@gmail.com "$$(pbpaste)"'
+
+# Issue invitation code (BETA_TESTER). Token from clipboard (pbpaste). Override: make invite-issue ISSUED_TO=foo@example.com PLATFORM_ISSUED_ON=beta
+ISSUED_TO ?= user@example.com
+PLATFORM_ISSUED_ON ?= web
+invite-issue:
+	@bash -c '\
+		token=$$(pbpaste 2>/dev/null || { echo "Error: pbpaste failed. Copy your admin access token to clipboard."; exit 1; }); \
+		[ -z "$$token" ] && { echo "Error: Clipboard is empty. Copy your admin access token first."; exit 1; }; \
+		echo "Issuing invite: userType=BETA_TESTER issuedTo=$(ISSUED_TO) platformIssuedOn=$(PLATFORM_ISSUED_ON)"; \
+		curl -s -X POST "http://localhost:$(PORT)/auth/invitations" \
+			-H "Authorization: Bearer $$token" \
+			-H "Content-Type: application/json" \
+			-d "{\"userType\":\"BETA_TESTER\",\"issuedTo\":\"$(ISSUED_TO)\",\"platformIssuedOn\":\"$(PLATFORM_ISSUED_ON)\"}" | python -m json.tool'
+
+# Validate invitation code. Token from clipboard. Usage: make invite-validate CODE=c8989719e91c015b2bab
+invite-validate:
+	@bash -c '\
+		if [ -z "$(CODE)" ]; then echo "Usage: make invite-validate CODE=<20-char-code>"; exit 1; fi; \
+		token=$$(pbpaste 2>/dev/null || { echo "Error: pbpaste failed. Copy your access token to clipboard."; exit 1; }); \
+		[ -z "$$token" ] && { echo "Error: Clipboard is empty. Copy your access token first."; exit 1; }; \
+		echo "Validating code: $(CODE)"; \
+		curl -s -X POST "http://localhost:$(PORT)/auth/invitations/validate" \
+			-H "Authorization: Bearer $$token" \
+			-H "Content-Type: application/json" \
+			-d "{\"code\":\"$(CODE)\"}" | python -m json.tool'
+
+# CSV invitation issuer. Usage: make invite-issue-csv-help | make invite-issue-csv CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=...
+invite-issue-csv-help:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python helper_scripts/invitation_csv_issuer/main.py --help'
+
+invite-issue-csv:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
 
 tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \

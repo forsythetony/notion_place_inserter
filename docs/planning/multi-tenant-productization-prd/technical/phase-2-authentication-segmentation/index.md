@@ -29,3 +29,9 @@ Phase 2 is complete when p2_pr01–p2_pr07 are merged and validated together in 
 - dashboard remains minimal and only exposes `Run Location Inserter (with dummy data)`
 - invite codes are generated, claimed once, and assign `user_type` (`ADMIN`, `STANDARD`, `BETA_TESTER`) at signup
 - auth and invite flows are covered by tests and documented operationally
+
+## Manual validation and operator workflow
+
+- **Operator invite generation:** See `helper_scripts/invitation_csv_issuer/README.md` for CSV-based issuance via `POST /auth/invitations`.
+- **Auth/signup manual checklist:** Generate invite codes, complete signup with valid code at `/auth`, confirm dashboard redirect; test invalid/already-claimed codes for deterministic errors. See p2_pr06 and p2_pr07 manual validation steps.
+- **Required env vars:** Backend: `SUPABASE_*`, `NOTION_API_KEY`, `ANTHROPIC_TOKEN`, `GOOGLE_PLACES_API_KEY`, `SECRET`, `CORS_ALLOWED_ORIGINS`. Frontend: `VITE_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SECRET` (optional).

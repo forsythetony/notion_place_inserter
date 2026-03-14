@@ -66,6 +66,207 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
+  /auth/signup:
+    post:
+      summary: Signup with invitation (orchestration)
+      description: |
+        Signup orchestration: validates invitation code first, then creates auth user,
+        claims code, and provisions profile. Invalid or already-claimed codes fail
+        before any auth user is created. No authentication required.
+      operationId: signupWithInvitation
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupWithInvitationRequest"
+      responses:
+        "200":
+          description: Signup successful; caller should sign in with email/password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupWithInvitationResponse"
+        "400":
+          description: Invalid code, already claimed, or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              examples:
+                invalid:
+                  summary: Invalid code
+                  value:
+                    detail: Invalid invitation code
+                already_claimed:
+                  summary: Already claimed
+                  value:
+                    detail: Invitation code already claimed
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /auth/invitations:
+    post:
+      summary: Issue invitation code (admin-only)
+      description: |
+        Create a new invitation code. Requires ADMIN user_type. Accepts userType,
+        issuedTo, and platformIssuedOn in the request body.
+      operationId: issueInvitation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationIssueRequest"
+      responses:
+        "200":
+          description: Invitation code created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationIssueResponse"
+        "400":
+          description: Invalid userType or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              example:
+                detail: userType must be one of ('ADMIN', 'STANDARD', 'BETA_TESTER'), got 'INVALID'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Admin access required (caller is not ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              example:
+                detail: Admin access required
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /auth/invitations/validate:
+    post:
+      summary: Validate invitation code
+      description: |
+        Validate an invitation code. Returns deterministic status: valid (claimable),
+        invalid (not found), or already_claimed. Requires valid Bearer token.
+      operationId: validateInvitation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationValidateRequest"
+      responses:
+        "200":
+          description: Validation result returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationValidateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /auth/invitations/claim:
+    post:
+      summary: Claim invitation code
+      description: |
+        Atomically claim an invitation code. Single-use; second attempt fails with
+        deterministic error. Returns user_type for signup provisioning when successful.
+      operationId: claimInvitation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationClaimRequest"
+      responses:
+        "200":
+          description: Code claimed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationClaimResponse"
+        "400":
+          description: Invalid or already-claimed code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              examples:
+                invalid:
+                  summary: Invalid code
+                  value:
+                    detail: Invalid invitation code
+                already_claimed:
+                  summary: Already claimed
+                  value:
+                    detail: Invitation code already claimed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /auth/invitations/claim-for-signup:
+    post:
+      summary: Claim invitation code for signup (orchestration)
+      description: |
+        Signup orchestration: atomically claim invitation code and provision user
+        profile with invite-derived user_type. Single-use; deterministic errors for
+        invalid, already-claimed, and race conditions.
+      operationId: claimInvitationForSignup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationClaimRequest"
+      responses:
+        "200":
+          description: Code claimed and profile provisioned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationClaimResponse"
+        "400":
+          description: Invalid or already-claimed code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+              examples:
+                invalid:
+                  summary: Invalid code
+                  value:
+                    detail: Invalid invitation code
+                already_claimed:
+                  summary: Already claimed
+                  value:
+                    detail: Invitation code already claimed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
   /locations:
     post:
       summary: Create a place entry from keywords
@@ -308,6 +509,139 @@ components:
       properties:
         detail:
           type: string
+
+    InvitationIssueRequest:
+      type: object
+      required:
+        - userType
+      properties:
+        userType:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+          description: User type the claimed code will assign
+        issuedTo:
+          type: string
+          nullable: true
+          description: Who this code is issued to
+        platformIssuedOn:
+          type: string
+          nullable: true
+          description: Platform this was issued on
+
+    InvitationIssueResponse:
+      type: object
+      required:
+        - code
+        - id
+        - user_type
+        - claimed
+      properties:
+        code:
+          type: string
+          description: The 20-character invitation code
+        id:
+          type: string
+          format: uuid
+          description: Invitation record ID
+        user_type:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+        issued_to:
+          type: string
+          nullable: true
+        platform_issued_on:
+          type: string
+          nullable: true
+        claimed:
+          type: boolean
+          example: false
+
+    InvitationValidateRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: 20-character invitation code
+
+    InvitationValidateResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [valid, invalid, already_claimed]
+        user_type:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+          description: Present when status is valid
+        id:
+          type: string
+          format: uuid
+          description: Invitation record ID when status is valid
+
+    SignupWithInvitationRequest:
+      type: object
+      required:
+        - email
+        - password
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: User email
+        password:
+          type: string
+          minLength: 6
+          description: User password
+        code:
+          type: string
+          minLength: 20
+          maxLength: 20
+          description: 20-character invitation code
+
+    SignupWithInvitationResponse:
+      type: object
+      required:
+        - user_id
+        - user_type
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Created Supabase auth user ID
+        user_type:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+          description: User type from claimed invite
+
+    InvitationClaimRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: 20-character invitation code to claim
+
+    InvitationClaimResponse:
+      type: object
+      required:
+        - user_type
+        - invitation_code_id
+      properties:
+        user_type:
+          type: string
+          enum: [ADMIN, STANDARD, BETA_TESTER]
+          description: User type from claimed invite for signup provisioning
+        invitation_code_id:
+          type: string
+          format: uuid
+          description: ID of the claimed invitation record
 
   responses:
     Forbidden:

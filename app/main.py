@@ -22,7 +22,8 @@ from app.integrations.supabase_client import create_supabase_client
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
-from app.routes import auth_context, locations, test
+from app.routes import auth_context, invitations, locations, signup, test
+from app.services.signup_orchestration_service import SignupOrchestrationService
 
 # Bootstrap env at import so all runtime lookups see file values (unless overridden)
 bootstrap_env()
@@ -141,12 +142,15 @@ async def lifespan(app: FastAPI):
 
     notion_key = os.environ.get("NOTION_API_KEY")
     if not notion_key:
+        logger.error("startup_failed | reason=missing_env var=NOTION_API_KEY")
         raise RuntimeError("NOTION_API_KEY environment variable is required")
     anthropic_token = os.environ.get("ANTHROPIC_TOKEN")
     if not anthropic_token:
+        logger.error("startup_failed | reason=missing_env var=ANTHROPIC_TOKEN")
         raise RuntimeError("ANTHROPIC_TOKEN environment variable is required")
     google_places_key = os.environ.get("GOOGLE_PLACES_API_KEY")
     if not google_places_key:
+        logger.error("startup_failed | reason=missing_env var=GOOGLE_PLACES_API_KEY")
         raise RuntimeError("GOOGLE_PLACES_API_KEY environment variable is required")
 
     supabase_config = load_supabase_config()
@@ -160,6 +164,9 @@ async def lifespan(app: FastAPI):
     )
     app.state.supabase_auth_repository = SupabaseAuthRepository(
         supabase_client, supabase_config
+    )
+    app.state.signup_orchestration_service = SignupOrchestrationService(
+        supabase_client, app.state.supabase_auth_repository
     )
 
     notion_svc = NotionService(api_key=notion_key)
@@ -214,6 +221,8 @@ if _cors_origins:
     )
 
 app.include_router(auth_context.router)
+app.include_router(signup.router)
+app.include_router(invitations.router)
 app.include_router(locations.router)
 app.include_router(test.router)
 

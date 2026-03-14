@@ -2,7 +2,7 @@
 
 ## Status
 
-- In progress (p2_pr01 schema implemented)
+- Complete (p2_pr01–p2_pr07 implemented and validated)
 
 ## Schema (p2_pr01)
 
@@ -57,7 +57,7 @@ Claim behavior:
 
 ### Operator workflow
 
-Add a manually run script/CLI to generate invitation codes for operator workflows (including beta tester onboarding).
+Add a manually run CSV-based script (`helper_scripts/invitation_csv_issuer`) to generate invitation codes via `POST /auth/invitations` for operator workflows (including beta tester onboarding).
 
 ## Deliverables
 

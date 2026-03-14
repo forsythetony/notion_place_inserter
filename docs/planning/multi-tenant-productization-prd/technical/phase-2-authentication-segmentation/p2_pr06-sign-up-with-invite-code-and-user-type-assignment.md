@@ -42,15 +42,17 @@ Connect signup UX to invitation-code claim flow so invited users are provisioned
 
 ## Manual validation steps (after implementation)
 
-1. Generate a fresh invitation code for each `user_type` (`ADMIN`, `STANDARD`, `BETA_TESTER`).
-2. Use one valid code in sign-up flow and verify user creation succeeds.
-3. Confirm created user profile has `user_type` matching the claimed invitation code.
-4. Attempt sign-up with an invalid code and verify user-friendly error.
-5. Attempt sign-up with an already-claimed code and verify deterministic failure.
-6. Confirm successful invite-based signup ends on dashboard landing page.
+1. **Validate claim logic**: Confirm that the signup orchestration via `POST /auth/signup` (which validates invite before creating auth user, then claims and provisions profile) works as expected—single-use, atomic, deterministic errors for invalid/already-claimed codes, and correct `user_type` propagation.
+2. Generate a fresh invitation code for each `user_type` (`ADMIN`, `STANDARD`, `BETA_TESTER`).
+3. Use one valid code in sign-up flow and verify user creation succeeds.
+4. Confirm created user profile has `user_type` matching the claimed invitation code.
+5. Attempt sign-up with an invalid code and verify user-friendly error.
+6. Attempt sign-up with an already-claimed code and verify deterministic failure.
+7. Confirm successful invite-based signup ends on dashboard landing page.
 
 ## Verification checklist
 
+- [ ] Claim logic (single-use, deterministic errors, user_type propagation) works as expected when integrated into signup.
 - [ ] Valid code signup succeeds and claims code once.
 - [ ] Assigned `user_type` matches invite `user_type`.
 - [ ] Invalid/already-claimed code paths fail gracefully.

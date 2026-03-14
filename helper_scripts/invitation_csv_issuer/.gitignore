@@ -1,0 +1,13 @@
+# Actual input file (copy from input_template.csv)
+input_actual.csv
+
+# Output artifacts
+output/
+*.csv.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
