@@ -216,6 +216,11 @@ def test_parse_job_graph_produces_full_graph():
     assert len(graph.stages) >= 2
     assert len(graph.pipelines) >= 2
     assert len(graph.steps) >= 6
+    # Bootstrap job uses sequential mode (temporary mitigation for Errno 11)
+    for stage in graph.stages:
+        assert stage.pipeline_run_mode == "sequential", (
+            f"Bootstrap stage {stage.id} expected sequential, got {stage.pipeline_run_mode}"
+        )
 
 
 def test_yaml_job_repository_get_graph_by_id():

@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-15 | sequential-mode-mitigation | Temporary mitigation for Errno 11: bootstrap job stages set to pipeline_run_mode=sequential; standalone SQL backfill in docs/sql/manual/; runtime docs and job_execution_service comments; deployment guide and tech-debt doc updated with rationale and exit criteria. |
 | 2026-03-15 | bootstrap-target-real-datasource-id | Updated Postgres bootstrap target seed to use the real `Places to Visit` Notion data source ID instead of the all-zero placeholder so dry-run/runtime logs resolve correct data source and property display names. |
 | 2026-03-15 | dry-run-image-upload-guard | Prevented `UploadImageToNotionHandler` from uploading image bytes in dry-run mode; added regression tests to assert no Notion upload calls for URL and Google photo inputs. |
 | 2026-03-15 | uuid-json-serialization-fix | PostgresRunRepository: coerce UUID values to strings in save_stage_run, save_pipeline_run, save_step_run, save_usage_record row payloads to fix "Object of type UUID is not JSON serializable" during Supabase writes; added regression tests. |

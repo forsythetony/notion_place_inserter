@@ -160,6 +160,50 @@ Key log patterns in datastore mode:
 | `postgres_run_event \| run_id=... event_type=pipeline_started` | Worker began execution |
 | `postgres_run_event \| run_id=... event_type=pipeline_succeeded` | Execution completed |
 | `worker_persist_*_failed \| job_id=... run_id=...` | Persistence failure |
+| `job_execution_stage_sequential \| run_id=... stage_id=...` | Stage running pipelines sequentially (temporary mitigation) |
+
+---
+
+## Temporary Sequential Mitigation
+
+**Status:** Implemented as a short-term workaround. This is NOT the final architecture.
+
+### Why it exists
+
+Under load, parallel pipeline execution triggers `Errno 11` (Resource temporarily unavailable) because all worker threads share a single Supabase client. Connection/socket contention causes `id_mapping` lookups, `save_step_run`, and `save_pipeline_run` to fail. See [td-2026-03-15-resource-constraints-db-connections-threads](../../../../tech-debt/td-2026-03-15-resource-constraints-db-connections-threads.md).
+
+### What was done
+
+- Bootstrap job (`notion_place_inserter.yaml`) stages use `pipeline_run_mode: sequential` instead of `parallel`.
+- New owners get sequential mode from bootstrap. **Existing owners** with already-provisioned job graphs need a manual backfill.
+
+### Backfill existing owners (Supabase Dashboard)
+
+If owners were provisioned before this mitigation, run the standalone SQL in Supabase Dashboard → SQL Editor:
+
+```
+docs/sql/manual/backfill_stage_run_mode_sequential.sql
+```
+
+The script is idempotent and includes pre/post verification queries.
+
+### Verify pipeline_run_mode
+
+```sql
+SELECT owner_user_id, job_id, id AS stage_id, display_name, pipeline_run_mode
+FROM stage_definitions
+WHERE job_id = 'job_notion_place_inserter'
+ORDER BY owner_user_id, sequence, id;
+```
+
+Expect `pipeline_run_mode = 'sequential'` for all rows.
+
+### Exit criteria (when to revert to parallel)
+
+Re-enable `pipeline_run_mode: parallel` for stages only after:
+
+- Connection pooling, per-thread clients, or controlled parallelism is in place, **or**
+- The tech-debt story `td-2026-03-15-resource-constraints-db-connections-threads` is completed and load tests confirm Errno 11 is resolved.
 
 ---
 

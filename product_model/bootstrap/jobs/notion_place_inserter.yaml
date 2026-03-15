@@ -9,10 +9,11 @@ stage_ids:
   - stage_research
   - stage_property_setting
 stages:
+  # TEMPORARY: sequential mitigates Errno 11 / shared-client contention. Revert to parallel after td-2026-03-15-resource-constraints-db-connections-threads.
   - id: stage_research
     display_name: Research
     sequence: 1
-    pipeline_run_mode: parallel
+    pipeline_run_mode: sequential
     pipelines:
       - id: pipeline_research
         display_name: Research Pipeline
@@ -53,10 +54,11 @@ stages:
                 signal_ref: step.step_google_places_lookup.selected_place
             config:
               cache_key: google_places_selected_place
+  # TEMPORARY: sequential mitigates Errno 11 / shared-client contention. Revert to parallel after td-2026-03-15-resource-constraints-db-connections-threads.
   - id: stage_property_setting
     display_name: Property Setting
     sequence: 2
-    pipeline_run_mode: parallel
+    pipeline_run_mode: sequential
     pipelines:
       - id: pipeline_name
         display_name: Set Name

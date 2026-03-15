@@ -66,7 +66,14 @@ def _default_registry() -> StepRuntimeRegistry:
 class JobExecutionService:
     """
     Executes jobs from resolved definition snapshots.
-    Stages sequential; pipelines in stage parallel; steps in pipeline sequential.
+    Stages sequential; pipelines in stage parallel or sequential; steps in pipeline sequential.
+
+    TEMPORARY MITIGATION (2026-03): The bootstrap job uses pipeline_run_mode=sequential
+    to avoid Errno 11 (Resource temporarily unavailable) under connection contention.
+    All threads share a single Supabase client; parallel pipelines cause socket/DB
+    exhaustion. This is NOT the final architecture. See td-2026-03-15-resource-constraints-
+    db-connections-threads. Revert stages to parallel once connection pooling, per-thread
+    clients, or controlled parallelism is in place.
     """
 
     def __init__(
@@ -140,7 +147,19 @@ class JobExecutionService:
         for stage in stages:
             stage_id = stage.get("id", "")
             pipelines_data = stage.get("pipelines") or []
+            # pipeline_run_mode: "parallel" uses ThreadPoolExecutor; "sequential" runs
+            # pipelines one-by-one. Sequential is a TEMPORARY mitigation for Errno 11
+            # under shared Supabase client contention. Revert to parallel after
+            # td-2026-03-15-resource-constraints-db-connections-threads is resolved.
             run_mode = stage.get("pipeline_run_mode", "parallel")
+            if run_mode == "sequential":
+                logger.info(
+                    "job_execution_stage_sequential | run_id={} stage_id={} pipeline_count={} "
+                    "(temporary mitigation for connection contention; see td-2026-03-15)",
+                    run_id,
+                    stage_id,
+                    len(pipelines_data),
+                )
             stage_run_id = f"{run_id}_stage_{stage_id}"
             if self._run_repo and owner_user_id:
                 self._persist_stage_run(
@@ -414,6 +433,12 @@ class JobExecutionService:
         stage_run_id: str,
         owner_user_id: str | None,
     ) -> None:
+        """
+        Run pipelines in parallel via ThreadPoolExecutor.
+        NOTE: Under shared Supabase client, parallel execution can trigger Errno 11
+        (connection contention). Bootstrap job uses sequential mode as temporary
+        mitigation. See td-2026-03-15-resource-constraints-db-connections-threads.
+        """
         errors: list[tuple[str, Exception]] = []
         with ThreadPoolExecutor(max_workers=len(pipelines_data)) as executor:
             futures = {
