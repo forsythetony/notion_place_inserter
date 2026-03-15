@@ -87,25 +87,30 @@ class UploadImageToNotionHandler(StepRuntime):
         google = ctx.get_service("google_places")
         dry_run = getattr(ctx, "dry_run", False)
 
-        image_bytes: bytes | None = None
+        if dry_run:
+            # Never upload during dry-run mode. Prefer external URL payloads.
+            if _is_google_photo_name(url_or_name):
+                if google:
+                    ext_url = google.get_photo_url(url_or_name)
+                    if ext_url:
+                        return {
+                            "notion_image_url": {"type": "external", "external": {"url": ext_url}}
+                        }
+                return {"notion_image_url": None}
+            if url_or_name.startswith(("http://", "https://")):
+                return {
+                    "notion_image_url": {"type": "external", "external": {"url": url_or_name}}
+                }
+            return {"notion_image_url": None}
 
+        image_bytes: bytes | None = None
         if _is_google_photo_name(url_or_name):
             if google:
                 image_bytes = google.get_photo_bytes(url_or_name)
-            if not image_bytes and google and dry_run:
-                ext_url = google.get_photo_url(url_or_name)
-                if ext_url:
-                    return {
-                        "notion_image_url": {"type": "external", "external": {"url": ext_url}}
-                    }
         else:
             timeout_ms = config.get("timeout_ms") or _DEFAULT_TIMEOUT_MS
             timeout_seconds = max(1.0, min(60.0, timeout_ms / 1000.0))
             image_bytes = _fetch_image_bytes(url_or_name, timeout_seconds)
-            if not image_bytes and dry_run and url_or_name.startswith(("http://", "https://")):
-                return {
-                    "notion_image_url": {"type": "external", "external": {"url": url_or_name}}
-                }
 
         if not image_bytes or not notion:
             return {"notion_image_url": None}

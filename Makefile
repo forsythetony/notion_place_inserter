@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-create-users supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -37,7 +37,8 @@ help:
 	@echo "  make test-google-places - Test Google Places search (server must be running)"
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
-	@echo "  make show-runs [USER_ID=bootstrap] [RUN_ID=<id>] - Show run/usage YAML files (omit RUN_ID to show all runs for user)"
+	@echo "  make show-runs [USER_ID=bootstrap] [RUN_ID=<id>] - (Deprecated) Show YAML run files; Phase 4 uses Postgres"
+	@echo "  make show-runs-db [LIMIT=20] - Show recent job runs from Postgres (Phase 4; requires supabase start)"
 	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /triggers/bootstrap/locations enqueue"
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
@@ -52,8 +53,12 @@ help:
 	@echo "  make invite-issue     - Issue BETA_TESTER invitation code (token from clipboard)"
 	@echo "  make invite-validate CODE=<20-char> - Validate invitation code (token from clipboard)"
 	@echo "  make invite-issue-csv-help        - Show CSV invitation issuer usage"
-	@echo "  make invite-issue-csv CSV_PATH=... PASSWORD=... - Issue invitations from CSV"
-	@echo "  make invite-create-users CSV_PATH=... PASSWORD=... - Create users from CSV (invite + signup)"
+	@echo "  make invite-issue-csv CSV_PATH=... PASSWORD=... - Issue invitations from CSV (local env)"
+	@echo "  make invite-issue-csv-local CSV_PATH=... PASSWORD=... - Issue invitations (envs/local.env)"
+	@echo "  make invite-issue-csv-prod CSV_PATH=... PASSWORD=... - Issue invitations (envs/prod.env)"
+	@echo "  make invite-create-users CSV_PATH=... PASSWORD=... - Create users from CSV (local env)"
+	@echo "  make invite-create-users-local CSV_PATH=... PASSWORD=... - Create users (envs/local.env)"
+	@echo "  make invite-create-users-prod CSV_PATH=... PASSWORD=... - Create users (envs/prod.env)"
 	@echo ""
 	@echo "Supabase (local stack, migrations):"
 	@echo "  make supabase-start    - Start local Supabase stack (Docker required)"
@@ -126,13 +131,14 @@ test-locations:
 	@curl -s -X POST -H "Authorization: $(SECRET)" -H "Content-Type: application/json" \
 		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/bootstrap/locations"
 
-# Show persisted run/usage YAML files (p3_pr08). USER_ID defaults to bootstrap.
+# (Deprecated) Show persisted run/usage YAML files (p3_pr08). Phase 4 uses Postgres; use show-runs-db instead.
 # Usage: make show-runs RUN_ID=<run_id>  or  make show-runs  (shows all runs for user)
 USER_ID ?= bootstrap
 show-runs:
+	@echo "DEPRECATED: Phase 4 runs are in Postgres. Use 'make show-runs-db' or Supabase Studio."
 	@runs_dir="product_model/tenants/$(USER_ID)/runs"; \
 	if [ ! -d "$$runs_dir" ]; then \
-		echo "No runs directory at $$runs_dir"; exit 1; \
+		echo "No runs directory at $$runs_dir (YAML runs deprecated in Phase 4)"; exit 1; \
 	fi; \
 	if [ -n "$(RUN_ID)" ]; then \
 		echo "--- Run $(RUN_ID) ---"; \
@@ -150,6 +156,12 @@ show-runs:
 			echo ""; echo "=== $$f ==="; cat "$$f"; \
 		done; \
 	fi
+
+# Phase 4: Show recent job runs from Postgres. Requires local Supabase (make supabase-start).
+# Usage: make show-runs-db  or  make show-runs-db LIMIT=50
+LIMIT ?= 20
+show-runs-db:
+	@supabase db execute --sql "SELECT id, owner_user_id, job_id, status, platform_job_id, created_at FROM job_runs ORDER BY created_at DESC LIMIT $(LIMIT)" 2>/dev/null || echo "Run 'make supabase-start' first, or use Supabase Studio to inspect job_runs."
 
 test-remote:
 	@bash -c 'if [ -z "$(REMOTE_BASE_URL)" ]; then echo "Usage: make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> [KEYWORDS=\"...\"]"; exit 1; fi; \
@@ -243,6 +255,34 @@ invite-create-users:
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
 		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
+
+invite-issue-csv-local:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
+			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}"'
+
+invite-issue-csv-prod:
+	@bash -c 'set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
+			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}"'
+
+invite-create-users-local:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
+			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}"'
+
+invite-create-users-prod:
+	@bash -c 'set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
+			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}"'
 
 tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \

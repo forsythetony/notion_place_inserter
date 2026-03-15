@@ -52,9 +52,17 @@ Implement Postgres-backed repository implementations that replace YAML adapters 
 
 ## Verification checklist
 
-- [ ] All repository interfaces have Postgres implementations.
-- [ ] API and worker use Postgres repos.
-- [ ] Definitions and runs persist in Postgres.
-- [ ] Snapshot-based execution is preserved.
-- [ ] Bootstrap/seed populates catalog and starter job.
-- [ ] RLS enforces tenant isolation.
+- [x] All repository interfaces have Postgres implementations.
+- [x] API and worker use Postgres repos.
+- [x] Definitions and runs persist in Postgres.
+- [x] Snapshot-based execution is preserved.
+- [x] Bootstrap/seed populates catalog and starter job.
+- [ ] RLS enforces tenant isolation (schema in place; manual validation in p4_pr03).
+
+## Implementation summary (2026-03-15)
+
+- **Postgres repositories:** `postgres_repositories.py` (catalog, owner definitions, job graph), `postgres_run_repository.py` (RunRepository + lifecycle API)
+- **ID mapping:** `id_mappings` table and `id_mapping.py` for deterministic UUIDv5 for nested run IDs (stage_run, pipeline_run, step_run, usage_record)
+- **Bootstrap provisioning:** `BootstrapProvisioningService` interface, `PostgresBootstrapProvisioningService` with `seed_catalog_if_needed()` and `ensure_owner_starter_definitions(owner_user_id)`; `ENABLE_BOOTSTRAP_PROVISIONING` env switch
+- **Runtime wiring:** `main.py` and `worker_main.py` use Postgres repos; locations route calls `ensure_owner_starter_definitions` before trigger resolution
+- **Tests:** `test_postgres_run_repository.py`, `test_id_mapping.py`; locations and worker tests pass with new backend

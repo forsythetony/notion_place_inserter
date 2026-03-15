@@ -21,14 +21,15 @@ from app.queue.memory_diagnostics import (
 )
 from app.queue.worker import _parse_retry_delays, run_worker_loop
 from app.repositories import (
-    YamlAppConfigRepository,
-    YamlConnectorInstanceRepository,
-    YamlJobRepository,
-    YamlStepTemplateRepository,
-    YamlTargetSchemaRepository,
-    YamlTargetTemplateRepository,
-    YamlTargetRepository,
-    YamlTriggerRepository,
+    PostgresAppConfigRepository,
+    PostgresConnectorInstanceRepository,
+    PostgresJobRepository,
+    PostgresRunRepository,
+    PostgresStepTemplateRepository,
+    PostgresTargetRepository,
+    PostgresTargetSchemaRepository,
+    PostgresTargetTemplateRepository,
+    PostgresTriggerRepository,
 )
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
@@ -36,9 +37,7 @@ from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
-from app.repositories import YamlRunRepository
 from app.services.notion_service import NotionService
-from app.services.run_lifecycle_adapter import RunLifecycleAdapter
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.target_service import TargetService
 from app.services.trigger_service import TriggerService
@@ -147,8 +146,7 @@ def main() -> None:
     supabase_config = load_supabase_config()
     supabase_client = create_supabase_client(supabase_config)
     queue_repo = SupabaseQueueRepository(supabase_client, supabase_config)
-    yaml_run_repo = YamlRunRepository()
-    run_repo = RunLifecycleAdapter(yaml_run_repo)
+    run_repo = PostgresRunRepository(supabase_client)
 
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
     notion_svc = NotionService(api_key=notion_key, dry_run=dry_run)
@@ -159,13 +157,13 @@ def main() -> None:
     freepik_key = os.environ.get("FREEPIK_API_KEY")
     freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
 
-    step_template_repo = YamlStepTemplateRepository()
-    target_template_repo = YamlTargetTemplateRepository()
-    trigger_repo = YamlTriggerRepository()
-    target_repo = YamlTargetRepository()
-    target_schema_repo = YamlTargetSchemaRepository()
-    app_config_repo = YamlAppConfigRepository()
-    connector_instance_repo = YamlConnectorInstanceRepository()
+    step_template_repo = PostgresStepTemplateRepository(supabase_client)
+    target_template_repo = PostgresTargetTemplateRepository(supabase_client)
+    trigger_repo = PostgresTriggerRepository(supabase_client)
+    target_repo = PostgresTargetRepository(supabase_client)
+    target_schema_repo = PostgresTargetSchemaRepository(supabase_client)
+    app_config_repo = PostgresAppConfigRepository(supabase_client)
+    connector_instance_repo = PostgresConnectorInstanceRepository(supabase_client)
     validation_service = ValidationService(
         trigger_repo=trigger_repo,
         target_repo=target_repo,
@@ -175,7 +173,7 @@ def main() -> None:
         connector_instance_repo=connector_instance_repo,
         target_template_repo=target_template_repo,
     )
-    job_repo = YamlJobRepository(validation_service=validation_service)
+    job_repo = PostgresJobRepository(supabase_client, validation_service=validation_service)
     trigger_service = TriggerService(trigger_repository=trigger_repo)
     target_service = TargetService(
         target_repository=target_repo,
@@ -192,7 +190,7 @@ def main() -> None:
         google_places_service=google_places_svc,
         freepik_service=freepik_svc,
         dry_run=dry_run,
-        run_repository=yaml_run_repo,
+        run_repository=run_repo,
     )
 
     event_bus = EventBus()

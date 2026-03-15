@@ -62,6 +62,16 @@ def invoke_trigger(
         )
         trigger_service_sync = getattr(request.app.state, "trigger_service", None)
         job_def_svc = getattr(request.app.state, "job_definition_service", None)
+        bootstrap_svc_sync = getattr(request.app.state, "bootstrap_provisioning_service", None)
+        if bootstrap_svc_sync is not None:
+            try:
+                bootstrap_svc_sync.ensure_owner_starter_definitions(user_id)
+            except Exception as e:
+                logger.warning(
+                    "locations_bootstrap_ensure_owner_failed | user_id={} error={}",
+                    user_id,
+                    e,
+                )
         if job_execution_service and trigger_service_sync and job_def_svc:
             normalized_path = _normalize_trigger_path(path)
             trigger = trigger_service_sync.resolve_by_path(normalized_path, user_id)
@@ -114,6 +124,17 @@ def invoke_trigger(
             status_code=503,
             detail="Unable to enqueue request",
         )
+
+    bootstrap_svc = getattr(request.app.state, "bootstrap_provisioning_service", None)
+    if bootstrap_svc is not None:
+        try:
+            bootstrap_svc.ensure_owner_starter_definitions(user_id)
+        except Exception as e:
+            logger.warning(
+                "locations_bootstrap_ensure_owner_failed | user_id={} error={}",
+                user_id,
+                e,
+            )
 
     normalized_path = _normalize_trigger_path(path)
     trigger = trigger_service.resolve_by_path(normalized_path, user_id)

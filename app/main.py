@@ -20,23 +20,25 @@ from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.repositories import (
-    YamlAppConfigRepository,
-    YamlConnectorInstanceRepository,
-    YamlJobRepository,
-    YamlStepTemplateRepository,
-    YamlTargetSchemaRepository,
-    YamlTargetTemplateRepository,
-    YamlTargetRepository,
-    YamlTriggerRepository,
+    PostgresAppConfigRepository,
+    PostgresConnectorInstanceRepository,
+    PostgresJobRepository,
+    PostgresRunRepository,
+    PostgresStepTemplateRepository,
+    PostgresTargetRepository,
+    PostgresTargetSchemaRepository,
+    PostgresTargetTemplateRepository,
+    PostgresTriggerRepository,
 )
+from app.repositories.id_mapping import verify_mapping_consistency
+from app.services.bootstrap_provisioning import BootstrapProvisioningService
+from app.services.postgres_seed_service import PostgresBootstrapProvisioningService
 from app.services.validation_service import ValidationService
 from app.services.trigger_service import TriggerService
 from app.services.target_service import TargetService
 from app.services.schema_sync_service import SchemaSyncService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
-from app.repositories import YamlRunRepository
-from app.services.run_lifecycle_adapter import RunLifecycleAdapter
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.routes import auth_context, invitations, locations, signup, test
@@ -176,8 +178,23 @@ async def lifespan(app: FastAPI):
     app.state.supabase_queue_repository = SupabaseQueueRepository(
         supabase_client, supabase_config
     )
-    yaml_run_repo = YamlRunRepository()
-    app.state.supabase_run_repository = RunLifecycleAdapter(yaml_run_repo)
+    postgres_run_repo = PostgresRunRepository(supabase_client)
+    app.state.supabase_run_repository = postgres_run_repo
+
+    enable_bootstrap = os.environ.get("ENABLE_BOOTSTRAP_PROVISIONING", "1").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if enable_bootstrap:
+        try:
+            verify_mapping_consistency(supabase_client)
+            bootstrap_svc: BootstrapProvisioningService = PostgresBootstrapProvisioningService(supabase_client)
+            bootstrap_svc.seed_catalog_if_needed()
+            app.state.bootstrap_provisioning_service = bootstrap_svc
+        except Exception as e:
+            logger.exception("startup_bootstrap_seed_failed | error={}", e)
+            raise
+    else:
+        app.state.bootstrap_provisioning_service = None
     app.state.supabase_auth_repository = SupabaseAuthRepository(
         supabase_client, supabase_config
     )
@@ -209,14 +226,14 @@ async def lifespan(app: FastAPI):
         dry_run=dry_run,
     )
 
-    # Wire validation into save paths (p3_pr04)
-    step_template_repo = YamlStepTemplateRepository()
-    target_template_repo = YamlTargetTemplateRepository()
-    trigger_repo = YamlTriggerRepository()
-    target_repo = YamlTargetRepository()
-    target_schema_repo = YamlTargetSchemaRepository()
-    app_config_repo = YamlAppConfigRepository()
-    connector_instance_repo = YamlConnectorInstanceRepository()
+    # Wire validation into save paths (p3_pr04); Phase 4 uses Postgres repos
+    step_template_repo = PostgresStepTemplateRepository(supabase_client)
+    target_template_repo = PostgresTargetTemplateRepository(supabase_client)
+    trigger_repo = PostgresTriggerRepository(supabase_client)
+    target_repo = PostgresTargetRepository(supabase_client)
+    target_schema_repo = PostgresTargetSchemaRepository(supabase_client)
+    app_config_repo = PostgresAppConfigRepository(supabase_client)
+    connector_instance_repo = PostgresConnectorInstanceRepository(supabase_client)
     validation_service = ValidationService(
         trigger_repo=trigger_repo,
         target_repo=target_repo,
@@ -226,7 +243,7 @@ async def lifespan(app: FastAPI):
         connector_instance_repo=connector_instance_repo,
         target_template_repo=target_template_repo,
     )
-    job_repo = YamlJobRepository(validation_service=validation_service)
+    job_repo = PostgresJobRepository(supabase_client, validation_service=validation_service)
     trigger_repo.set_validation_service(validation_service)
     target_repo.set_validation_service(validation_service)
     app.state.job_repository = job_repo
@@ -261,7 +278,7 @@ async def lifespan(app: FastAPI):
         google_places_service=app.state.google_places_service,
         freepik_service=freepik_svc,
         dry_run=dry_run,
-        run_repository=yaml_run_repo,
+        run_repository=postgres_run_repo,
     )
     app.state.job_execution_service = job_execution_service
 

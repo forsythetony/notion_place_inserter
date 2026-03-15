@@ -2,7 +2,7 @@ id: step_template_templater
 slug: templater
 display_name: Templater
 step_kind: templater
-description: Render a string from a template and configurable values. Values can reference cache or static literals. Placeholder syntax: {{key}}
+description: "Render a string from a template and configurable values. Values can reference cache or static literals. Placeholder syntax: {{key}}"
 input_contract: {}
 output_contract:
   fields:

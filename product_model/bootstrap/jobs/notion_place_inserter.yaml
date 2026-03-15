@@ -171,7 +171,7 @@ stages:
               schema_property_id: prop_neighborhood
       - id: pipeline_location
         display_name: Set Location Relation
-        sequence: 6.5
+        sequence: 7
         steps:
           - id: step_location_cache_get
             step_template_id: step_template_cache_get
@@ -208,7 +208,7 @@ stages:
               schema_property_id: prop_location
       - id: pipeline_address
         display_name: Set Address
-        sequence: 7
+        sequence: 8
         steps:
           - id: step_property_set_address
             step_template_id: step_template_property_set
@@ -221,7 +221,7 @@ stages:
               schema_property_id: prop_address
       - id: pipeline_latitude
         display_name: Set Latitude
-        sequence: 8
+        sequence: 9
         steps:
           - id: step_property_set_latitude
             step_template_id: step_template_property_set
@@ -234,7 +234,7 @@ stages:
               schema_property_id: prop_latitude
       - id: pipeline_longitude
         display_name: Set Longitude
-        sequence: 9
+        sequence: 10
         steps:
           - id: step_property_set_longitude
             step_template_id: step_template_property_set
@@ -247,7 +247,7 @@ stages:
               schema_property_id: prop_longitude
       - id: pipeline_coordinates
         display_name: Set Coordinates
-        sequence: 9.5
+        sequence: 11
         steps:
           - id: step_coordinates_templater
             step_template_id: step_template_templater
@@ -270,7 +270,7 @@ stages:
               schema_property_id: prop_coordinates
       - id: pipeline_main_type
         display_name: Set Main Type
-        sequence: 10
+        sequence: 12
         steps:
           - id: step_property_set_main_type
             step_template_id: step_template_property_set
@@ -283,7 +283,7 @@ stages:
               schema_property_id: prop_main_type
       - id: pipeline_url
         display_name: Set Website URL
-        sequence: 11
+        sequence: 13
         steps:
           - id: step_property_set_url
             step_template_id: step_template_property_set
@@ -296,7 +296,7 @@ stages:
               schema_property_id: prop_url
       - id: pipeline_cover_image
         display_name: Set Cover Image
-        sequence: 12
+        sequence: 14
         steps:
           - id: step_cover_cache_get
             step_template_id: step_template_cache_get
@@ -331,7 +331,7 @@ stages:
               target_field: cover_image
       - id: pipeline_icon_image
         display_name: Set Icon Image
-        sequence: 13
+        sequence: 15
         steps:
           - id: step_icon_optimize_query
             step_template_id: step_template_optimize_input_claude

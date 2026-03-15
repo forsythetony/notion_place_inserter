@@ -1,4 +1,4 @@
-"""YAML-backed repository implementations for Phase 3 product model."""
+"""Repository implementations for Phase 3 (YAML) and Phase 4 (Postgres) product model."""
 
 from app.repositories.yaml_loader import (
     load_yaml_file,
@@ -20,6 +20,18 @@ from app.repositories.yaml_repositories import (
     YamlTriggerRepository,
 )
 from app.repositories.yaml_run_repository import YamlRunRepository
+from app.repositories.postgres_repositories import (
+    PostgresAppConfigRepository,
+    PostgresConnectorInstanceRepository,
+    PostgresConnectorTemplateRepository,
+    PostgresJobRepository,
+    PostgresStepTemplateRepository,
+    PostgresTargetRepository,
+    PostgresTargetSchemaRepository,
+    PostgresTargetTemplateRepository,
+    PostgresTriggerRepository,
+)
+from app.repositories.postgres_run_repository import PostgresRunRepository
 
 __all__ = [
     "load_yaml_file",
@@ -38,4 +50,14 @@ __all__ = [
     "YamlTargetRepository",
     "YamlTriggerRepository",
     "YamlRunRepository",
+    "PostgresAppConfigRepository",
+    "PostgresConnectorInstanceRepository",
+    "PostgresConnectorTemplateRepository",
+    "PostgresJobRepository",
+    "PostgresStepTemplateRepository",
+    "PostgresTargetRepository",
+    "PostgresTargetSchemaRepository",
+    "PostgresTargetTemplateRepository",
+    "PostgresTriggerRepository",
+    "PostgresRunRepository",
 ]

@@ -2,7 +2,7 @@
 
 ## Status
 
-- Not started
+- p4_pr01 complete (2026-03-15); p4_pr02 complete (2026-03-15); p4_pr03 complete (2026-03-15)
 - Scope: replace YAML repositories with Postgres/Supabase-backed storage; durable definitions and runs; RLS-based tenant isolation
 
 ## Phase 4 PR Task Index
@@ -14,6 +14,11 @@ This folder breaks Phase 4 datastore migration into PR-sized stories. Complete t
 1. [`p4_pr01-datastore-schema-and-migrations.md`](./p4_pr01-datastore-schema-and-migrations.md)
 2. [`p4_pr02-postgres-repositories-and-runtime-cutover.md`](./p4_pr02-postgres-repositories-and-runtime-cutover.md)
 3. [`p4_pr03-validation-observability-tests-and-docs.md`](./p4_pr03-validation-observability-tests-and-docs.md)
+
+### Supplemental docs
+
+- [`runtime-architecture-onboarding.md`](./runtime-architecture-onboarding.md) - onboarding guide for the Phase 4 runtime architecture and end-to-end `locations` execution flow
+- [`phase4-deployment-guide.md`](./phase4-deployment-guide.md) - deployment steps for Supabase and manual validation after deploy
 
 ### Why this sequence
 

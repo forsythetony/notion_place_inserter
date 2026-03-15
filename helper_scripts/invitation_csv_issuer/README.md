@@ -70,12 +70,58 @@ python main.py create-users --csv-path input_actual.csv --password YOUR_ADMIN_PA
 - `SUPABASE_SECRET_KEY` — Required for profile bootstrap; creates ADMIN profile if missing (e.g. from `envs/local.env`)
 - `INVITATION_ISSUER_PASSWORD` — Optional; use `--password` if not set
 
-## Makefile
+## Post-reset one-command recovery
 
-From project root:
+After `make supabase-reset`, the database is empty. Use `create-users` with issuer bootstrap (default) to recover everything in one command:
+
+1. **Ensure the API is running** (`make run` in another terminal).
+2. **Run create-users** — it will:
+   - Create the issuer admin account in Supabase Auth + `user_profiles` if missing
+   - Issue invitations for each CSV row
+   - Create each user via `POST /auth/signup`
 
 ```bash
-make invite-issue-csv-help   # Show script usage
-make invite-issue-csv CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
-make invite-create-users CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
+# From project root (envs/local.env sourced automatically)
+make invite-create-users CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_admin_password
 ```
+
+Or from the script directory:
+
+```bash
+cd helper_scripts/invitation_csv_issuer
+set -a && source ../../envs/local.env && set +a
+python main.py create-users --csv-path input_actual.csv --password your_admin_password
+```
+
+**Options:**
+
+- `--no-bootstrap-issuer` — Skip issuer creation; use when the admin account already exists.
+- `--issuer-password <pwd>` — Password for the issuer when bootstrapping (default: same as `--password`).
+- `--username <email>` — Issuer email (default: `forsythetony@gmail.com`).
+
+## Makefile
+
+### Run from project root
+
+The root `Makefile` exposes convenience targets that source the appropriate env file before invoking the script. Use `-local` for local Supabase/API, `-prod` for production.
+
+```bash
+# Help
+make invite-issue-csv-help
+
+# Local (envs/local.env) — default for invite-issue-csv / invite-create-users
+make invite-issue-csv-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
+make invite-create-users-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
+
+# Production (envs/prod.env)
+make invite-issue-csv-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
+make invite-create-users-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=your_password
+
+# Backward-compatible (same as -local)
+make invite-issue-csv CSV_PATH=... PASSWORD=...
+make invite-create-users CSV_PATH=... PASSWORD=...
+```
+
+### Run from script directory
+
+The script’s own `Makefile` (`helper_scripts/invitation_csv_issuer/Makefile`) has equivalent targets (`create-users-local`, `create-users-prod`, etc.) for use when working inside that directory.

@@ -56,8 +56,8 @@ Establish the Postgres/Supabase schema foundation for Phase 4: owner-scoped tabl
 
 ## Verification checklist
 
-- [ ] All product model tables exist with correct schema.
-- [ ] RLS policies enforce owner-scoped access.
-- [ ] Foreign keys and indexes are in place.
-- [ ] Migrations apply cleanly.
-- [ ] Domain and service contracts unchanged.
+- [x] All product model tables exist with correct schema.
+- [x] RLS policies enforce owner-scoped access.
+- [x] Foreign keys and indexes are in place.
+- [x] Migrations apply cleanly.
+- [x] Domain and service contracts unchanged.

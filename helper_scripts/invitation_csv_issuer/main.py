@@ -175,6 +175,91 @@ def _signup_one(
         return None, f"Request error: {e}"
 
 
+def _ensure_issuer_admin_account(
+    supabase_url: str,
+    supabase_secret_key: str,
+    email: str,
+    password: str,
+) -> None:
+    """
+    Ensure the issuer admin account exists in Supabase Auth and user_profiles.
+    Idempotent: creates auth user + ADMIN profile if missing; no-op if already exists.
+    Uses service role key for admin operations. Safe to run after supabase reset.
+    """
+    client = create_client(supabase_url, supabase_secret_key)
+
+    # Check if user exists by listing (admin API)
+    try:
+        resp = client.auth.admin.list_users(per_page=1000)
+        users = getattr(resp, "users", []) or []
+        existing = next((u for u in users if getattr(u, "email", None) == email), None)
+    except Exception as e:
+        logger.warning("ensure_issuer: list_users failed, will try create: {}", e)
+        existing = None
+
+    if existing:
+        user_id = str(getattr(existing, "id", "") or "")
+        if user_id:
+            _upsert_admin_profile(client, user_id)
+            logger.info("Issuer admin already exists for email={}", email[:20] + "...")
+        return
+
+    # Create issuer auth user
+    try:
+        create_resp = client.auth.admin.create_user(
+            {
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+            }
+        )
+    except Exception as e:
+        msg = str(e).lower()
+        if "already registered" in msg or "already exists" in msg or "duplicate" in msg:
+            # Race: user was created between list and create; ensure profile
+            resp = client.auth.admin.list_users(per_page=1000)
+            users = getattr(resp, "users", []) or []
+            existing = next((u for u in users if getattr(u, "email", None) == email), None)
+            if existing:
+                user_id = str(getattr(existing, "id", "") or "")
+                if user_id:
+                    _upsert_admin_profile(client, user_id)
+                return
+        logger.exception("ensure_issuer: create_user failed for email={}", email[:20] + "...")
+        typer.echo(f"Error: Failed to create issuer account: {e}", err=True)
+        raise typer.Exit(1) from e
+
+    user = getattr(create_resp, "user", None) if create_resp else None
+    if not user:
+        typer.echo("Error: Issuer user created but no user object returned", err=True)
+        raise typer.Exit(1)
+    user_id = str(getattr(user, "id", "") or "")
+    if not user_id:
+        typer.echo("Error: Issuer user created but user_id is empty", err=True)
+        raise typer.Exit(1)
+
+    _upsert_admin_profile(client, user_id)
+    logger.info("Created issuer admin account for email={}", email[:20] + "...")
+    typer.echo("Created issuer admin account (auth + user_profiles).")
+
+
+def _upsert_admin_profile(client, user_id: str) -> None:
+    """Upsert ADMIN profile for user_id. Idempotent."""
+    try:
+        client.table("user_profiles").upsert(
+            {
+                "user_id": user_id,
+                "user_type": "ADMIN",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="user_id",
+        ).execute()
+    except Exception as e:
+        logger.exception("_upsert_admin_profile failed for user_id={}", user_id[:8] + "...")
+        typer.echo(f"Error: Failed to ensure ADMIN profile: {e}", err=True)
+        raise typer.Exit(1) from e
+
+
 def _ensure_admin_profile(
     supabase_url: str,
     supabase_secret_key: str,
@@ -245,6 +330,9 @@ def _common_options(
     password: str | None,
     timeout_seconds: float,
     output_path: Path | None,
+    *,
+    bootstrap_issuer: bool = True,
+    issuer_password: str | None = None,
 ) -> tuple[str, str]:
     """Validate common auth/env and return (apikey, token). Raises on error."""
     if not password:
@@ -264,6 +352,16 @@ def _common_options(
             err=True,
         )
         raise typer.Exit(1)
+
+    pw = issuer_password if issuer_password is not None else password
+    if bootstrap_issuer:
+        _ensure_issuer_admin_account(
+            supabase_url=supabase_url,
+            supabase_secret_key=secret_key,
+            email=username,
+            password=pw,
+        )
+
     token = _get_token(
         supabase_url=supabase_url,
         apikey=apikey,
@@ -319,6 +417,16 @@ def issue_invitations(
         "-p",
         envvar="INVITATION_ISSUER_PASSWORD",
         help="Admin password (or set INVITATION_ISSUER_PASSWORD)",
+    ),
+    bootstrap_issuer: bool = typer.Option(
+        True,
+        "--bootstrap-issuer/--no-bootstrap-issuer",
+        help="Ensure issuer admin exists in Auth + user_profiles before running (default: on)",
+    ),
+    issuer_password: str | None = typer.Option(
+        None,
+        "--issuer-password",
+        help="Password for issuer when bootstrapping (default: same as --password)",
     ),
     timeout_seconds: float = typer.Option(
         15.0,
@@ -387,6 +495,8 @@ def issue_invitations(
     _, token = _common_options(
         csv_path, api_base_url, supabase_url, supabase_publishable_key,
         supabase_secret_key, username, password, timeout_seconds, output_path,
+        bootstrap_issuer=bootstrap_issuer,
+        issuer_password=issuer_password,
     )
     logger.info("Token acquired, issuing invitations...")
 
@@ -464,6 +574,16 @@ def create_users(
         envvar="INVITATION_ISSUER_PASSWORD",
         help="Admin password (or set INVITATION_ISSUER_PASSWORD)",
     ),
+    bootstrap_issuer: bool = typer.Option(
+        True,
+        "--bootstrap-issuer/--no-bootstrap-issuer",
+        help="Ensure issuer admin exists in Auth + user_profiles before running (default: on)",
+    ),
+    issuer_password: str | None = typer.Option(
+        None,
+        "--issuer-password",
+        help="Password for issuer when bootstrapping (default: same as --password)",
+    ),
     timeout_seconds: float = typer.Option(
         15.0,
         "--timeout-seconds",
@@ -529,6 +649,8 @@ def create_users(
     _, token = _common_options(
         csv_path, api_base_url, supabase_url, supabase_publishable_key,
         supabase_secret_key, username, password, timeout_seconds, output_path,
+        bootstrap_issuer=bootstrap_issuer,
+        issuer_password=issuer_password,
     )
     logger.info("Token acquired, creating users...")
 

@@ -51,8 +51,8 @@ Harden Phase 4 with database-native guardrails, expand run/usage observability v
 
 ## Verification checklist
 
-- [ ] Tests cover critical Phase 4 paths.
-- [ ] DB guardrails are in place.
-- [ ] Logs support debugging.
-- [ ] Operator docs are complete.
-- [ ] Phase 4 completion definition satisfied.
+- [x] Tests cover critical Phase 4 paths.
+- [x] DB guardrails are in place.
+- [x] Logs support debugging.
+- [x] Operator docs are complete.
+- [x] Phase 4 completion definition satisfied.

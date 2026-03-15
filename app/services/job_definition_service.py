@@ -84,10 +84,7 @@ class JobDefinitionService:
         Returns None if job, trigger, or target cannot be resolved for the owner.
         Snapshot is owner-scoped; cross-tenant resolution is rejected.
         """
-        job_repo = self._job_repo
-        if not hasattr(job_repo, "get_graph_by_id"):
-            return None
-        graph = job_repo.get_graph_by_id(job_id, owner_user_id)
+        graph = self._job_repo.get_graph_by_id(job_id, owner_user_id)
         if graph is None:
             return None
 

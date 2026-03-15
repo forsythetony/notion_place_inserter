@@ -462,6 +462,64 @@ def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
     }
 
 
+def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_available():
+    """Dry-run mode never uploads image bytes to Notion."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.dry_run = True
+    notion = MagicMock()
+    ctx._services["notion"] = notion
+    ctx._services["google_places"] = MagicMock()
+    handler = UploadImageToNotionHandler()
+    with patch(
+        "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
+        return_value=b"fake-image-bytes",
+    ) as fetch_mock:
+        result = handler.execute(
+            step_id="step_upload",
+            config={},
+            input_bindings={"value": {}},
+            resolved_inputs={"value": "https://example.com/image.jpg"},
+            ctx=ctx,
+            snapshot={},
+        )
+    assert result["notion_image_url"] == {
+        "type": "external",
+        "external": {"url": "https://example.com/image.jpg"},
+    }
+    fetch_mock.assert_not_called()
+    notion.upload_cover_from_bytes.assert_not_called()
+
+
+def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_only():
+    """Dry-run Google photo path returns external URL and skips byte upload."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.dry_run = True
+    notion = MagicMock()
+    google = MagicMock()
+    google.get_photo_url.return_value = "https://example.com/google-photo.jpg"
+    google.get_photo_bytes.return_value = b"bytes-that-should-not-be-used"
+    ctx._services["notion"] = notion
+    ctx._services["google_places"] = google
+    handler = UploadImageToNotionHandler()
+
+    result = handler.execute(
+        step_id="step_upload",
+        config={},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "places/abc/photos/def"},
+        ctx=ctx,
+        snapshot={},
+    )
+
+    assert result["notion_image_url"] == {
+        "type": "external",
+        "external": {"url": "https://example.com/google-photo.jpg"},
+    }
+    google.get_photo_url.assert_called_once_with("places/abc/photos/def")
+    google.get_photo_bytes.assert_not_called()
+    notion.upload_cover_from_bytes.assert_not_called()
+
+
 def test_optimize_input_claude_handler_returns_optimized_query():
     """OptimizeInputClaudeHandler returns optimized_query (or passthrough when no Claude)."""
     ctx = ExecutionContext(

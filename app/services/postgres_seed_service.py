@@ -1,0 +1,207 @@
+"""Postgres bootstrap provisioning: catalog seed and lazy owner starter definitions."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from loguru import logger
+from supabase import Client
+
+from app.domain import (
+    ConnectorInstance,
+    ConnectorTemplate,
+    DataTarget,
+    TriggerDefinition,
+)
+from app.domain.yaml_layout import (
+    PRODUCT_MODEL_ROOT,
+    bootstrap_job_path,
+    bootstrap_trigger_path,
+    catalog_connector_template_path,
+    catalog_step_template_path,
+    catalog_target_template_path,
+)
+from app.repositories.postgres_repositories import (
+    PostgresConnectorInstanceRepository,
+    PostgresConnectorTemplateRepository,
+    PostgresJobRepository,
+    PostgresTargetRepository,
+    PostgresTargetTemplateRepository,
+    PostgresStepTemplateRepository,
+    PostgresTriggerRepository,
+    _ensure_uuid,
+)
+from app.repositories.yaml_loader import (
+    load_yaml_file,
+    parse_connector_template,
+    parse_job_graph,
+    parse_step_template,
+    parse_target_template,
+    parse_trigger_definition,
+)
+
+# Starter definitions derived from bootstrap YAML
+STARTER_TRIGGER_PATH = "/locations"
+STARTER_JOB_SLUG = "notion_place_inserter"
+# Dev/local only: real Places to Visit data source ID for bootstrap target.
+# TODO: Before production, replace with per-tenant resolution (e.g. OAuth binding,
+#       user-selected DB, or env override) — this value must not be hardcoded.
+PLACEHOLDER_EXTERNAL_TARGET_ID = "9592d56b-899e-440e-9073-b2f0768669ad"
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _list_catalog_ids(relative_dir: str) -> list[str]:
+    root = _project_root()
+    dir_path = root / relative_dir
+    if not dir_path.exists() or not dir_path.is_dir():
+        return []
+    return [f.stem for f in dir_path.glob("*.yaml")]
+
+
+class PostgresBootstrapProvisioningService:
+    """
+    Bootstrap provisioning implementation. All YAML->Postgres mapping lives here.
+    No direct bootstrap YAML parsing from routes, worker, or repositories.
+    """
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+        self._connector_templates = PostgresConnectorTemplateRepository(client)
+        self._target_templates = PostgresTargetTemplateRepository(client)
+        self._step_templates = PostgresStepTemplateRepository(client)
+        self._connector_instances = PostgresConnectorInstanceRepository(client)
+        self._targets = PostgresTargetRepository(client)
+        self._triggers = PostgresTriggerRepository(client)
+        self._jobs = PostgresJobRepository(client)
+
+    def seed_catalog_if_needed(self) -> None:
+        """Idempotently seed connector, target, and step templates from catalog YAML."""
+        for tid in _list_catalog_ids(f"{PRODUCT_MODEL_ROOT}/catalog/connector_templates"):
+            path = catalog_connector_template_path(tid, PRODUCT_MODEL_ROOT)
+            data = load_yaml_file(path)
+            if data:
+                try:
+                    t = parse_connector_template(data)
+                    self._connector_templates.save(t)
+                    logger.debug("bootstrap_seed_connector_template | id={}", tid)
+                except (KeyError, TypeError) as e:
+                    logger.warning("bootstrap_skip_connector_template | id={} error={}", tid, e)
+
+        for tid in _list_catalog_ids(f"{PRODUCT_MODEL_ROOT}/catalog/target_templates"):
+            path = catalog_target_template_path(tid, PRODUCT_MODEL_ROOT)
+            data = load_yaml_file(path)
+            if data:
+                try:
+                    t = parse_target_template(data)
+                    self._target_templates.save(t)
+                    logger.debug("bootstrap_seed_target_template | id={}", tid)
+                except (KeyError, TypeError) as e:
+                    logger.warning("bootstrap_skip_target_template | id={} error={}", tid, e)
+
+        for tid in _list_catalog_ids(f"{PRODUCT_MODEL_ROOT}/catalog/step_templates"):
+            path = catalog_step_template_path(tid, PRODUCT_MODEL_ROOT)
+            data = load_yaml_file(path)
+            if data:
+                try:
+                    t = parse_step_template(data)
+                    self._step_templates.save(t)
+                    logger.debug("bootstrap_seed_step_template | id={}", tid)
+                except (KeyError, TypeError) as e:
+                    logger.warning("bootstrap_skip_step_template | id={} error={}", tid, e)
+
+        logger.info("bootstrap_seed_catalog_complete")
+
+    def ensure_owner_starter_definitions(self, owner_user_id: str) -> None:
+        """
+        Ensure owner has starter definitions. Idempotent.
+        Provisions connector instances, target, trigger, job graph from bootstrap YAML if missing.
+        """
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+        except ValueError:
+            logger.warning("bootstrap_ensure_owner_skipped | invalid_owner={}", owner_user_id)
+            return
+
+        trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
+        if trigger:
+            logger.debug("bootstrap_ensure_owner_already_provisioned | owner={}", owner_user_id)
+            return
+
+        # Load bootstrap YAML
+        trigger_data = load_yaml_file(bootstrap_trigger_path("trigger_http_locations", PRODUCT_MODEL_ROOT))
+        job_data = load_yaml_file(bootstrap_job_path(STARTER_JOB_SLUG, PRODUCT_MODEL_ROOT))
+        if not trigger_data or not job_data:
+            logger.warning("bootstrap_ensure_owner_missing_yaml | owner={}", owner_user_id)
+            return
+
+        # 1. Connector instances (required by target and job steps)
+        for conn_id, template_id in [
+            ("connector_instance_google_places_default", "google_places_api"),
+            ("connector_instance_notion_default", "notion_oauth_workspace"),
+        ]:
+            if not self._connector_instances.get_by_id(conn_id, uid):
+                inst = ConnectorInstance(
+                    id=conn_id,
+                    owner_user_id=uid,
+                    connector_template_id=template_id,
+                    display_name=conn_id.replace("connector_instance_", "").replace("_", " ").title(),
+                    status="active",
+                    config={},
+                    secret_ref=None,
+                    visibility="owner",
+                )
+                self._connector_instances.save(inst)
+                logger.info("bootstrap_provision_connector | id={} owner={}", conn_id, owner_user_id)
+
+        # 2. Target (required by job)
+        target_id = "target_places_to_visit"
+        if not self._targets.get_by_id(target_id, uid):
+            target = DataTarget(
+                id=target_id,
+                owner_user_id=uid,
+                target_template_id="notion_database",
+                connector_instance_id="connector_instance_notion_default",
+                display_name="Places to Visit",
+                external_target_id=PLACEHOLDER_EXTERNAL_TARGET_ID,
+                status="active",
+                visibility="owner",
+            )
+            self._targets.save(target)
+            logger.info("bootstrap_provision_target | id={} owner={}", target_id, owner_user_id)
+
+        # 3. Parse trigger to get trigger_id for job wiring
+        trigger = parse_trigger_definition(trigger_data)
+        trigger.owner_user_id = uid
+
+        # 4. Job graph first (trigger_definitions has FK to job_definitions; job must exist before trigger)
+        graph = parse_job_graph(job_data, owner_user_id_override=uid)
+        graph.job.owner_user_id = uid
+        graph.job.trigger_id = trigger.id
+        graph.job.target_id = target_id
+
+        # Ensure all step templates referenced by the bootstrap graph exist.
+        # This protects owner provisioning when catalog seeding is partial.
+        for template_id in sorted({step.step_template_id for step in graph.steps}):
+            if self._step_templates.get_by_id(template_id):
+                continue
+            template_data = load_yaml_file(catalog_step_template_path(template_id, PRODUCT_MODEL_ROOT))
+            if not template_data:
+                logger.warning(
+                    "bootstrap_missing_step_template | id={} owner={}",
+                    template_id,
+                    owner_user_id,
+                )
+                continue
+            template = parse_step_template(template_data)
+            self._step_templates.save(template)
+            logger.info("bootstrap_provision_step_template | id={} owner={}", template_id, owner_user_id)
+
+        self._jobs.save_job_graph(graph, skip_reference_checks=True)
+        logger.info("bootstrap_provision_job | id={} owner={}", graph.job.id, owner_user_id)
+
+        # 5. Trigger (after job so fk_job is satisfied)
+        self._triggers.save(trigger)
+        logger.info("bootstrap_provision_trigger | id={} owner={}", trigger.id, owner_user_id)
