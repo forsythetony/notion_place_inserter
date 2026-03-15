@@ -104,9 +104,9 @@ Analyze and document resource constraints for database connections and thread us
 - The 2026-03-15 fixes (fail-fast on `save_pipeline_run`, retry in `id_mapping`) mitigate symptoms but do not address root cause of connection/thread contention.
 - Supabase free tier has limited connections; Render starter worker may have resource constraints that amplify contention.
 
-## Temporary Mitigation (Implemented 2026-03-15)
+## Temporary Mitigation (Implemented and Validated 2026-03-15)
 
-As a short-term workaround, the bootstrap job stages use `pipeline_run_mode: sequential` instead of `parallel`. This reduces concurrent DB usage and avoids Errno 11 under current shared-client architecture. **This is not the final state.** Revert to parallel once this story is completed and connection/thread handling is improved.
+As a short-term workaround, the bootstrap job stages use `pipeline_run_mode: sequential` instead of `parallel`. This reduces concurrent DB usage and avoids Errno 11 under current shared-client architecture. **Validated in production.** This is not the final state—revert to parallel once this story is completed and connection/thread handling is improved.
 
 - Bootstrap YAML: `product_model/bootstrap/jobs/notion_place_inserter.yaml` — stages set to sequential with inline comments.
 - Manual backfill for existing owners: `docs/sql/manual/backfill_stage_run_mode_sequential.sql` (run in Supabase Dashboard).

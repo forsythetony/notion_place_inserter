@@ -3,6 +3,7 @@
 ## Status
 
 - p4_pr01 complete (2026-03-15); p4_pr02 complete (2026-03-15); p4_pr03 complete (2026-03-15)
+- Sequential-mode mitigation implemented and validated (2026-03-15) — temporary Errno 11 workaround in production
 - Scope: replace YAML repositories with Postgres/Supabase-backed storage; durable definitions and runs; RLS-based tenant isolation
 
 ## Phase 4 PR Task Index

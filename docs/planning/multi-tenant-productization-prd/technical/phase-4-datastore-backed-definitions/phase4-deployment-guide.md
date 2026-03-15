@@ -166,7 +166,7 @@ Key log patterns in datastore mode:
 
 ## Temporary Sequential Mitigation
 
-**Status:** Implemented as a short-term workaround. This is NOT the final architecture.
+**Status:** Implemented and validated. Short-term workaround; NOT the final architecture.
 
 ### Why it exists
 
