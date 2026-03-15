@@ -31,4 +31,16 @@ class OptimizeInputClaudeHandler(StepRuntime):
             return {"optimized_query": ""}
 
         rewritten = claude.rewrite_place_query(str(query))
+        usage_svc = ctx.get_service("usage_accounting")
+        if usage_svc and ctx.owner_user_id:
+            usage = claude.get_last_usage()
+            if usage:
+                usage_svc.record_llm_tokens(
+                    job_run_id=ctx.run_id,
+                    owner_user_id=ctx.owner_user_id,
+                    provider="anthropic",
+                    prompt_tokens=usage.get("input_tokens", 0),
+                    completion_tokens=usage.get("output_tokens", 0),
+                    step_run_id=ctx.step_run_id,
+                )
         return {"optimized_query": rewritten or str(query).strip()}

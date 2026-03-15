@@ -32,12 +32,14 @@ from app.repositories import (
 )
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
+from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
+from app.repositories import YamlRunRepository
 from app.services.notion_service import NotionService
+from app.services.run_lifecycle_adapter import RunLifecycleAdapter
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.services.supabase_run_repository import SupabaseRunRepository
 from app.services.target_service import TargetService
 from app.services.trigger_service import TriggerService
 from app.services.validation_service import ValidationService
@@ -145,15 +147,17 @@ def main() -> None:
     supabase_config = load_supabase_config()
     supabase_client = create_supabase_client(supabase_config)
     queue_repo = SupabaseQueueRepository(supabase_client, supabase_config)
-    run_repo = SupabaseRunRepository(supabase_client, supabase_config)
-
-    notion_svc = NotionService(api_key=notion_key)
-    notion_svc.initialize()
+    yaml_run_repo = YamlRunRepository()
+    run_repo = RunLifecycleAdapter(yaml_run_repo)
 
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+    notion_svc = NotionService(api_key=notion_key, dry_run=dry_run)
+    notion_svc.initialize()
 
     claude_svc = ClaudeService(api_key=anthropic_token)
     google_places_svc = GooglePlacesService(api_key=google_places_key)
+    freepik_key = os.environ.get("FREEPIK_API_KEY")
+    freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
 
     step_template_repo = YamlStepTemplateRepository()
     target_template_repo = YamlTargetTemplateRepository()
@@ -186,7 +190,9 @@ def main() -> None:
         notion_service=notion_svc,
         claude_service=claude_svc,
         google_places_service=google_places_svc,
+        freepik_service=freepik_svc,
         dry_run=dry_run,
+        run_repository=yaml_run_repo,
     )
 
     event_bus = EventBus()

@@ -1,0 +1,30 @@
+id: step_template_ai_select_relation
+slug: ai_select_relation
+display_name: AI Select Relation
+step_kind: ai_select_relation
+description: Use AI to select the best relation from a related database by key lookup
+input_contract:
+  fields:
+    source_value:
+      type: any
+    value:
+      type: any
+output_contract:
+  fields:
+    selected_page_pointer:
+      type: object
+    selected_relation:
+      type: array
+config_schema:
+  related_db:
+    type: string
+    required: true
+  key_lookup:
+    type: string
+    default: title
+  prompt:
+    type: string
+runtime_binding: ai_select_relation
+category: transform
+status: active
+visibility: platform

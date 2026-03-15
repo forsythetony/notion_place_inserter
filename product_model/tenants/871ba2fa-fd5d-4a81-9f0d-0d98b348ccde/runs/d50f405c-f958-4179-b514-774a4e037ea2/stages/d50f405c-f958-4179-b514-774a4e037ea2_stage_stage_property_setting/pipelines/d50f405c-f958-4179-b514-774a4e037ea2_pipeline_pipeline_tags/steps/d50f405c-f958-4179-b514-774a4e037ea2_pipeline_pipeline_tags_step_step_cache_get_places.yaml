@@ -1,0 +1,11 @@
+id: d50f405c-f958-4179-b514-774a4e037ea2_pipeline_pipeline_tags_step_step_cache_get_places
+pipeline_run_id: d50f405c-f958-4179-b514-774a4e037ea2_pipeline_pipeline_tags
+step_id: step_cache_get_places
+step_template_id: step_template_cache_get
+status: succeeded
+owner_user_id: 871ba2fa-fd5d-4a81-9f0d-0d98b348ccde
+job_run_id: d50f405c-f958-4179-b514-774a4e037ea2
+stage_run_id: d50f405c-f958-4179-b514-774a4e037ea2_stage_stage_property_setting
+started_at: '2026-03-15T16:56:01.009145+00:00'
+completed_at: '2026-03-15T16:56:01.009146+00:00'
+kind: step_run

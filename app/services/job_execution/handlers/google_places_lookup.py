@@ -33,6 +33,16 @@ class GooglePlacesLookupHandler(StepRuntime):
         results, raw_search_response = result
         place = results[0] if results else None
 
+        usage_svc = ctx.get_service("usage_accounting")
+        if usage_svc and ctx.owner_user_id:
+            usage_svc.record_external_api_call(
+                job_run_id=ctx.run_id,
+                owner_user_id=ctx.owner_user_id,
+                provider="google_places",
+                operation="search_places",
+                step_run_id=ctx.step_run_id,
+            )
+
         logger.bind(
             run_id=ctx.run_id,
             step_id=step_id,
@@ -44,6 +54,15 @@ class GooglePlacesLookupHandler(StepRuntime):
 
         if place and fetch_details:
             place = self._enrich_with_details_if_needed(google, place)
+            usage_svc = ctx.get_service("usage_accounting")
+            if usage_svc and ctx.owner_user_id and place:
+                usage_svc.record_external_api_call(
+                    job_run_id=ctx.run_id,
+                    owner_user_id=ctx.owner_user_id,
+                    provider="google_places",
+                    operation="get_place_details",
+                    step_run_id=ctx.step_run_id,
+                )
 
         return {
             "search_response": raw_search_response if raw_search_response else (place or {}),

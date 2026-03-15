@@ -1,0 +1,13 @@
+id: usage_7ca4d6d13e75
+job_run_id: d50f405c-f958-4179-b514-774a4e037ea2
+usage_type: llm_tokens
+provider: anthropic
+metric_name: total_tokens
+metric_value: 63
+owner_user_id: 871ba2fa-fd5d-4a81-9f0d-0d98b348ccde
+step_run_id: d50f405c-f958-4179-b514-774a4e037ea2_pipeline_pipeline_tags_step_step_property_set_tags
+metadata:
+  prompt_tokens: 55
+  completion_tokens: 8
+  model: claude-sonnet-4-20250514
+kind: usage_record

@@ -1,0 +1,24 @@
+id: step_template_data_transform
+slug: data_transform
+display_name: Data Transform
+step_kind: data_transform
+description: Deterministic transform over step input (e.g. extract URL from payload)
+input_contract:
+  fields:
+    value:
+      type: any
+output_contract:
+  fields:
+    transformed_value:
+      type: any
+config_schema:
+  operation:
+    type: string
+  source_path:
+    type: string
+  fallback_value:
+    type: any
+runtime_binding: data_transform
+category: transform
+status: active
+visibility: platform

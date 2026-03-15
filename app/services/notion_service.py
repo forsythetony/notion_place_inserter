@@ -7,6 +7,7 @@ from loguru import logger
 from notion_client import Client
 
 from app.models.schema import DatabaseSchema, PropertySchema
+from app.pipeline_lib.table_format import format_table_log
 from app.services.schema_cache import SchemaCache
 
 
@@ -16,15 +17,141 @@ class NotionService:
     # Database IDs to fetch on startup (from the two provided Notion URLs)
     DATABASE_IDS = [
         "544d5797-9344-4258-aed6-1f72e66b6927",  # Locations
-        "1e2a5cd4-f107-490f-9b7a-4af865fd1beb",  # Places to Visit
+        "9592d56b-899e-440e-9073-b2f0768669ad",  # Places to Visit
     ]
 
-    def __init__(self, api_key: str, schema_ttl: float = 300):
+    def __init__(self, api_key: str, schema_ttl: float = 300, dry_run: bool = False):
         self._client = Client(auth=api_key)
         self._api_key = api_key
+        self._dry_run = dry_run
         self._cache = SchemaCache(
             self._client, database_ids=self.DATABASE_IDS, ttl_seconds=schema_ttl
         )
+
+    @staticmethod
+    def _get_property_type(prop_value: dict) -> str:
+        """Return the Notion property type key from a property value."""
+        for key in (
+            "title",
+            "rich_text",
+            "url",
+            "select",
+            "multi_select",
+            "checkbox",
+            "number",
+            "date",
+            "email",
+            "phone_number",
+            "relation",
+        ):
+            if key in prop_value:
+                return key
+        return "?"
+
+    @staticmethod
+    def _extract_property_preview_str(prop_value: dict) -> str:
+        """Extract a compact string preview from a Notion API property value for logging."""
+        if not prop_value:
+            return ""
+        if "title" in prop_value:
+            blocks = prop_value["title"] or []
+            return "".join(
+                b.get("plain_text", "") or b.get("text", {}).get("content", "")
+                for b in blocks
+            )
+        if "rich_text" in prop_value:
+            blocks = prop_value["rich_text"] or []
+            text = "".join(
+                b.get("plain_text", "") or b.get("text", {}).get("content", "")
+                for b in blocks
+            )
+            return text[:80] + ("..." if len(text) > 80 else "")
+        if "url" in prop_value:
+            return prop_value["url"] or ""
+        if "select" in prop_value:
+            sel = prop_value["select"]
+            return sel.get("name", "") if sel else ""
+        if "multi_select" in prop_value:
+            items = prop_value["multi_select"] or []
+            return ", ".join(i.get("name", "") for i in items)
+        if "checkbox" in prop_value:
+            return str(prop_value["checkbox"])
+        if "number" in prop_value:
+            val = prop_value["number"]
+            return str(val) if val is not None else ""
+        if "date" in prop_value:
+            d = prop_value["date"]
+            if not d:
+                return ""
+            start = d.get("start", "")
+            end = d.get("end", "")
+            return f"{start} → {end}" if end else start
+        if "email" in prop_value:
+            return prop_value["email"] or ""
+        if "phone_number" in prop_value:
+            return prop_value["phone_number"] or ""
+        if "relation" in prop_value:
+            rel_list = prop_value.get("relation") or []
+            if not rel_list:
+                return "—"
+            urls = []
+            for item in rel_list:
+                page_id = item.get("id") if isinstance(item, dict) else None
+                if page_id:
+                    compact = str(page_id).replace("-", "")
+                    urls.append(f"https://www.notion.so/{compact}")
+            return " | ".join(urls) if urls else "—"
+        return str(prop_value)[:60]
+
+    @staticmethod
+    def _extract_media_url(payload: dict | None) -> str | None:
+        """Extract a URL from Notion icon/cover payloads when present."""
+        if not isinstance(payload, dict):
+            return None
+        external = payload.get("external")
+        if isinstance(external, dict):
+            url = external.get("url")
+            if isinstance(url, str) and url:
+                return url
+        file_obj = payload.get("file")
+        if isinstance(file_obj, dict):
+            url = file_obj.get("url")
+            if isinstance(url, str) and url:
+                return url
+        file_upload = payload.get("file_upload")
+        if isinstance(file_upload, dict):
+            url = file_upload.get("url")
+            if isinstance(url, str) and url:
+                return url
+        return None
+
+    def _get_external_id_to_display_name_map(self, data_source_id: str) -> dict[str, str]:
+        """
+        Build external-property-id -> display-name map for a data source.
+        Falls back to empty map on any retrieval/parsing error.
+        """
+        if not data_source_id:
+            return {}
+        try:
+            data_source = self._client.data_sources.retrieve(data_source_id=data_source_id)
+        except Exception:
+            return {}
+
+        raw_props = data_source.get("properties", {})
+        if not isinstance(raw_props, dict):
+            return {}
+
+        mapping: dict[str, str] = {}
+        for display_name, raw in raw_props.items():
+            if not isinstance(raw, dict):
+                continue
+            external_id = raw.get("id")
+            if isinstance(external_id, str) and external_id:
+                mapping[external_id] = display_name
+            if isinstance(display_name, str) and display_name:
+                # Also map display-name keys to themselves for mixed-key payloads.
+                mapping[display_name] = display_name
+        return mapping
 
     @property
     def client(self):
@@ -162,7 +289,32 @@ class NotionService:
         """Create a new page in the given data source with the provided properties.
         Optionally include top-level icon and cover (Notion page metadata, not properties).
         """
-        print(f"Creating page in data source {data_source_id}")
+        cover_url = self._extract_media_url(cover)
+        icon_url = self._extract_media_url(icon)
+        property_count = len(properties) if isinstance(properties, dict) else 0
+        display_name_map = self._get_external_id_to_display_name_map(data_source_id)
+        request_table = format_table_log(
+            "notion_create_page_request",
+            ["data_source_id", "dry_run", "property_count", "cover_url", "icon_url"],
+            [[data_source_id, str(self._dry_run), str(property_count), cover_url or "—", icon_url or "—"]],
+        )
+        logger.debug("\n{}", request_table)
+        if isinstance(properties, dict) and properties:
+            prop_rows = [
+                [
+                    display_name_map.get(name, name),
+                    name,
+                    self._get_property_type(val),
+                    self._extract_property_preview_str(val),
+                ]
+                for name, val in sorted(properties.items())
+            ]
+            props_table = format_table_log(
+                "notion_create_page_properties",
+                ["Display Name", "External ID", "Type", "Value"],
+                prop_rows,
+            )
+            logger.debug("\n{}", props_table)
         payload: dict = {
             "parent": {"data_source_id": data_source_id},
             "properties": properties,
@@ -171,4 +323,27 @@ class NotionService:
             payload["icon"] = icon
         if cover is not None:
             payload["cover"] = cover
-        return self._client.pages.create(**payload)
+        if self._dry_run:
+            dry_run_table = format_table_log(
+                "notion_create_page_skipped_dry_run",
+                ["mode", "data_source_id", "property_count", "has_icon", "has_cover"],
+                [["dry_run", data_source_id, str(property_count), str(icon is not None), str(cover is not None)]],
+            )
+            logger.info("\n{}", dry_run_table)
+            return {
+                "mode": "dry_run",
+                "parent": payload["parent"],
+                "properties": payload["properties"],
+                **({"icon": icon} if icon is not None else {}),
+                **({"cover": cover} if cover is not None else {}),
+            }
+        result = self._client.pages.create(**payload)
+        page_id = result.get("id", "") if isinstance(result, dict) else ""
+        obj_type = result.get("object", "") if isinstance(result, dict) else ""
+        success_table = format_table_log(
+            "notion_create_page_success",
+            ["data_source_id", "page_id", "object"],
+            [[data_source_id, page_id, obj_type]],
+        )
+        logger.info("\n{}", success_table)
+        return result

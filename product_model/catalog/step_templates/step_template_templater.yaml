@@ -1,0 +1,21 @@
+id: step_template_templater
+slug: templater
+display_name: Templater
+step_kind: templater
+description: Render a string from a template and configurable values. Values can reference cache or static literals. Placeholder syntax: {{key}}
+input_contract: {}
+output_contract:
+  fields:
+    rendered_value:
+      type: string
+config_schema:
+  template:
+    type: string
+    required: true
+  values:
+    type: object
+    description: Flat dict of key -> value. Values can be static_value, cache_key_ref, or signal_ref.
+runtime_binding: templater
+category: transform
+status: active
+visibility: platform

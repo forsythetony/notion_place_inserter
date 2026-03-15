@@ -43,15 +43,18 @@ Implement run and usage record persistence, add observability, and harden Phase 
 
 ## Manual validation steps (after implementation)
 
-1. Run a job and confirm `JobRun`, `StageRun`, `PipelineRun`, `StepRun` records are persisted.
-2. Confirm usage records are created for Claude and Google Places calls.
-3. Run test suite for Phase 3 paths.
-4. Follow docs to bootstrap, run job, restart container; confirm ephemeral edits are lost and bootstrap is restored.
+1. **Run a job and confirm run hierarchy persisted:**
+   - Trigger async: `POST /triggers/{user_id}/locations` with `{"keywords": "park"}`.
+   - Check `product_model/tenants/<owner_user_id>/runs/` for `{run_id}.yaml` (JobRun).
+   - Check nested `runs/{run_id}/stages/`, `pipelines/`, `steps/` for StageRun, PipelineRun, StepRun YAML files.
+2. **Confirm usage records:** Check `runs/{run_id}/usage/` for `llm_tokens` (anthropic) and `external_api_call` (google_places, notion) YAML files.
+3. **Run test suite:** `pytest tests/ -v` (including `test_yaml_run_repository`, `test_job_execution`, `test_worker_consumer`, `test_locations_route`).
+4. **Ephemeral persistence:** Restart container; confirm run/usage YAML under `tenants/` is container-local and may be lost on restart.
 
 ## Verification checklist
 
-- [ ] Runs are persisted with snapshot ref and metadata.
-- [ ] Usage records are created.
-- [ ] Logging is sufficient for debugging.
-- [ ] Tests or manual checklist cover critical paths.
-- [ ] Phase 3 docs are complete and consistent.
+- [x] Runs are persisted with snapshot ref and metadata.
+- [x] Usage records are created.
+- [x] Logging is sufficient for debugging.
+- [x] Tests or manual checklist cover critical paths.
+- [x] Phase 3 docs are complete and consistent.

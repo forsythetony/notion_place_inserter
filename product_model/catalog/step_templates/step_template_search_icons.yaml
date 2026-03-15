@@ -1,0 +1,25 @@
+id: step_template_search_icons
+slug: search_icons
+display_name: Search Icons
+step_kind: search_icons
+description: Search icon from optimized query (Freepik)
+input_contract:
+  fields:
+    query:
+      type: string
+      required: true
+output_contract:
+  fields:
+    image_url:
+      type: string
+config_schema:
+  connector_instance_id:
+    type: string
+  provider:
+    type: string
+  result_preference:
+    type: string
+runtime_binding: search_icons
+category: transform
+status: active
+visibility: platform

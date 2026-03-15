@@ -131,6 +131,9 @@ class RunRepository(Protocol):
     def get_job_run(
         self, id: str, owner_user_id: str
     ) -> JobRun | None: ...
+    def get_job_run_by_platform_job_id(
+        self, platform_job_id: str, owner_user_id: str
+    ) -> JobRun | None: ...
     def list_job_runs_by_owner(
         self, owner_user_id: str, *, job_id: str | None = None, limit: int = 100
     ) -> list[JobRun]: ...

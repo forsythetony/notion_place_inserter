@@ -2,7 +2,7 @@ id: step_template_property_set
 slug: property_set
 display_name: Property Set
 step_kind: property_set
-description: Write value to a specific target schema property
+description: Write value to a specific target schema property or page metadata (icon/cover)
 input_contract:
   fields:
     value:
@@ -14,7 +14,11 @@ config_schema:
     required: true
   schema_property_id:
     type: string
-    required: true
+  target_kind:
+    type: string
+    default: schema_property
+  target_field:
+    type: string
 runtime_binding: property_set
 category: output
 status: active

@@ -16,9 +16,9 @@ from app.queue.memory_diagnostics import (
 )
 from app.queue.models import PipelineFailureEvent, PipelineSuccessEvent
 from app.services.supabase_queue_repository import QueueMessage, SupabaseQueueRepository
-from app.services.supabase_run_repository import SupabaseRunRepository
 
 if TYPE_CHECKING:
+    from app.services.run_lifecycle_adapter import RunLifecycleAdapter
     from app.services.job_definition_service import JobDefinitionService
     from app.services.job_execution import JobExecutionService
 
@@ -80,6 +80,7 @@ def _run_pipeline_sync(
         job_id=job_id,
         trigger_payload=trigger_payload,
         definition_snapshot_ref=definition_snapshot_ref or snapshot_obj.snapshot_ref,
+        owner_user_id=owner_user_id,
     )
 
 
@@ -139,7 +140,7 @@ def _parse_retry_delays(raw: str) -> tuple[int, ...]:
 
 async def run_worker_loop(
     queue_repo: SupabaseQueueRepository,
-    run_repo: SupabaseRunRepository,
+    run_repo: "RunLifecycleAdapter",
     job_execution_service: "JobExecutionService",
     job_definition_service: "JobDefinitionService",
     event_bus: EventBus,
@@ -272,7 +273,7 @@ async def run_worker_loop(
 def _handle_final_failure(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
-    run_repo: SupabaseRunRepository,
+    run_repo: "RunLifecycleAdapter",
     event_bus: EventBus,
     error: BaseException,
 ) -> None:
@@ -318,7 +319,7 @@ def _handle_final_failure(
 async def _process_message(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
-    run_repo: SupabaseRunRepository,
+    run_repo: "RunLifecycleAdapter",
     job_execution_service: "JobExecutionService",
     job_definition_service: "JobDefinitionService",
     event_bus: EventBus,
@@ -682,7 +683,7 @@ async def _process_message(
 
 
 def _persist_retry_and_schedule(
-    run_repo: SupabaseRunRepository,
+    run_repo: "RunLifecycleAdapter",
     job_id: str,
     run_id: str,
     new_retry_count: int,
@@ -706,7 +707,7 @@ def _persist_retry_and_schedule(
 def _mark_failed_and_archive(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
-    run_repo: SupabaseRunRepository,
+    run_repo: "RunLifecycleAdapter",
     event_bus: EventBus,
     job_id: str,
     run_id: str,

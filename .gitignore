@@ -38,6 +38,9 @@ pip-delete-this-directory.txt
 # Application logs (auto-rotated)
 logs/
 
+# Temporary files
+temp/
+
 # Unit test / coverage
 .htmlcov
 .tox/

@@ -120,12 +120,10 @@ def test_post_triggers_async_returns_accepted(client):
     assert call_kw["keywords"] == "park"
     assert call_kw["status"] == "queued"
     assert call_kw["job_id"].startswith("loc_")
-
-    mock_run_repo.create_run.assert_called_once()
-    call_kw = mock_run_repo.create_run.call_args[1]
-    assert call_kw["status"] == "pending"
-    assert "job_id" in call_kw
+    assert call_kw["owner_user_id"] == "bootstrap"
     assert "run_id" in call_kw
+    assert call_kw.get("job_definition_id") == "job_notion_place_inserter"
+    assert call_kw.get("definition_snapshot_ref") == "job_snapshot:bootstrap:job_notion_place_inserter:abc123"
 
     mock_queue_repo.send.assert_called_once()
     call_args = mock_queue_repo.send.call_args
@@ -314,15 +312,14 @@ def test_post_triggers_async_503_when_create_job_raises(client):
     )
     assert resp.status_code == 503
     mock_run_repo.create_job.assert_called_once()
-    mock_run_repo.create_run.assert_not_called()
     mock_queue_repo.send.assert_not_called()
 
 
 def test_post_triggers_async_503_when_create_run_raises(client):
-    """POST /triggers/{user_id}/locations when create_run raises returns 503; send is never called."""
+    """POST /triggers/{user_id}/locations when create_job (run persistence) raises returns 503; send is never called."""
     mock_queue_repo = MagicMock()
     mock_run_repo = MagicMock()
-    mock_run_repo.create_run.side_effect = RuntimeError("Supabase unavailable")
+    mock_run_repo.create_job.side_effect = RuntimeError("Run persistence unavailable")
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = MagicMock(job_id="job_notion_place_inserter", owner_user_id="bootstrap")
@@ -342,7 +339,6 @@ def test_post_triggers_async_503_when_create_run_raises(client):
     )
     assert resp.status_code == 503
     mock_run_repo.create_job.assert_called_once()
-    mock_run_repo.create_run.assert_called_once()
     mock_queue_repo.send.assert_not_called()
 
 
@@ -384,7 +380,7 @@ def test_post_triggers_async_logs_correlation_on_success(client, captured_logs):
     )
     assert resp.status_code == 200
     job_id = resp.json()["job_id"]
-    run_id = mock_run_repo.create_run.call_args[1]["run_id"]
+    run_id = mock_run_repo.create_job.call_args[1]["run_id"]
 
     enqueued = next((e for e in captured_logs if "locations_enqueued" in e["message"]), None)
     assert enqueued is not None
@@ -416,7 +412,7 @@ def test_post_triggers_async_logs_correlation_on_failure(client, captured_logs):
     )
     assert resp.status_code == 503
     job_id = mock_run_repo.create_job.call_args[1]["job_id"]
-    run_id = mock_run_repo.create_run.call_args[1]["run_id"]
+    run_id = mock_run_repo.create_job.call_args[1]["run_id"]
 
     failed = next((e for e in captured_logs if "locations_enqueue_failed" in e["message"]), None)
     assert failed is not None

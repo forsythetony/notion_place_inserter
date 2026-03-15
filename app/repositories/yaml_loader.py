@@ -377,3 +377,111 @@ def job_graph_to_yaml_dict(graph: JobGraph) -> dict[str, Any]:
     result["kind"] = "job_definition"
     result["stages"] = stages_data
     return result
+
+
+def _parse_datetime(val: Any) -> "datetime | None":
+    """Parse datetime from ISO string. Returns None if invalid."""
+    from datetime import datetime, timezone
+
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def parse_job_run(data: dict[str, Any]) -> "JobRun":
+    """Parse YAML dict into JobRun."""
+    from app.domain.runs import JobRun
+
+    return JobRun(
+        id=data["id"],
+        owner_user_id=data["owner_user_id"],
+        job_id=data["job_id"],
+        trigger_id=data["trigger_id"],
+        target_id=data["target_id"],
+        status=data["status"],
+        trigger_payload=data.get("trigger_payload", {}),
+        workspace_id=data.get("workspace_id"),
+        visibility=data.get("visibility", "owner"),
+        definition_snapshot_ref=data.get("definition_snapshot_ref"),
+        started_at=_parse_datetime(data.get("started_at")),
+        completed_at=_parse_datetime(data.get("completed_at")),
+        error_summary=data.get("error_summary"),
+        platform_job_id=data.get("platform_job_id"),
+        retry_count=data.get("retry_count", 0),
+    )
+
+
+def parse_stage_run(data: dict[str, Any]) -> "StageRun":
+    """Parse YAML dict into StageRun."""
+    from app.domain.runs import StageRun
+
+    return StageRun(
+        id=data["id"],
+        job_run_id=data["job_run_id"],
+        stage_id=data["stage_id"],
+        status=data["status"],
+        owner_user_id=data.get("owner_user_id", ""),
+        started_at=_parse_datetime(data.get("started_at")),
+        completed_at=_parse_datetime(data.get("completed_at")),
+    )
+
+
+def parse_pipeline_run(data: dict[str, Any]) -> "PipelineRun":
+    """Parse YAML dict into PipelineRun."""
+    from app.domain.runs import PipelineRun
+
+    return PipelineRun(
+        id=data["id"],
+        stage_run_id=data["stage_run_id"],
+        pipeline_id=data["pipeline_id"],
+        status=data["status"],
+        owner_user_id=data.get("owner_user_id", ""),
+        job_run_id=data.get("job_run_id", ""),
+        started_at=_parse_datetime(data.get("started_at")),
+        completed_at=_parse_datetime(data.get("completed_at")),
+    )
+
+
+def parse_step_run(data: dict[str, Any]) -> "StepRun":
+    """Parse YAML dict into StepRun."""
+    from app.domain.runs import StepRun
+
+    return StepRun(
+        id=data["id"],
+        pipeline_run_id=data["pipeline_run_id"],
+        step_id=data["step_id"],
+        step_template_id=data["step_template_id"],
+        status=data["status"],
+        owner_user_id=data.get("owner_user_id", ""),
+        job_run_id=data.get("job_run_id", ""),
+        stage_run_id=data.get("stage_run_id", ""),
+        input_summary=data.get("input_summary"),
+        output_summary=data.get("output_summary"),
+        started_at=_parse_datetime(data.get("started_at")),
+        completed_at=_parse_datetime(data.get("completed_at")),
+        error_summary=data.get("error_summary"),
+    )
+
+
+def parse_usage_record(data: dict[str, Any]) -> "UsageRecord":
+    """Parse YAML dict into UsageRecord."""
+    from app.domain.runs import UsageRecord
+
+    return UsageRecord(
+        id=data["id"],
+        job_run_id=data["job_run_id"],
+        usage_type=data["usage_type"],
+        provider=data["provider"],
+        metric_name=data["metric_name"],
+        metric_value=data["metric_value"],
+        owner_user_id=data.get("owner_user_id", ""),
+        step_run_id=data.get("step_run_id"),
+        metadata=data.get("metadata"),
+    )

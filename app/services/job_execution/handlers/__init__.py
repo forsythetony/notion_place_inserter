@@ -6,6 +6,12 @@ from app.services.job_execution.handlers.cache_set import CacheSetHandler
 from app.services.job_execution.handlers.cache_get import CacheGetHandler
 from app.services.job_execution.handlers.ai_constrain_values import AiConstrainValuesClaudeHandler
 from app.services.job_execution.handlers.property_set import PropertySetHandler
+from app.services.job_execution.handlers.data_transform import DataTransformHandler
+from app.services.job_execution.handlers.search_icons import SearchIconsHandler
+from app.services.job_execution.handlers.upload_image_to_notion import UploadImageToNotionHandler
+from app.services.job_execution.handlers.ai_select_relation import AiSelectRelationHandler
+from app.services.job_execution.handlers.ai_prompt import AiPromptHandler
+from app.services.job_execution.handlers.templater import TemplaterHandler
 
 __all__ = [
     "OptimizeInputClaudeHandler",
@@ -14,4 +20,10 @@ __all__ = [
     "CacheGetHandler",
     "AiConstrainValuesClaudeHandler",
     "PropertySetHandler",
+    "DataTransformHandler",
+    "TemplaterHandler",
+    "SearchIconsHandler",
+    "UploadImageToNotionHandler",
+    "AiSelectRelationHandler",
+    "AiPromptHandler",
 ]

@@ -1,0 +1,11 @@
+id: d50f405c-f958-4179-b514-774a4e037ea2_pipeline_pipeline_icon_image_step_step_icon_optimize_query
+pipeline_run_id: d50f405c-f958-4179-b514-774a4e037ea2_pipeline_pipeline_icon_image
+step_id: step_icon_optimize_query
+step_template_id: step_template_optimize_input_claude
+status: succeeded
+owner_user_id: 871ba2fa-fd5d-4a81-9f0d-0d98b348ccde
+job_run_id: d50f405c-f958-4179-b514-774a4e037ea2
+stage_run_id: d50f405c-f958-4179-b514-774a4e037ea2_stage_stage_property_setting
+started_at: '2026-03-15T16:56:02.628596+00:00'
+completed_at: '2026-03-15T16:56:02.628599+00:00'
+kind: step_run

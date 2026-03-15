@@ -178,33 +178,53 @@ class ValidationService:
                         f"last step '{last_step.id}' has kind '{template.step_kind}'"
                     )
                 elif template.step_kind == "property_set":
-                    # Property Set must reference real schema property on job's target
-                    schema_property_id = last_step.config.get("schema_property_id")
+                    target_kind = last_step.config.get("target_kind", "schema_property")
                     data_target_id = last_step.config.get("data_target_id")
-                    if not schema_property_id or not data_target_id:
+
+                    if not data_target_id:
                         errors.append(
-                            f"Property Set step '{last_step.id}' must have config.schema_property_id and config.data_target_id"
+                            f"Property Set step '{last_step.id}' must have config.data_target_id"
                         )
                     elif data_target_id != job.target_id:
                         errors.append(
                             f"Property Set step '{last_step.id}' references target '{data_target_id}' "
                             f"but job target is '{job.target_id}'"
                         )
-                    elif self._target_schema_repo and not skip_reference_checks:
-                        schema = self._target_schema_repo.get_active_for_target(
-                            data_target_id, job.owner_user_id
-                        )
-                        if schema is None:
+                    elif target_kind == "page_metadata":
+                        target_field = last_step.config.get("target_field")
+                        if not target_field:
                             errors.append(
-                                f"no active schema for target '{data_target_id}'"
+                                f"Property Set step '{last_step.id}' with target_kind=page_metadata "
+                                "must have config.target_field"
                             )
-                        else:
-                            prop_ids = {p.id for p in schema.properties}
-                            if schema_property_id not in prop_ids:
+                        elif target_field not in ("cover_image", "icon_image"):
+                            errors.append(
+                                f"Property Set step '{last_step.id}' target_field '{target_field}' "
+                                "must be cover_image or icon_image"
+                            )
+                    else:
+                        # schema_property mode: require schema_property_id and validate against target
+                        schema_property_id = last_step.config.get("schema_property_id")
+                        if not schema_property_id:
+                            errors.append(
+                                f"Property Set step '{last_step.id}' must have config.schema_property_id "
+                                "(or use target_kind=page_metadata with target_field)"
+                            )
+                        elif self._target_schema_repo and not skip_reference_checks:
+                            schema = self._target_schema_repo.get_active_for_target(
+                                data_target_id, job.owner_user_id
+                            )
+                            if schema is None:
                                 errors.append(
-                                    f"Property Set step '{last_step.id}' references schema_property_id "
-                                    f"'{schema_property_id}' not found in target schema"
+                                    f"no active schema for target '{data_target_id}'"
                                 )
+                            else:
+                                prop_ids = {p.id for p in schema.properties}
+                                if schema_property_id not in prop_ids:
+                                    errors.append(
+                                        f"Property Set step '{last_step.id}' references schema_property_id "
+                                        f"'{schema_property_id}' not found in target schema"
+                                    )
 
         # Step input bindings resolution
         if self._step_template_repo:

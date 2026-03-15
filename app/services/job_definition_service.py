@@ -43,6 +43,16 @@ def _deep_copy_dict(d: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _collect_related_target_ids(graph) -> set[str]:
+    """Collect unique related_db (data_target_id) from all steps in the job graph."""
+    ids: set[str] = set()
+    for step in graph.steps:
+        related = step.config.get("related_db") if step.config else None
+        if isinstance(related, str) and related.strip():
+            ids.add(related.strip())
+    return ids
+
+
 def _canonical_hash(snapshot: dict[str, Any]) -> str:
     """Deterministic hash of snapshot for snapshot_ref."""
     canonical = json.dumps(snapshot, sort_keys=True, default=str)
@@ -101,11 +111,20 @@ class JobDefinitionService:
             else None
         )
 
+        related_target_ids = _collect_related_target_ids(graph)
+        targets_dict: dict[str, Any] = {}
+        owner_for_targets = owner_user_id
+        for tid in related_target_ids:
+            t = self._target_service.get_by_id(tid, owner_for_targets)
+            if t is not None:
+                targets_dict[tid] = domain_to_yaml_dict(t)
+
         snapshot: dict[str, Any] = {
             "job": job_graph_dict,
             "trigger": trigger_dict,
             "target": target_dict,
             "active_schema": active_schema_dict,
+            "targets": targets_dict,
         }
 
         snapshot_ref = (

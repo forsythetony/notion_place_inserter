@@ -18,6 +18,10 @@ class ExecutionContext:
     definition_snapshot_ref: str | None
     trigger_payload: dict[str, Any]
     dry_run: bool = False
+    owner_user_id: str = ""
+
+    # Current step run id (set during step execution for usage attribution)
+    step_run_id: str | None = None
 
     # Step outputs: step_id -> {output_name: value}
     step_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -32,7 +36,7 @@ class ExecutionContext:
     icon: dict[str, Any] | None = None
     cover: dict[str, Any] | None = None
 
-    # Injected service refs (claude, google, notion, etc.)
+    # Injected service refs (claude, google, notion, usage_accounting, etc.)
     _services: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def get_service(self, name: str) -> Any:

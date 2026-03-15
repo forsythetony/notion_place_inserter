@@ -45,14 +45,74 @@ stages:
                 signal_ref: step.step_google_places_lookup.search_response
             config:
               cache_key: google_places_response
+          - id: step_cache_place
+            step_template_id: step_template_cache_set
+            sequence: 4
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place
+            config:
+              cache_key: google_places_selected_place
   - id: stage_property_setting
     display_name: Property Setting
     sequence: 2
     pipeline_run_mode: parallel
     pipelines:
+      - id: pipeline_name
+        display_name: Set Name
+        sequence: 1
+        steps:
+          - id: step_property_set_name
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.displayName
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_name
+      - id: pipeline_source
+        display_name: Set Source
+        sequence: 2
+        steps:
+          - id: step_property_set_source
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                static_value: Notion Place Inserter
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_source
+      - id: pipeline_notes
+        display_name: Set Notes
+        sequence: 3
+        steps:
+          - id: step_ai_prompt_notes
+            step_template_id: step_template_ai_prompt
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place
+            config:
+              prompt: |
+                Rewrite this place information into a concise, engaging travel note (2-4 sentences).
+                Use ONLY the facts provided. Do not invent details.
+                Include location, type, and notable highlights when available.
+                Return only the paragraph text.
+              max_tokens: 512
+          - id: step_property_set_notes
+            step_template_id: step_template_property_set
+            sequence: 2
+            input_bindings:
+              value:
+                signal_ref: step.step_ai_prompt_notes.value
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_notes
       - id: pipeline_tags
         display_name: Set Tags
-        sequence: 1
+        sequence: 4
         steps:
           - id: step_cache_get_places
             step_template_id: step_template_cache_get
@@ -83,3 +143,227 @@ stages:
             config:
               data_target_id: target_places_to_visit
               schema_property_id: prop_tags
+      - id: pipeline_google_maps
+        display_name: Set Google Maps URL
+        sequence: 5
+        steps:
+          - id: step_property_set_google_maps
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.googleMapsUri
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_google_maps
+      - id: pipeline_neighborhood
+        display_name: Set Neighborhood
+        sequence: 6
+        steps:
+          - id: step_property_set_neighborhood
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.neighborhood
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_neighborhood
+      - id: pipeline_location
+        display_name: Set Location Relation
+        sequence: 6.5
+        steps:
+          - id: step_location_cache_get
+            step_template_id: step_template_cache_get
+            sequence: 1
+            config:
+              cache_key: google_places_selected_place
+          - id: step_location_extract_address
+            step_template_id: step_template_data_transform
+            sequence: 2
+            input_bindings:
+              value:
+                signal_ref: step.step_location_cache_get.value
+            config:
+              operation: extract_key
+              source_path: formattedAddress
+          - id: step_location_ai_select
+            step_template_id: step_template_ai_select_relation
+            sequence: 3
+            input_bindings:
+              source_value:
+                signal_ref: step.step_location_extract_address.transformed_value
+            config:
+              related_db: target_locations
+              key_lookup: title
+              prompt: Match the place to the best Location page (city, neighborhood, or region) based on address. Consider aliases (e.g. Twin Cities for Minneapolis/St. Paul metro).
+          - id: step_property_set_location
+            step_template_id: step_template_property_set
+            sequence: 4
+            input_bindings:
+              value:
+                signal_ref: step.step_location_ai_select.selected_relation
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_location
+      - id: pipeline_address
+        display_name: Set Address
+        sequence: 7
+        steps:
+          - id: step_property_set_address
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.formattedAddress
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_address
+      - id: pipeline_latitude
+        display_name: Set Latitude
+        sequence: 8
+        steps:
+          - id: step_property_set_latitude
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.latitude
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_latitude
+      - id: pipeline_longitude
+        display_name: Set Longitude
+        sequence: 9
+        steps:
+          - id: step_property_set_longitude
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.longitude
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_longitude
+      - id: pipeline_coordinates
+        display_name: Set Coordinates
+        sequence: 9.5
+        steps:
+          - id: step_coordinates_templater
+            step_template_id: step_template_templater
+            sequence: 1
+            config:
+              template: "{{latitude}}, {{longitude}}"
+              values:
+                latitude:
+                  signal_ref: step.step_google_places_lookup.selected_place.latitude
+                longitude:
+                  signal_ref: step.step_google_places_lookup.selected_place.longitude
+          - id: step_property_set_coordinates
+            step_template_id: step_template_property_set
+            sequence: 2
+            input_bindings:
+              value:
+                signal_ref: step.step_coordinates_templater.rendered_value
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_coordinates
+      - id: pipeline_main_type
+        display_name: Set Main Type
+        sequence: 10
+        steps:
+          - id: step_property_set_main_type
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.primaryType
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_main_type
+      - id: pipeline_url
+        display_name: Set Website URL
+        sequence: 11
+        steps:
+          - id: step_property_set_url
+            step_template_id: step_template_property_set
+            sequence: 1
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.selected_place.websiteUri
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_url
+      - id: pipeline_cover_image
+        display_name: Set Cover Image
+        sequence: 12
+        steps:
+          - id: step_cover_cache_get
+            step_template_id: step_template_cache_get
+            sequence: 1
+            config:
+              cache_key: google_places_selected_place
+          - id: step_cover_extract_url
+            step_template_id: step_template_data_transform
+            sequence: 2
+            input_bindings:
+              value:
+                signal_ref: step.step_cover_cache_get.value
+            config:
+              operation: extract_key
+              source_path: photos[0].name
+          - id: step_cover_upload_notion
+            step_template_id: step_template_upload_image_to_notion
+            sequence: 3
+            input_bindings:
+              value:
+                signal_ref: step.step_cover_extract_url.transformed_value
+            config: {}
+          - id: step_cover_property_set
+            step_template_id: step_template_property_set
+            sequence: 4
+            input_bindings:
+              value:
+                signal_ref: step.step_cover_upload_notion.notion_image_url
+            config:
+              data_target_id: target_places_to_visit
+              target_kind: page_metadata
+              target_field: cover_image
+      - id: pipeline_icon_image
+        display_name: Set Icon Image
+        sequence: 13
+        steps:
+          - id: step_icon_optimize_query
+            step_template_id: step_template_optimize_input_claude
+            sequence: 1
+            input_bindings:
+              query:
+                signal_ref: step.step_google_places_lookup.selected_place.displayName
+            config:
+              prompt: Generate a short icon search query (1-3 words) for this place.
+              linked_step_id: step_icon_search
+              include_target_query_schema: false
+          - id: step_icon_search
+            step_template_id: step_template_search_icons
+            sequence: 2
+            input_bindings:
+              query:
+                signal_ref: step.step_icon_optimize_query.optimized_query
+            config: {}
+          - id: step_icon_upload_notion
+            step_template_id: step_template_upload_image_to_notion
+            sequence: 3
+            input_bindings:
+              value:
+                signal_ref: step.step_icon_search.image_url
+            config: {}
+          - id: step_icon_property_set
+            step_template_id: step_template_property_set
+            sequence: 4
+            input_bindings:
+              value:
+                signal_ref: step.step_icon_upload_notion.notion_image_url
+            config:
+              data_target_id: target_places_to_visit
+              target_kind: page_metadata
+              target_field: icon_image

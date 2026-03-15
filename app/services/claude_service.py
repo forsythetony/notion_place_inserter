@@ -20,6 +20,7 @@ class ClaudeService:
 
     def __init__(self, api_key: str):
         self._client = anthropic.Anthropic(api_key=api_key)
+        self._last_usage: dict | None = None
 
     def rewrite_place_query(self, raw_query: str) -> str:
         """
@@ -344,6 +345,71 @@ Rules:
         ).info("claude_multi_select_validated")
         return canonical
 
+    def choose_best_relation_from_candidates(
+        self,
+        source_context: dict,
+        candidates: list[dict],
+        key_lookup: str = "title",
+        *,
+        prompt: str | None = None,
+    ) -> str | None:
+        """
+        Choose the best matching page from a list of relation candidates.
+        Uses source_context (e.g. Google Place data) to find the best match.
+        Returns page ID of selected candidate, or None if no confident match.
+        """
+        if not candidates:
+            logger.bind(key_lookup=key_lookup).info(
+                "claude_relation_select_skipped_no_candidates"
+            )
+            return None
+
+        context_str = json.dumps(source_context, default=str)[:8000]
+        candidates_str = json.dumps(candidates, default=str)[:6000]
+        extra = f"\n\nAdditional instructions: {prompt}" if prompt else ""
+
+        system = (
+            "You select the best matching relation from a list of candidates. "
+            "Use address geography (city, state, region) and any display name or place metadata. "
+            "Consider aliases: e.g. 'Twin Cities' matches Minneapolis/St. Paul metro; 'Minneapolis, MN' matches 'Twin Cities, MN' or 'Minneapolis'; city names match their metro/region. "
+            "Return only the page ID of the best match, or empty string if no confident match."
+        )
+        user_prompt = f"""Given this source data (address, place name, or related fields):
+{context_str}
+
+And these relation candidates (each has "id" = page ID, "{key_lookup}" = lookup value):
+{candidates_str}
+
+Select the single best matching candidate. Use the "{key_lookup}" field and geography from the source (city, state, region). Match aliases (e.g. Twin Cities = Minneapolis metro, city = region).
+- Return valid JSON only: {{"selected_id": "page-uuid"}} or {{"selected_id": ""}} if no match.
+- Return empty string for selected_id when uncertain.
+- Return JSON only, no markdown or prose.{extra}"""
+
+        try:
+            response = self._client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=128,
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = self._extract_text(response).strip()
+            if not raw:
+                return None
+            if raw.startswith("{") and raw.endswith("}"):
+                parsed = json.loads(raw)
+                sel = parsed.get("selected_id", "")
+                if isinstance(sel, str) and sel.strip():
+                    # Validate it matches a candidate
+                    for c in candidates:
+                        if c.get("id") == sel:
+                            return sel
+            return None
+        except Exception as exc:
+            logger.warning(
+                "claude_relation_select_exception | error={}", str(exc)
+            )
+            return None
+
     def _canonicalize_multi_select(
         self,
         raw_value: str,
@@ -508,6 +574,14 @@ Return only the search term, nothing else. No quotes, no punctuation, no explana
             return None
 
     def _extract_text(self, response) -> str:
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self._last_usage = {
+                "input_tokens": getattr(usage, "input_tokens", 0) or 0,
+                "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+            }
+        else:
+            self._last_usage = None
         if not response.content:
             return ""
         text_parts = []
@@ -566,3 +640,43 @@ Rules:
         )
         result = self._extract_text(response).strip()
         return result if result else None
+
+    def prompt_completion(
+        self,
+        prompt: str,
+        value: str | dict | None,
+        *,
+        max_tokens: int = 1024,
+    ) -> str:
+        """
+        Run a configurable prompt with an input value. Returns the model's text response.
+        The prompt may include {{value}} or {{input}} placeholders; otherwise value is appended.
+        If value is a dict, it is JSON-serialized for the prompt.
+        """
+        if value is None:
+            value_str = ""
+        elif isinstance(value, dict):
+            value_str = json.dumps(value, default=str)[:8000]
+        else:
+            value_str = str(value)
+
+        if "{{value}}" in prompt or "{{input}}" in prompt:
+            user_content = (
+                prompt.replace("{{value}}", value_str)
+                .replace("{{input}}", value_str)
+            )
+        else:
+            user_content = f"{prompt}\n\n{value_str}" if value_str else prompt
+
+        response = self._client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=max_tokens,
+            system="You follow instructions precisely. Return only the requested output.",
+            messages=[{"role": "user", "content": user_content}],
+        )
+        result = self._extract_text(response).strip()
+        return result
+
+    def get_last_usage(self) -> dict | None:
+        """Return last API usage from most recent call: {input_tokens, output_tokens}."""
+        return self._last_usage

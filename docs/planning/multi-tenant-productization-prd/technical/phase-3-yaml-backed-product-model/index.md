@@ -2,7 +2,7 @@
 
 ## Status
 
-- In progress: p3_pr01-p3_pr05 complete (2026-03-14)
+- Complete: p3_pr01-p3_pr08 (2026-03-15)
 - Scope: define the canonical product model and back it with local YAML repositories before moving definitions into Postgres/Supabase
 
 ## Phase 3 PR Task Index
@@ -688,7 +688,28 @@ Suggested config:
 
 - `cache_key`
 
-### 6. Property Set
+### 6. AI Select Relation
+
+Purpose:
+
+- use AI to select the best relation from a related database by key lookup
+
+Suggested config:
+
+- `related_db` (required): data_target_id of the related database
+- `key_lookup` (default: title): property to use for matching (e.g. title, Name)
+- `prompt` (optional): additional instructions for the AI selection
+
+Input: `source_value` or `value` (e.g. cached Google Place record)
+
+Outputs:
+
+- `selected_page_pointer`: `{"id": "page-uuid"}` or None
+- `selected_relation`: `[{"id": "page-uuid"}]` or `[]` (Notion-ready format)
+
+When no confident match is found, returns empty relation so the run continues.
+
+### 7. Property Set
 
 Purpose:
 
@@ -706,7 +727,7 @@ Rules:
 - when a pipeline terminates in `Property Set`, it must reference a real target schema property
 - this should be validated on save and enforced at execution time
 
-### 7. Utility: Extract Target Property Options
+### 8. Utility: Extract Target Property Options
 
 Purpose:
 
@@ -973,7 +994,7 @@ owner_user_id: user_tony
 target_template_id: target_template_notion_database
 connector_instance_id: connector_instance_notion_tony_main
 display_name: Places to Visit
-external_target_id: 1e2a5cd4-f107-490f-9b7a-4af865fd1beb
+external_target_id: 9592d56b-899e-440e-9073-b2f0768669ad
 status: active
 active_schema_snapshot_id: schema_places_to_visit_v3
 target_settings:

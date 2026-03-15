@@ -76,6 +76,7 @@ def invoke_trigger(
                         job_id=f"sync_{run_id[:8]}",
                         trigger_payload=trigger_payload,
                         definition_snapshot_ref=snapshot.snapshot_ref,
+                        owner_user_id=user_id,
                     )
                     return result
         places_service = getattr(request.app.state, "places_service", None)
@@ -143,11 +144,22 @@ def invoke_trigger(
     job_id = _job_id()
     run_id = str(uuid.uuid4())
     recipient_whatsapp = None
+    job_definition_id = snapshot.snapshot["job"]["id"]
+    target_data = snapshot.snapshot.get("target") or {}
+    target_id = target_data.get("id", "")
 
     try:
-        run_repo.create_job(job_id=job_id, keywords=body.keywords, status="queued")
-        run_repo.create_run(job_id=job_id, run_id=run_id, status="pending")
-        job_definition_id = snapshot.snapshot["job"]["id"]
+        run_repo.create_job(
+            job_id=job_id,
+            keywords=body.keywords,
+            status="queued",
+            owner_user_id=user_id,
+            run_id=run_id,
+            job_definition_id=job_definition_id,
+            trigger_id=trigger.id,
+            target_id=target_id,
+            definition_snapshot_ref=snapshot.snapshot_ref,
+        )
         payload = {
             "job_id": job_id,
             "run_id": run_id,

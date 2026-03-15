@@ -68,3 +68,43 @@ def test_schema_cache_invalidate():
     cache.invalidate("Places to Visit")
     cache.get("Places to Visit")
     assert mock_client.databases.retrieve.call_count == 2
+
+
+def test_schema_cache_supports_configured_data_source_id():
+    """Configured IDs can be direct data source IDs (database lookup may 404)."""
+    mock_client = MagicMock()
+    mock_client.databases.retrieve.side_effect = Exception("404")
+    mock_client.data_sources.retrieve.return_value = {
+        "title": [{"plain_text": "Places to Visit"}],
+        "properties": {"Name": {"type": "title"}},
+    }
+
+    cache = SchemaCache(mock_client, database_ids=["ds-123"], ttl_seconds=300)
+    entry = cache.get("Places to Visit")
+
+    assert entry.data_source_id == "ds-123"
+    assert "Name" in entry.properties
+
+
+def test_schema_cache_skips_unusable_ids_and_uses_next():
+    """One bad configured ID should not fail resolution if a later ID works."""
+    mock_client = MagicMock()
+
+    def retrieve_db(database_id: str):
+        if database_id == "bad-id":
+            raise Exception("404")
+        return {
+            "title": [{"plain_text": "Places"}],
+            "data_sources": [{"id": "ds-good", "name": "Places to Visit"}],
+        }
+
+    mock_client.databases.retrieve.side_effect = retrieve_db
+    mock_client.data_sources.retrieve.return_value = {
+        "properties": {"Name": {"type": "title"}},
+    }
+
+    cache = SchemaCache(mock_client, database_ids=["bad-id", "db-good"], ttl_seconds=300)
+    entry = cache.get("Places to Visit")
+
+    assert entry.data_source_id == "ds-good"
+    assert "Name" in entry.properties

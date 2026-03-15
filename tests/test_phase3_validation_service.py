@@ -300,3 +300,134 @@ def test_validation_error_aggregates_messages():
     assert len(err.errors) == 2
     assert "error one" in str(err)
     assert "error two" in str(err)
+
+
+def test_validation_service_accepts_property_set_page_metadata_cover_image():
+    """Property Set with target_kind=page_metadata and target_field=cover_image is valid."""
+    job = JobDefinition(
+        id="j1",
+        owner_user_id="u1",
+        display_name="Test",
+        trigger_id="t1",
+        target_id="d1",
+        status="active",
+        stage_ids=["s1"],
+    )
+    stage = StageDefinition(
+        id="s1",
+        job_id="j1",
+        display_name="S1",
+        sequence=1,
+        pipeline_ids=["p1"],
+    )
+    pipeline = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="P1",
+        sequence=1,
+        step_ids=["st1"],
+    )
+    st1 = StepInstance(
+        id="st1",
+        pipeline_id="p1",
+        step_template_id="step_template_property_set",
+        display_name="ST1",
+        sequence=1,
+        input_bindings={},
+        config={
+            "data_target_id": "d1",
+            "target_kind": "page_metadata",
+            "target_field": "cover_image",
+        },
+    )
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
+    svc = _validation_service()
+    svc.validate_job_graph(graph, skip_reference_checks=True)
+
+
+def test_validation_service_accepts_property_set_page_metadata_icon_image():
+    """Property Set with target_kind=page_metadata and target_field=icon_image is valid."""
+    job = JobDefinition(
+        id="j1",
+        owner_user_id="u1",
+        display_name="Test",
+        trigger_id="t1",
+        target_id="d1",
+        status="active",
+        stage_ids=["s1"],
+    )
+    stage = StageDefinition(
+        id="s1",
+        job_id="j1",
+        display_name="S1",
+        sequence=1,
+        pipeline_ids=["p1"],
+    )
+    pipeline = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="P1",
+        sequence=1,
+        step_ids=["st1"],
+    )
+    st1 = StepInstance(
+        id="st1",
+        pipeline_id="p1",
+        step_template_id="step_template_property_set",
+        display_name="ST1",
+        sequence=1,
+        input_bindings={},
+        config={
+            "data_target_id": "d1",
+            "target_kind": "page_metadata",
+            "target_field": "icon_image",
+        },
+    )
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
+    svc = _validation_service()
+    svc.validate_job_graph(graph, skip_reference_checks=True)
+
+
+def test_validation_service_rejects_property_set_page_metadata_invalid_target_field():
+    """Property Set with target_kind=page_metadata and invalid target_field fails."""
+    job = JobDefinition(
+        id="j1",
+        owner_user_id="u1",
+        display_name="Test",
+        trigger_id="t1",
+        target_id="d1",
+        status="active",
+        stage_ids=["s1"],
+    )
+    stage = StageDefinition(
+        id="s1",
+        job_id="j1",
+        display_name="S1",
+        sequence=1,
+        pipeline_ids=["p1"],
+    )
+    pipeline = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="P1",
+        sequence=1,
+        step_ids=["st1"],
+    )
+    st1 = StepInstance(
+        id="st1",
+        pipeline_id="p1",
+        step_template_id="step_template_property_set",
+        display_name="ST1",
+        sequence=1,
+        input_bindings={},
+        config={
+            "data_target_id": "d1",
+            "target_kind": "page_metadata",
+            "target_field": "invalid_field",
+        },
+    )
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
+    svc = _validation_service()
+    with pytest.raises(ValidationError) as exc_info:
+        svc.validate_job_graph(graph, skip_reference_checks=True)
+    assert "cover_image" in str(exc_info.value) or "icon_image" in str(exc_info.value)

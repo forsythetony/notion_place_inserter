@@ -4,7 +4,7 @@ Run with: pytest tests/test_notion_write_step_live.py -m live_notion -q
 
 Requires env vars:
   - NOTION_API_KEY
-  - NOTION_TEST_DATA_SOURCE_ID (e.g. 1e2a5cd4-f107-490f-9b7a-4af865fd1beb)
+  - NOTION_TEST_DATA_SOURCE_ID (e.g. 9592d56b-899e-440e-9073-b2f0768669ad)
 """
 
 import os
@@ -20,7 +20,7 @@ def test_notion_write_step_live():
     """Create a minimal page via NotionService.create_page to debug connector in isolation."""
     api_key = os.environ.get("NOTION_API_KEY")
     # data_source_id = os.environ.get("NOTION_TEST_DATA_SOURCE_ID")
-    data_source_id = "1e2a5cd4-f107-490f-9b7a-4af865fd1beb"
+    data_source_id = "9592d56b-899e-440e-9073-b2f0768669ad"
 
     if not api_key:
         pytest.skip("NOTION_API_KEY not set; skip live Notion write test")

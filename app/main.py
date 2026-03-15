@@ -35,9 +35,10 @@ from app.services.target_service import TargetService
 from app.services.schema_sync_service import SchemaSyncService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
+from app.repositories import YamlRunRepository
+from app.services.run_lifecycle_adapter import RunLifecycleAdapter
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.services.supabase_run_repository import SupabaseRunRepository
 from app.routes import auth_context, invitations, locations, signup, test
 from app.services.signup_orchestration_service import SignupOrchestrationService
 
@@ -175,9 +176,8 @@ async def lifespan(app: FastAPI):
     app.state.supabase_queue_repository = SupabaseQueueRepository(
         supabase_client, supabase_config
     )
-    app.state.supabase_run_repository = SupabaseRunRepository(
-        supabase_client, supabase_config
-    )
+    yaml_run_repo = YamlRunRepository()
+    app.state.supabase_run_repository = RunLifecycleAdapter(yaml_run_repo)
     app.state.supabase_auth_repository = SupabaseAuthRepository(
         supabase_client, supabase_config
     )
@@ -185,10 +185,9 @@ async def lifespan(app: FastAPI):
         supabase_client, app.state.supabase_auth_repository
     )
 
-    notion_svc = NotionService(api_key=notion_key)
-    notion_svc.initialize()
-
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+    notion_svc = NotionService(api_key=notion_key, dry_run=dry_run)
+    notion_svc.initialize()
 
     freepik_key = os.environ.get("FREEPIK_API_KEY")
     freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
@@ -260,7 +259,9 @@ async def lifespan(app: FastAPI):
         notion_service=notion_svc,
         claude_service=app.state.claude_service,
         google_places_service=app.state.google_places_service,
+        freepik_service=freepik_svc,
         dry_run=dry_run,
+        run_repository=yaml_run_repo,
     )
     app.state.job_execution_service = job_execution_service
 

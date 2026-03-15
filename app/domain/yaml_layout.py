@@ -154,3 +154,47 @@ def tenant_job_path(
 ) -> str:
     """Path to a tenant job file: tenants/<owner>/jobs/<id>.yaml."""
     return f"{tenant_jobs_dir(owner_user_id, base)}/{job_id}.yaml"
+
+
+def tenant_job_run_path(
+    owner_user_id: str, run_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a job run file: tenants/<owner>/runs/<run_id>.yaml."""
+    return f"{tenant_runs_dir(owner_user_id, base)}/{run_id}.yaml"
+
+
+def tenant_stage_run_path(
+    owner_user_id: str, job_run_id: str, stage_run_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a stage run file: tenants/<owner>/runs/<job_run_id>/stages/<stage_run_id>.yaml."""
+    return f"{tenant_runs_dir(owner_user_id, base)}/{job_run_id}/stages/{stage_run_id}.yaml"
+
+
+def tenant_pipeline_run_path(
+    owner_user_id: str,
+    job_run_id: str,
+    stage_run_id: str,
+    pipeline_run_id: str,
+    base: str = PRODUCT_MODEL_ROOT,
+) -> str:
+    """Path to a pipeline run file under stage run."""
+    return f"{tenant_runs_dir(owner_user_id, base)}/{job_run_id}/stages/{stage_run_id}/pipelines/{pipeline_run_id}.yaml"
+
+
+def tenant_step_run_path(
+    owner_user_id: str,
+    job_run_id: str,
+    stage_run_id: str,
+    pipeline_run_id: str,
+    step_run_id: str,
+    base: str = PRODUCT_MODEL_ROOT,
+) -> str:
+    """Path to a step run file under pipeline run."""
+    return f"{tenant_runs_dir(owner_user_id, base)}/{job_run_id}/stages/{stage_run_id}/pipelines/{pipeline_run_id}/steps/{step_run_id}.yaml"
+
+
+def tenant_usage_record_path(
+    owner_user_id: str, job_run_id: str, record_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a usage record file: tenants/<owner>/runs/<job_run_id>/usage/<record_id>.yaml."""
+    return f"{tenant_runs_dir(owner_user_id, base)}/{job_run_id}/usage/{record_id}.yaml"

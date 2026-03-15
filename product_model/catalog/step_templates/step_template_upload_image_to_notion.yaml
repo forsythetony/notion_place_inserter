@@ -1,0 +1,26 @@
+id: step_template_upload_image_to_notion
+slug: upload_image_to_notion
+display_name: Upload Image to Notion
+step_kind: upload_image_to_notion
+description: Ingest external image URL or Google photo name and return Notion payload for icon/cover
+input_contract:
+  fields:
+    value:
+      type: string
+      required: true
+output_contract:
+  fields:
+    notion_image_url:
+      type: any
+config_schema:
+  connector_instance_id:
+    type: string
+  source_type:
+    type: string
+    default: external_url
+  timeout_ms:
+    type: integer
+runtime_binding: upload_image_to_notion
+category: output
+status: active
+visibility: platform

@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-create-users supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-create-users supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -27,6 +27,7 @@ help:
 	@echo "  make run-async         - Start the server with async locations (default)"
 	@echo "  make run-sync          - Start the server with sync locations (LOCATIONS_ASYNC_ENABLED=0)"
 	@echo "  make run-worker        - Start the Supabase queue consumer (run alongside API for async locations)"
+	@echo "  make run-worker-dry-run - Start worker in dry-run mode (no Notion writes)"
 	@echo "  make kill-port         - Kill process on port $(PORT)"
 	@echo "  make clear-logs        - Remove log files from logs/"
 	@echo "  make test              - Quick smoke test (curl health check)"
@@ -36,6 +37,7 @@ help:
 	@echo "  make test-google-places - Test Google Places search (server must be running)"
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
+	@echo "  make show-runs [USER_ID=bootstrap] [RUN_ID=<id>] - Show run/usage YAML files (omit RUN_ID to show all runs for user)"
 	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /triggers/bootstrap/locations enqueue"
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
@@ -93,6 +95,9 @@ run-sync:
 run-worker:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && . env/bin/activate 2>/dev/null || true; LOG_LEVEL=$(LOG_LEVEL) python -m app.worker_main'
 
+run-worker-dry-run:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; DRY_RUN=1; set +a && . env/bin/activate 2>/dev/null || true; LOG_LEVEL=$(LOG_LEVEL) DRY_RUN=1 python -m app.worker_main'
+
 kill-port:
 	@bash -c 'pid=$$(lsof -ti:$(PORT)); if [ -n "$$pid" ]; then kill -9 $$pid && echo "Killed process on port $(PORT)"; else echo "Nothing running on port $(PORT)"; fi'
 
@@ -120,6 +125,31 @@ test-random-location:
 test-locations:
 	@curl -s -X POST -H "Authorization: $(SECRET)" -H "Content-Type: application/json" \
 		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/bootstrap/locations"
+
+# Show persisted run/usage YAML files (p3_pr08). USER_ID defaults to bootstrap.
+# Usage: make show-runs RUN_ID=<run_id>  or  make show-runs  (shows all runs for user)
+USER_ID ?= bootstrap
+show-runs:
+	@runs_dir="product_model/tenants/$(USER_ID)/runs"; \
+	if [ ! -d "$$runs_dir" ]; then \
+		echo "No runs directory at $$runs_dir"; exit 1; \
+	fi; \
+	if [ -n "$(RUN_ID)" ]; then \
+		echo "--- Run $(RUN_ID) ---"; \
+		run_file="$$runs_dir/$(RUN_ID).yaml"; \
+		if [ -f "$$run_file" ]; then cat "$$run_file"; echo ""; fi; \
+		run_subdir="$$runs_dir/$(RUN_ID)"; \
+		if [ -d "$$run_subdir" ]; then \
+			find "$$run_subdir" -name "*.yaml" -type f -exec stat -f '%m|%N' {} \; | sort -n -t'|' -k1 | cut -d'|' -f2- | while read f; do \
+				echo ""; echo "=== $$f ==="; cat "$$f"; \
+			done; \
+		fi; \
+	else \
+		echo "--- All runs for $(USER_ID) ---"; \
+		find "$$runs_dir" -name "*.yaml" -type f -exec stat -f '%m|%N' {} \; | sort -n -t'|' -k1 | cut -d'|' -f2- | while read f; do \
+			echo ""; echo "=== $$f ==="; cat "$$f"; \
+		done; \
+	fi
 
 test-remote:
 	@bash -c 'if [ -z "$(REMOTE_BASE_URL)" ]; then echo "Usage: make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> [KEYWORDS=\"...\"]"; exit 1; fi; \

@@ -48,6 +48,27 @@ def test_create_page_omits_icon_cover_when_not_provided():
     assert "properties" in call_kwargs
 
 
+def test_create_page_honors_dry_run():
+    """create_page returns dry-run payload and does not call Notion API when dry_run is enabled."""
+    mock_client = MagicMock()
+    svc = NotionService(api_key="test-key", dry_run=True)
+    svc._client = mock_client
+
+    result = svc.create_page(
+        data_source_id="ds-123",
+        properties={"Title": {"title": [{"text": {"content": "Test"}}]}},
+        icon={"type": "external", "external": {"url": "https://example.com/icon.png"}},
+        cover={"type": "external", "external": {"url": "https://example.com/cover.jpg"}},
+    )
+
+    mock_client.pages.create.assert_not_called()
+    assert result["mode"] == "dry_run"
+    assert result["parent"] == {"data_source_id": "ds-123"}
+    assert "properties" in result
+    assert "icon" in result
+    assert "cover" in result
+
+
 def test_upload_cover_from_bytes_returns_success_when_already_uploaded_after_send():
     """If retrieve returns uploaded right after send, skip complete and succeed."""
     mock_client = MagicMock()

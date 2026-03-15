@@ -19,6 +19,7 @@ from app.repositories.yaml_repositories import (
     YamlTargetRepository,
     YamlTriggerRepository,
 )
+from app.repositories.yaml_run_repository import YamlRunRepository
 
 __all__ = [
     "load_yaml_file",
@@ -36,4 +37,5 @@ __all__ = [
     "YamlTargetTemplateRepository",
     "YamlTargetRepository",
     "YamlTriggerRepository",
+    "YamlRunRepository",
 ]

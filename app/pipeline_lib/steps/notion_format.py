@@ -124,4 +124,21 @@ def format_value_for_notion(value: object, prop_schema: PropertySchema) -> dict 
             return None
         return {"phone_number": str_val}
 
+    if prop_type == "relation":
+        if value is None:
+            return {"relation": []}
+        if isinstance(value, dict) and "relation" in value:
+            rel_list = value.get("relation") or []
+            if isinstance(rel_list, list):
+                return {"relation": [{"id": r["id"]} for r in rel_list if isinstance(r, dict) and r.get("id")]}
+        if isinstance(value, list):
+            return {
+                "relation": [
+                    {"id": r["id"]} if isinstance(r, dict) else {"id": str(r)}
+                    for r in value
+                    if (isinstance(r, dict) and r.get("id")) or r
+                ]
+            }
+        return {"relation": []}
+
     return None

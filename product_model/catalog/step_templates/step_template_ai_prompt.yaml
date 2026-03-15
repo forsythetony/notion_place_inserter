@@ -1,0 +1,26 @@
+id: step_template_ai_prompt
+slug: ai_prompt
+display_name: AI Prompt
+step_kind: ai_prompt
+description: Run a configurable AI prompt on an input value; returns the model's text response
+input_contract:
+  fields:
+    value:
+      type: any
+      description: Input string or object to pass to the prompt (use {{value}} or {{input}} in prompt)
+output_contract:
+  fields:
+    value:
+      type: string
+config_schema:
+  prompt:
+    type: string
+    required: true
+    description: The prompt. Use {{value}} or {{input}} as placeholder; otherwise input is appended.
+  max_tokens:
+    type: integer
+    description: Max tokens for the response (default 1024)
+runtime_binding: ai_prompt
+category: ai
+status: active
+visibility: platform

@@ -73,7 +73,10 @@ def _resolve_signal_ref(ref: str, ctx: ExecutionContext) -> Any:
     if parts[0] == "step" and len(parts) >= 3:
         step_id = parts[1]
         output_name = parts[2]
-        return ctx.get_step_output(step_id, output_name)
+        out = ctx.get_step_output(step_id, output_name)
+        if len(parts) == 3:
+            return out
+        return _resolve_path(out, parts[3:])
     return None
 
 
@@ -87,6 +90,28 @@ def _resolve_trigger_ref(parts: list[str], payload: dict[str, Any]) -> Any:
             cur = cur[p]
         else:
             return None
+    return cur
+
+
+def _resolve_path(value: Any, parts: list[str]) -> Any:
+    """Resolve nested dict/list path parts from an already-resolved base value."""
+    cur: Any = value
+    for p in parts:
+        if isinstance(cur, dict):
+            if p not in cur:
+                return None
+            cur = cur[p]
+            continue
+        if isinstance(cur, list):
+            try:
+                idx = int(p)
+            except (TypeError, ValueError):
+                return None
+            if idx < 0 or idx >= len(cur):
+                return None
+            cur = cur[idx]
+            continue
+        return None
     return cur
 
 
