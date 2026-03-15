@@ -345,6 +345,8 @@ class JobExecutionService:
                     pipeline_run_id,
                     e,
                 )
+                # Must not proceed: step_runs FK requires pipeline_run_executions row to exist
+                raise
         steps_data = pipeline_data.get("steps") or []
         try:
             for step_data in sorted(steps_data, key=lambda s: s.get("sequence", 0)):
