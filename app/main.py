@@ -34,6 +34,7 @@ from app.services.trigger_service import TriggerService
 from app.services.target_service import TargetService
 from app.services.schema_sync_service import SchemaSyncService
 from app.services.job_definition_service import JobDefinitionService
+from app.services.job_execution import JobExecutionService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
@@ -254,6 +255,14 @@ async def lifespan(app: FastAPI):
     app.state.target_service = target_service
     app.state.job_definition_service = job_definition_service
     app.state.schema_sync_service = schema_sync_service
+
+    job_execution_service = JobExecutionService(
+        notion_service=notion_svc,
+        claude_service=app.state.claude_service,
+        google_places_service=app.state.google_places_service,
+        dry_run=dry_run,
+    )
+    app.state.job_execution_service = job_execution_service
 
     async_enabled = os.environ.get("LOCATIONS_ASYNC_ENABLED", "1").strip().lower() in (
         "1",

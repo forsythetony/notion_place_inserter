@@ -162,6 +162,7 @@ class NotionService:
         """Create a new page in the given data source with the provided properties.
         Optionally include top-level icon and cover (Notion page metadata, not properties).
         """
+        print(f"Creating page in data source {data_source_id}")
         payload: dict = {
             "parent": {"data_source_id": data_source_id},
             "properties": properties,

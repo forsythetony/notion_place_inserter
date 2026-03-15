@@ -47,8 +47,8 @@ Migrate runtime execution from code-bound registries to YAML-backed definitions 
 
 ## Verification checklist
 
-- [ ] Job runs from YAML-backed snapshot.
-- [ ] Stage/pipeline/step order matches architecture.
-- [ ] Signal bindings resolve correctly.
-- [ ] Run-scoped cache works.
-- [ ] Code-bound registries are no longer used for execution.
+- [x] Job runs from YAML-backed snapshot.
+- [x] Stage/pipeline/step order matches architecture.
+- [x] Signal bindings resolve correctly.
+- [x] Run-scoped cache works.
+- [x] Code-bound registries are no longer used for execution.

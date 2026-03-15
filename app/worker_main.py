@@ -20,15 +20,27 @@ from app.queue.memory_diagnostics import (
     start_tracemalloc_if_enabled,
 )
 from app.queue.worker import _parse_retry_delays, run_worker_loop
+from app.repositories import (
+    YamlAppConfigRepository,
+    YamlConnectorInstanceRepository,
+    YamlJobRepository,
+    YamlStepTemplateRepository,
+    YamlTargetSchemaRepository,
+    YamlTargetTemplateRepository,
+    YamlTargetRepository,
+    YamlTriggerRepository,
+)
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
-from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
-from app.services.location_service import LocationService
+from app.services.job_definition_service import JobDefinitionService
+from app.services.job_execution import JobExecutionService
 from app.services.notion_service import NotionService
-from app.services.places_service import PlacesService
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
+from app.services.target_service import TargetService
+from app.services.trigger_service import TriggerService
+from app.services.validation_service import ValidationService
 from app.services.whatsapp_service import WhatsAppService
 
 # Worker tuning (optional env overrides; parsed after bootstrap_env in main)
@@ -139,21 +151,41 @@ def main() -> None:
     notion_svc.initialize()
 
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
-    freepik_key = os.environ.get("FREEPIK_API_KEY")
-    freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
 
     claude_svc = ClaudeService(api_key=anthropic_token)
     google_places_svc = GooglePlacesService(api_key=google_places_key)
-    location_svc = LocationService(
+
+    step_template_repo = YamlStepTemplateRepository()
+    target_template_repo = YamlTargetTemplateRepository()
+    trigger_repo = YamlTriggerRepository()
+    target_repo = YamlTargetRepository()
+    target_schema_repo = YamlTargetSchemaRepository()
+    app_config_repo = YamlAppConfigRepository()
+    connector_instance_repo = YamlConnectorInstanceRepository()
+    validation_service = ValidationService(
+        trigger_repo=trigger_repo,
+        target_repo=target_repo,
+        target_schema_repo=target_schema_repo,
+        step_template_repo=step_template_repo,
+        app_config_repo=app_config_repo,
+        connector_instance_repo=connector_instance_repo,
+        target_template_repo=target_template_repo,
+    )
+    job_repo = YamlJobRepository(validation_service=validation_service)
+    trigger_service = TriggerService(trigger_repository=trigger_repo)
+    target_service = TargetService(
+        target_repository=target_repo,
+        target_schema_repository=target_schema_repo,
+    )
+    job_definition_service = JobDefinitionService(
+        job_repository=job_repo,
+        trigger_service=trigger_service,
+        target_service=target_service,
+    )
+    job_execution_service = JobExecutionService(
         notion_service=notion_svc,
         claude_service=claude_svc,
-    )
-    places_svc = PlacesService(
-        notion_svc,
-        claude_service=claude_svc,
         google_places_service=google_places_svc,
-        location_service=location_svc,
-        freepik_service=freepik_svc,
         dry_run=dry_run,
     )
 
@@ -220,7 +252,8 @@ def main() -> None:
         run_worker_loop(
             queue_repo,
             run_repo,
-            places_svc,
+            job_execution_service,
+            job_definition_service,
             event_bus,
             poll_interval_seconds=_WORKER_POLL_INTERVAL,
             vt_seconds=_WORKER_VT_SECONDS,

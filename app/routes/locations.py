@@ -57,9 +57,36 @@ def invoke_trigger(
 
     async_enabled = getattr(request.app.state, "locations_async_enabled", False)
     if not async_enabled:
-        places_service = request.app.state.places_service
-        return places_service.create_place_from_query(body.keywords)
+        job_execution_service = getattr(
+            request.app.state, "job_execution_service", None
+        )
+        trigger_service_sync = getattr(request.app.state, "trigger_service", None)
+        job_def_svc = getattr(request.app.state, "job_definition_service", None)
+        if job_execution_service and trigger_service_sync and job_def_svc:
+            normalized_path = _normalize_trigger_path(path)
+            trigger = trigger_service_sync.resolve_by_path(normalized_path, user_id)
+            if trigger:
+                snapshot = job_def_svc.resolve_for_run(trigger.job_id, user_id)
+                if snapshot:
+                    run_id = str(uuid.uuid4())
+                    trigger_payload = {"raw_input": body.keywords}
+                    result = job_execution_service.execute_snapshot_run(
+                        snapshot=snapshot.snapshot,
+                        run_id=run_id,
+                        job_id=f"sync_{run_id[:8]}",
+                        trigger_payload=trigger_payload,
+                        definition_snapshot_ref=snapshot.snapshot_ref,
+                    )
+                    return result
+        places_service = getattr(request.app.state, "places_service", None)
+        if places_service:
+            return places_service.create_place_from_query(body.keywords)
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to run pipeline (sync mode)",
+        )
 
+    # Async path: enqueue for worker
     queue_repo = getattr(request.app.state, "supabase_queue_repository", None)
     run_repo = getattr(request.app.state, "supabase_run_repository", None)
     job_definition_service = getattr(
@@ -128,6 +155,7 @@ def invoke_trigger(
             "job_definition_id": job_definition_id,
             "job_slug": "notion_place_inserter",
             "definition_snapshot_ref": snapshot.snapshot_ref,
+            "owner_user_id": user_id,
         }
         if recipient_whatsapp is not None:
             payload["recipient_whatsapp"] = recipient_whatsapp

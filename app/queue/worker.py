@@ -19,7 +19,8 @@ from app.services.supabase_queue_repository import QueueMessage, SupabaseQueueRe
 from app.services.supabase_run_repository import SupabaseRunRepository
 
 if TYPE_CHECKING:
-    from app.services.places_service import PlacesService
+    from app.services.job_definition_service import JobDefinitionService
+    from app.services.job_execution import JobExecutionService
 
 # Terminal statuses for idempotency; run already completed
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed"})
@@ -56,9 +57,30 @@ def _is_non_retriable(error: BaseException) -> bool:
     return code in _NON_RETRIABLE_SQLSTATES if code else False
 
 
-def _run_pipeline_sync(places_service: "PlacesService", keywords: str) -> dict:
-    """Run the synchronous pipeline (call from worker thread)."""
-    return places_service.create_place_from_query(keywords)
+def _run_pipeline_sync(
+    job_execution_service: "JobExecutionService",
+    job_definition_service: "JobDefinitionService",
+    job_definition_id: str,
+    owner_user_id: str,
+    run_id: str,
+    job_id: str,
+    keywords: str,
+    definition_snapshot_ref: str | None,
+) -> dict:
+    """Run snapshot-driven pipeline (call from worker thread)."""
+    snapshot_obj = job_definition_service.resolve_for_run(job_definition_id, owner_user_id)
+    if not snapshot_obj:
+        raise RuntimeError(
+            f"Job definition unavailable: job_id={job_definition_id} owner={owner_user_id}"
+        )
+    trigger_payload = {"raw_input": keywords}
+    return job_execution_service.execute_snapshot_run(
+        snapshot=snapshot_obj.snapshot,
+        run_id=run_id,
+        job_id=job_id,
+        trigger_payload=trigger_payload,
+        definition_snapshot_ref=definition_snapshot_ref or snapshot_obj.snapshot_ref,
+    )
 
 
 def _normalize_error(error: BaseException) -> str:
@@ -67,10 +89,13 @@ def _normalize_error(error: BaseException) -> str:
     return msg[:500] if len(msg) > 500 else msg
 
 
-def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None, str | None, str | None] | None:
+def _extract_payload(
+    msg: QueueMessage,
+) -> tuple[str, str, str, str | None, str | None, str | None, str | None, str | None] | None:
     """
-    Extract job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug from message payload.
-    Returns None if payload is malformed. job_definition_id and job_slug are optional (for backward compat).
+    Extract job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug,
+    owner_user_id, definition_snapshot_ref from message payload.
+    Returns None if payload is malformed.
     """
     p = msg.payload or {}
     job_id = p.get("job_id")
@@ -81,6 +106,8 @@ def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None, str 
     recipient = p.get("recipient_whatsapp")
     job_def_id = p.get("job_definition_id")
     job_slug = p.get("job_slug")
+    owner_user_id = p.get("owner_user_id")
+    snapshot_ref = p.get("definition_snapshot_ref")
     return (
         str(job_id),
         str(run_id),
@@ -88,6 +115,8 @@ def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None, str 
         str(recipient) if recipient else None,
         str(job_def_id) if job_def_id else None,
         str(job_slug) if job_slug else None,
+        str(owner_user_id) if owner_user_id else None,
+        str(snapshot_ref) if snapshot_ref else None,
     )
 
 
@@ -111,7 +140,8 @@ def _parse_retry_delays(raw: str) -> tuple[int, ...]:
 async def run_worker_loop(
     queue_repo: SupabaseQueueRepository,
     run_repo: SupabaseRunRepository,
-    places_service: "PlacesService",
+    job_execution_service: "JobExecutionService",
+    job_definition_service: "JobDefinitionService",
     event_bus: EventBus,
     *,
     poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS,
@@ -219,7 +249,8 @@ async def run_worker_loop(
                     msg,
                     queue_repo,
                     run_repo,
-                    places_service,
+                    job_execution_service,
+                    job_definition_service,
                     event_bus,
                     loop,
                     retry_delays_seconds=retry_delays_seconds,
@@ -250,7 +281,7 @@ def _handle_final_failure(
     if extracted is None:
         queue_repo.archive(msg.message_id)
         return
-    job_id, run_id, keywords, recipient_whatsapp, _jd, _js = extracted
+    job_id, run_id, keywords, recipient_whatsapp, _jd, _js, _owner, _snap = extracted
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
     try:
@@ -288,7 +319,8 @@ async def _process_message(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
     run_repo: SupabaseRunRepository,
-    places_service: "PlacesService",
+    job_execution_service: "JobExecutionService",
+    job_definition_service: "JobDefinitionService",
     event_bus: EventBus,
     loop: asyncio.AbstractEventLoop,
     *,
@@ -341,7 +373,16 @@ async def _process_message(
         queue_repo.archive(msg.message_id)
         return
 
-    job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug = extracted
+    (
+        job_id,
+        run_id,
+        keywords,
+        recipient_whatsapp,
+        job_definition_id,
+        job_slug,
+        owner_user_id,
+        definition_snapshot_ref,
+    ) = extracted
 
     # Idempotency: skip if run already terminal
     try:
@@ -464,11 +505,24 @@ async def _process_message(
             )
             return
 
-        # Execute pipeline
+        # Execute pipeline (snapshot-driven)
+        if not owner_user_id or not job_definition_id:
+            raise ValueError(
+                "owner_user_id and job_definition_id required for snapshot execution"
+            )
         try:
             result = await loop.run_in_executor(
                 None,
-                lambda k=keywords: _run_pipeline_sync(places_service, k),
+                lambda: _run_pipeline_sync(
+                    job_execution_service,
+                    job_definition_service,
+                    job_definition_id,
+                    owner_user_id,
+                    run_id,
+                    job_id,
+                    keywords,
+                    definition_snapshot_ref,
+                ),
             )
         except Exception as e:
             err_msg = _normalize_error(e)
