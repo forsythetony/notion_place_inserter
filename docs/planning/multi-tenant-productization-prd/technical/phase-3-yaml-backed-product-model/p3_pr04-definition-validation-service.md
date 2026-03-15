@@ -1,5 +1,7 @@
 # p3_pr04 - Definition Validation Service
 
+**Status:** Complete (2026-03-14)
+
 ## Objective
 
 Implement a `ValidationService` that enforces definition integrity at save time: ID resolution, sequencing, limits, and the Property Set terminal rule.
@@ -10,7 +12,7 @@ Implement a `ValidationService` that enforces definition integrity at save time:
 - Enforce: referenced IDs exist and belong to same owner (unless platform-owned)
 - Enforce: job has at least one stage; stage has at least one pipeline; pipeline has at least one step
 - Enforce: stage sequences unique within job; pipeline sequences unique within stage; step sequences unique within pipeline
-- Enforce: trigger paths unique per owner
+- Enforce: trigger paths unique per owner (path is the segment used in `/triggers/{owner_user_id}/{path}`)
 - Enforce: Property Set is the final step of any property-setting pipeline; Property Set references a real target schema property on the job's target
 - Enforce: step input bindings resolve to known signal/cache/schema sources
 - Enforce: object counts do not exceed `AppLimits` (max_stages_per_job, max_pipelines_per_stage, max_steps_per_pipeline)
@@ -48,8 +50,8 @@ Implement a `ValidationService` that enforces definition integrity at save time:
 
 ## Verification checklist
 
-- [ ] Referenced ID resolution is enforced.
-- [ ] Sequencing rules are enforced.
-- [ ] Property Set terminal rule is enforced.
-- [ ] Limits are enforced.
-- [ ] Valid definitions pass.
+- [x] Referenced ID resolution is enforced.
+- [x] Sequencing rules are enforced.
+- [x] Property Set terminal rule is enforced.
+- [x] Limits are enforced.
+- [x] Valid definitions pass.

@@ -2,7 +2,7 @@
 
 ## Status
 
-- Proposed architecture for review
+- In progress: p3_pr01-p3_pr05 complete (2026-03-14)
 - Scope: define the canonical product model and back it with local YAML repositories before moving definitions into Postgres/Supabase
 
 ## Phase 3 PR Task Index
@@ -25,7 +25,7 @@ This folder breaks Phase 3 YAML-backed product model into PR-sized stories. Comp
 - p3_pr01 establishes domain classes and ownership metadata so all later work uses stable product-model types.
 - p3_pr02 defines repository interfaces and YAML layout so storage adapters have a clear contract.
 - p3_pr03 seeds the catalog and bootstrap `Notion Place Inserter` template for authenticated users.
-- p3_pr04 adds validation so saves enforce ID resolution, sequencing, limits, and Property Set terminal rules.
+- p3_pr04 adds validation so saves enforce ID resolution, sequencing, limits, and terminal step rules (`Cache Set` or `Property Set`).
 - p3_pr07 wires trigger, target, and schema services to YAML repositories so resolution can fetch referenced entities.
 - p3_pr05 implements job-definition resolution and snapshotting for execution (depends on trigger/target/schema repos).
 - p3_pr06 migrates runtime from code-bound registries to YAML-backed definitions.
@@ -120,7 +120,7 @@ The current implementation already has useful execution primitives, but the prod
 - `app/custom_pipelines/__init__.py` maps Notion property names directly to Python classes
 - `app/services/places_service.py` always resolves `places_global_pipeline`, which is the current code-level top-level job-like runtime object
 - `app/services/notion_service.py` and `app/services/schema_cache.py` fetch live schema, but there is no persisted product-level target/schema model yet
-- `app/routes/locations.py` is the only trigger definition, and it is implemented as a route rather than a persisted trigger resource
+- Trigger invocation uses the user-scoped endpoint `POST /triggers/{user_id}/{path}` (e.g. `POST /triggers/{user_uuid}/locations`) so Tony's `/locations` does not conflict with Patrick's; trigger definitions are persisted in YAML
 
 ### Architecture implication
 
@@ -434,6 +434,7 @@ Suggested fields:
 Rules:
 
 - V1 supports `POST` only
+- The full HTTP path is `POST /triggers/{owner_user_id}/{path}`; path is the segment after user_id (e.g. `locations`)
 - path must be unique within the owning tenant namespace
 - one trigger points to one job in V1
 - request body shape should be stored in a JSON-schema-like structure, even if YAML is the container format
@@ -701,7 +702,8 @@ Suggested config:
 
 Rules:
 
-- any property-configuring pipeline must terminate in `Property Set`
+- any pipeline must terminate in either `Cache Set` or `Property Set`
+- when a pipeline terminates in `Property Set`, it must reference a real target schema property
 - this should be validated on save and enforced at execution time
 
 ### 7. Utility: Extract Target Property Options
@@ -1122,8 +1124,8 @@ Required initial rules:
 - pipeline sequences must be unique within a stage
 - step sequences must be unique within a pipeline
 - trigger paths must be unique per owner
-- `Property Set` must be the final step of any property-setting pipeline
-- `Property Set` must reference a real target schema property on the job's target
+- each pipeline must terminate with either `Cache Set` or `Property Set`
+- if the terminal step is `Property Set`, it must reference a real target schema property on the job's target
 - step input bindings must resolve to known signal/cache/schema sources
 - object counts must not exceed configured limits
 

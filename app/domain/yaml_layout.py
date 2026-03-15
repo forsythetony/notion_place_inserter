@@ -27,6 +27,7 @@ PRODUCT_MODEL_ROOT = "product_model"
 
 # Bootstrap: shared starter templates (read-only, bundled)
 BOOTSTRAP_JOBS = f"{PRODUCT_MODEL_ROOT}/bootstrap/jobs"
+BOOTSTRAP_TRIGGERS = f"{PRODUCT_MODEL_ROOT}/bootstrap/triggers"
 
 # Catalog: platform-owned templates (read-only, bundled)
 CATALOG_CONNECTOR_TEMPLATES = f"{PRODUCT_MODEL_ROOT}/catalog/connector_templates"
@@ -92,6 +93,13 @@ def bootstrap_job_path(job_slug: str, base: str = PRODUCT_MODEL_ROOT) -> str:
     return f"{base}/bootstrap/jobs/{job_slug}.yaml"
 
 
+def bootstrap_trigger_path(
+    trigger_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a bootstrap trigger file: bootstrap/triggers/<id>.yaml."""
+    return f"{base}/bootstrap/triggers/{trigger_id}.yaml"
+
+
 def catalog_connector_template_path(
     template_id: str, base: str = PRODUCT_MODEL_ROOT
 ) -> str:
@@ -111,3 +119,38 @@ def catalog_step_template_path(
 ) -> str:
     """Path to a catalog step template file."""
     return f"{base}/catalog/step_templates/{template_id}.yaml"
+
+
+def tenant_trigger_path(
+    owner_user_id: str, trigger_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a tenant trigger file: tenants/<owner>/triggers/<id>.yaml."""
+    return f"{tenant_triggers_dir(owner_user_id, base)}/{trigger_id}.yaml"
+
+
+def tenant_target_path(
+    owner_user_id: str, target_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a tenant target file: tenants/<owner>/targets/<id>.yaml."""
+    return f"{tenant_targets_dir(owner_user_id, base)}/{target_id}.yaml"
+
+
+def tenant_target_schema_snapshot_path(
+    owner_user_id: str, snapshot_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a tenant schema snapshot: tenants/<owner>/target_schema_snapshots/<id>.yaml."""
+    return f"{tenant_target_schema_snapshots_dir(owner_user_id, base)}/{snapshot_id}.yaml"
+
+
+def tenant_connector_instance_path(
+    owner_user_id: str, instance_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a tenant connector instance: tenants/<owner>/connector_instances/<id>.yaml."""
+    return f"{tenant_connector_instances_dir(owner_user_id, base)}/{instance_id}.yaml"
+
+
+def tenant_job_path(
+    owner_user_id: str, job_id: str, base: str = PRODUCT_MODEL_ROOT
+) -> str:
+    """Path to a tenant job file: tenants/<owner>/jobs/<id>.yaml."""
+    return f"{tenant_jobs_dir(owner_user_id, base)}/{job_id}.yaml"

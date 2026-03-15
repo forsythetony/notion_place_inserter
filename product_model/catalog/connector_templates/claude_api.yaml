@@ -1,0 +1,18 @@
+id: claude_api
+slug: claude_api
+display_name: Claude API
+connector_type: claude
+provider: anthropic
+auth_strategy: api_key
+capabilities:
+  - claude_text_generation
+config_schema:
+  model:
+    type: string
+    default: claude-sonnet-4-20250514
+secret_schema:
+  api_key:
+    type: string
+    required: true
+status: active
+visibility: platform

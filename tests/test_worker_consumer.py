@@ -37,16 +37,21 @@ def event_bus():
     return EventBus()
 
 
-def _valid_message():
+def _valid_message(job_definition_id=None, job_slug=None):
+    payload = {
+        "job_id": "loc_abc",
+        "run_id": "run-xyz",
+        "keywords": "coffee shop",
+    }
+    if job_definition_id is not None:
+        payload["job_definition_id"] = job_definition_id
+    if job_slug is not None:
+        payload["job_slug"] = job_slug
     return QueueMessage(
         message_id=1,
         read_count=0,
         enqueued_at=datetime.now(),
-        payload={
-            "job_id": "loc_abc",
-            "run_id": "run-xyz",
-            "keywords": "coffee shop",
-        },
+        payload=payload,
     )
 
 
@@ -105,6 +110,30 @@ def test_worker_success_path(
 
     mock_queue_repo.archive.assert_called_once_with(1)
     mock_places_service.create_place_from_query.assert_called_once_with("coffee shop")
+
+
+def test_worker_pipeline_started_includes_job_definition_metadata(
+    mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+):
+    """When payload has job_definition_id and job_slug, pipeline_started event includes them."""
+    mock_queue_repo.read.side_effect = [
+        [_valid_message(job_definition_id="job_notion_place_inserter", job_slug="notion_place_inserter")],
+        [],
+        [],
+    ]
+
+    asyncio.run(_run_worker_briefly(
+        mock_queue_repo, mock_run_repo, mock_places_service, event_bus
+    ))
+
+    pipeline_started_calls = [
+        c for c in mock_run_repo.insert_event.call_args_list
+        if c[0][1] == "pipeline_started"
+    ]
+    assert len(pipeline_started_calls) == 1
+    event_payload = pipeline_started_calls[0][0][2]
+    assert event_payload.get("job_definition_id") == "job_notion_place_inserter"
+    assert event_payload.get("job_slug") == "notion_place_inserter"
 
 
 def test_worker_failure_path(

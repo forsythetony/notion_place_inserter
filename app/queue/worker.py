@@ -67,10 +67,10 @@ def _normalize_error(error: BaseException) -> str:
     return msg[:500] if len(msg) > 500 else msg
 
 
-def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None] | None:
+def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None, str | None, str | None] | None:
     """
-    Extract job_id, run_id, keywords, recipient_whatsapp from message payload.
-    Returns None if payload is malformed.
+    Extract job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug from message payload.
+    Returns None if payload is malformed. job_definition_id and job_slug are optional (for backward compat).
     """
     p = msg.payload or {}
     job_id = p.get("job_id")
@@ -79,8 +79,15 @@ def _extract_payload(msg: QueueMessage) -> tuple[str, str, str, str | None] | No
     if not job_id or not run_id or keywords is None:
         return None
     recipient = p.get("recipient_whatsapp")
-    return str(job_id), str(run_id), str(keywords).strip(), (
-        str(recipient) if recipient else None
+    job_def_id = p.get("job_definition_id")
+    job_slug = p.get("job_slug")
+    return (
+        str(job_id),
+        str(run_id),
+        str(keywords).strip(),
+        str(recipient) if recipient else None,
+        str(job_def_id) if job_def_id else None,
+        str(job_slug) if job_slug else None,
     )
 
 
@@ -243,7 +250,7 @@ def _handle_final_failure(
     if extracted is None:
         queue_repo.archive(msg.message_id)
         return
-    job_id, run_id, keywords, recipient_whatsapp = extracted
+    job_id, run_id, keywords, recipient_whatsapp, _jd, _js = extracted
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
     try:
@@ -334,7 +341,7 @@ async def _process_message(
         queue_repo.archive(msg.message_id)
         return
 
-    job_id, run_id, keywords, recipient_whatsapp = extracted
+    job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug = extracted
 
     # Idempotency: skip if run already terminal
     try:
@@ -391,9 +398,12 @@ async def _process_message(
                 job_id, "running", started_at=now, retry_count=retry_count
             )
             run_repo.update_run(run_id, status="running")
-            run_repo.insert_event(
-                run_id, "pipeline_started", {"keywords_preview": keywords[:80]}
-            )
+            event_payload: dict = {"keywords_preview": keywords[:80]}
+            if job_definition_id:
+                event_payload["job_definition_id"] = job_definition_id
+            if job_slug:
+                event_payload["job_slug"] = job_slug
+            run_repo.insert_event(run_id, "pipeline_started", event_payload)
         except Exception as e:
             logger.exception(
                 "worker_persist_running_failed | job_id={} run_id={}",

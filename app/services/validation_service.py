@@ -1,0 +1,409 @@
+"""Definition validation service for Phase 3 product model. Enforces integrity at save time."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.domain.connectors import ConnectorInstance, ConnectorTemplate
+    from app.domain.jobs import (
+        JobDefinition,
+        PipelineDefinition,
+        StageDefinition,
+        StepInstance,
+        StepTemplate,
+    )
+    from app.domain.limits import AppLimits
+    from app.domain.repositories import (
+        AppConfigRepository,
+        ConnectorInstanceRepository,
+        ConnectorTemplateRepository,
+        StepTemplateRepository,
+        TargetRepository,
+        TargetSchemaRepository,
+        TargetTemplateRepository,
+        TriggerRepository,
+    )
+    from app.domain.targets import (
+        DataTarget,
+        TargetSchemaProperty,
+        TargetSchemaSnapshot,
+        TargetTemplate,
+    )
+    from app.domain.triggers import TriggerDefinition
+
+
+# Terminal step kinds: pipeline must end with one of these
+_TERMINAL_STEP_KINDS = frozenset({"cache_set", "property_set"})
+
+
+class ValidationError(ValueError):
+    """Raised when definition validation fails. Supports single or aggregated errors."""
+
+    def __init__(self, message: str, errors: list[str] | None = None) -> None:
+        self.errors = errors or [message]
+        combined = "; ".join(self.errors) if len(self.errors) > 1 else self.errors[0]
+        super().__init__(combined)
+
+
+@dataclass
+class JobGraph:
+    """Full job definition graph for validation: job + stages + pipelines + steps."""
+
+    job: "JobDefinition"
+    stages: list["StageDefinition"]
+    pipelines: list["PipelineDefinition"]
+    steps: list["StepInstance"]
+
+
+class ValidationService:
+    """
+    Validates product model definitions at save time.
+    Enforces ID resolution, sequencing, limits, terminal-step rules, and binding resolution.
+    """
+
+    def __init__(
+        self,
+        *,
+        trigger_repo: "TriggerRepository | None" = None,
+        target_repo: "TargetRepository | None" = None,
+        target_schema_repo: "TargetSchemaRepository | None" = None,
+        target_template_repo: "TargetTemplateRepository | None" = None,
+        step_template_repo: "StepTemplateRepository | None" = None,
+        connector_template_repo: "ConnectorTemplateRepository | None" = None,
+        connector_instance_repo: "ConnectorInstanceRepository | None" = None,
+        app_config_repo: "AppConfigRepository | None" = None,
+    ) -> None:
+        self._trigger_repo = trigger_repo
+        self._target_repo = target_repo
+        self._target_schema_repo = target_schema_repo
+        self._target_template_repo = target_template_repo
+        self._step_template_repo = step_template_repo
+        self._connector_template_repo = connector_template_repo
+        self._connector_instance_repo = connector_instance_repo
+        self._app_config_repo = app_config_repo
+
+    def validate_job_graph(
+        self,
+        graph: JobGraph,
+        *,
+        skip_reference_checks: bool = False,
+    ) -> None:
+        """
+        Validate a full job graph. Raises ValidationError on failure.
+        Set skip_reference_checks=True when referenced entities may not yet be persisted.
+        """
+        errors: list[str] = []
+        job = graph.job
+        stages = graph.stages
+        pipelines = graph.pipelines
+        steps = graph.steps
+
+        # Job must have at least one stage
+        if not job.stage_ids:
+            errors.append("job must have at least one stage")
+        else:
+            # Stage IDs in job must match provided stages
+            stage_ids = {s.id for s in stages}
+            for sid in job.stage_ids:
+                if sid not in stage_ids:
+                    errors.append(f"stage '{sid}' referenced in job not found in graph")
+
+        # Build lookup maps
+        stages_by_id = {s.id: s for s in stages}
+        pipelines_by_id = {p.id: p for p in pipelines}
+        steps_by_pipeline: dict[str, list[StepInstance]] = {}
+        for s in steps:
+            steps_by_pipeline.setdefault(s.pipeline_id, []).append(s)
+
+        # Stage-level checks
+        for stage in stages:
+            if not stage.pipeline_ids:
+                errors.append(f"stage '{stage.id}' must have at least one pipeline")
+            for pid in stage.pipeline_ids:
+                if pid not in pipelines_by_id:
+                    errors.append(f"pipeline '{pid}' referenced in stage '{stage.id}' not found")
+                else:
+                    pipe = pipelines_by_id[pid]
+                    if pipe.stage_id != stage.id:
+                        errors.append(
+                            f"pipeline '{pid}' has stage_id '{pipe.stage_id}' but is in stage '{stage.id}'"
+                        )
+
+        # Pipeline-level checks
+        for pipeline in pipelines:
+            pipe_steps = steps_by_pipeline.get(pipeline.id, [])
+            if not pipe_steps:
+                errors.append(f"pipeline '{pipeline.id}' must have at least one step")
+            for step in pipe_steps:
+                if step.pipeline_id != pipeline.id:
+                    errors.append(
+                        f"step '{step.id}' has pipeline_id '{step.pipeline_id}' but is in pipeline '{pipeline.id}'"
+                    )
+
+        # Sequence uniqueness
+        stage_seqs = [s.sequence for s in stages]
+        if len(stage_seqs) != len(set(stage_seqs)):
+            errors.append("stage sequences must be unique within job")
+        for stage in stages:
+            pipes_in_stage = [p for p in pipelines if p.stage_id == stage.id]
+            pipe_seqs = [p.sequence for p in pipes_in_stage]
+            if len(pipe_seqs) != len(set(pipe_seqs)):
+                errors.append(f"pipeline sequences must be unique within stage '{stage.id}'")
+        for pipeline in pipelines:
+            pipe_steps = sorted(steps_by_pipeline.get(pipeline.id, []), key=lambda s: s.sequence)
+            step_seqs = [s.sequence for s in pipe_steps]
+            if len(step_seqs) != len(set(step_seqs)):
+                errors.append(f"step sequences must be unique within pipeline '{pipeline.id}'")
+
+        # Terminal step rule: each pipeline must end with cache_set or property_set
+        if self._step_template_repo:
+            for pipeline in pipelines:
+                pipe_steps = sorted(
+                    steps_by_pipeline.get(pipeline.id, []),
+                    key=lambda s: s.sequence,
+                )
+                if not pipe_steps:
+                    continue
+                last_step = pipe_steps[-1]
+                template = self._step_template_repo.get_by_id(last_step.step_template_id)
+                if template is None:
+                    errors.append(
+                        f"step '{last_step.id}' references unknown step_template_id '{last_step.step_template_id}'"
+                    )
+                elif template.step_kind not in _TERMINAL_STEP_KINDS:
+                    errors.append(
+                        f"pipeline '{pipeline.id}' must terminate with Cache Set or Property Set; "
+                        f"last step '{last_step.id}' has kind '{template.step_kind}'"
+                    )
+                elif template.step_kind == "property_set":
+                    # Property Set must reference real schema property on job's target
+                    schema_property_id = last_step.config.get("schema_property_id")
+                    data_target_id = last_step.config.get("data_target_id")
+                    if not schema_property_id or not data_target_id:
+                        errors.append(
+                            f"Property Set step '{last_step.id}' must have config.schema_property_id and config.data_target_id"
+                        )
+                    elif data_target_id != job.target_id:
+                        errors.append(
+                            f"Property Set step '{last_step.id}' references target '{data_target_id}' "
+                            f"but job target is '{job.target_id}'"
+                        )
+                    elif self._target_schema_repo and not skip_reference_checks:
+                        schema = self._target_schema_repo.get_active_for_target(
+                            data_target_id, job.owner_user_id
+                        )
+                        if schema is None:
+                            errors.append(
+                                f"no active schema for target '{data_target_id}'"
+                            )
+                        else:
+                            prop_ids = {p.id for p in schema.properties}
+                            if schema_property_id not in prop_ids:
+                                errors.append(
+                                    f"Property Set step '{last_step.id}' references schema_property_id "
+                                    f"'{schema_property_id}' not found in target schema"
+                                )
+
+        # Step input bindings resolution
+        if self._step_template_repo:
+            step_ids_in_order = self._step_ids_in_execution_order(stages, pipelines, steps)
+            for step in steps:
+                self._validate_step_bindings(step, step_ids_in_order, job, errors)
+
+        # Limits (from AppConfigRepository; will be backend-configurable for frontend display)
+        limits = self._app_config_repo.get_by_owner(job.owner_user_id) if self._app_config_repo else None
+        if limits:
+            if len(stages) > limits.max_stages_per_job:
+                errors.append(
+                    f"job exceeds max_stages_per_job ({limits.max_stages_per_job}): has {len(stages)}"
+                )
+            for stage in stages:
+                pipes_in_stage = [p for p in pipelines if p.stage_id == stage.id]
+                if len(pipes_in_stage) > limits.max_pipelines_per_stage:
+                    errors.append(
+                        f"stage '{stage.id}' exceeds max_pipelines_per_stage "
+                        f"({limits.max_pipelines_per_stage}): has {len(pipes_in_stage)}"
+                    )
+            for pipeline in pipelines:
+                pipe_steps = steps_by_pipeline.get(pipeline.id, [])
+                if len(pipe_steps) > limits.max_steps_per_pipeline:
+                    errors.append(
+                        f"pipeline '{pipeline.id}' exceeds max_steps_per_pipeline "
+                        f"({limits.max_steps_per_pipeline}): has {len(pipe_steps)}"
+                    )
+
+        # Reference checks (trigger, target) - skip when entities not yet persisted
+        if not skip_reference_checks:
+            if self._trigger_repo:
+                trigger = self._trigger_repo.get_by_id(job.trigger_id, job.owner_user_id)
+                if trigger is None:
+                    errors.append(f"trigger_id '{job.trigger_id}' not found for owner")
+            if self._target_repo:
+                target = self._target_repo.get_by_id(job.target_id, job.owner_user_id)
+                if target is None:
+                    errors.append(f"target_id '{job.target_id}' not found for owner")
+
+        if errors:
+            raise ValidationError("validation failed", errors)
+
+    def _step_ids_in_execution_order(
+        self,
+        stages: list["StageDefinition"],
+        pipelines: list["PipelineDefinition"],
+        steps: list["StepInstance"],
+    ) -> list[str]:
+        """Return step IDs in execution order (stage order, pipeline order, step order)."""
+        result: list[str] = []
+        stages_sorted = sorted(stages, key=lambda s: s.sequence)
+        pipelines_by_stage: dict[str, list[PipelineDefinition]] = {}
+        for p in pipelines:
+            pipelines_by_stage.setdefault(p.stage_id, []).append(p)
+        for stage in stages_sorted:
+            pipes = sorted(pipelines_by_stage.get(stage.id, []), key=lambda p: p.sequence)
+            for pipe in pipes:
+                pipe_steps = sorted(
+                    [s for s in steps if s.pipeline_id == pipe.id],
+                    key=lambda s: s.sequence,
+                )
+                for s in pipe_steps:
+                    result.append(s.id)
+        return result
+
+    def _validate_step_bindings(
+        self,
+        step: "StepInstance",
+        step_ids_in_order: list[str],
+        job: "JobDefinition",
+        errors: list[str],
+    ) -> None:
+        """Validate that step input bindings resolve to known sources."""
+        for _field, binding in step.input_bindings.items():
+            if not isinstance(binding, dict):
+                continue
+            if "signal_ref" in binding:
+                ref = binding["signal_ref"]
+                if not isinstance(ref, str):
+                    errors.append(f"step '{step.id}' signal_ref must be string")
+                    continue
+                if ref.startswith("trigger."):
+                    continue  # trigger is always valid
+                if ref.startswith("step."):
+                    # step.step_<id>.<field>
+                    parts = ref.split(".", 2)
+                    if len(parts) < 3:
+                        errors.append(f"step '{step.id}' invalid signal_ref format: {ref}")
+                        continue
+                    ref_step_id = parts[1]
+                    if ref_step_id not in step_ids_in_order:
+                        errors.append(
+                            f"step '{step.id}' signal_ref '{ref}' references unknown step '{ref_step_id}'"
+                        )
+                    else:
+                        # Referenced step must come before this step
+                        idx = step_ids_in_order.index(step.id)
+                        ref_idx = step_ids_in_order.index(ref_step_id)
+                        if ref_idx >= idx:
+                            errors.append(
+                                f"step '{step.id}' signal_ref '{ref}' references step that does not precede it"
+                            )
+                    continue
+                errors.append(f"step '{step.id}' signal_ref '{ref}' has unknown format")
+            if "cache_key" in binding:
+                continue  # cache key is valid
+        # Check config for target_schema_ref (e.g. in ai_constrain_values)
+        for key, val in step.config.items():
+            if key == "allowable_values_source" and isinstance(val, dict):
+                tsr = val.get("target_schema_ref")
+                if isinstance(tsr, dict):
+                    tid = tsr.get("data_target_id")
+                    pid = tsr.get("schema_property_id")
+                    if tid and pid:
+                        if tid != job.target_id:
+                            errors.append(
+                                f"step '{step.id}' target_schema_ref data_target_id '{tid}' "
+                                f"does not match job target '{job.target_id}'"
+                            )
+                        elif self._target_schema_repo:
+                            schema = self._target_schema_repo.get_active_for_target(
+                                tid, job.owner_user_id
+                            )
+                            if schema and pid not in {p.id for p in schema.properties}:
+                                errors.append(
+                                    f"step '{step.id}' target_schema_ref schema_property_id '{pid}' "
+                                    f"not found in target schema"
+                                )
+
+    def validate_stage_definition(self, stage: "StageDefinition") -> None:
+        """Validate a stage definition. Raises ValidationError on failure."""
+        errors: list[str] = []
+        if not stage.pipeline_ids:
+            errors.append(f"stage '{stage.id}' must have at least one pipeline")
+        if errors:
+            raise ValidationError("stage validation failed", errors)
+
+    def validate_pipeline_definition(self, pipeline: "PipelineDefinition") -> None:
+        """Validate a pipeline definition (structure only). Raises ValidationError on failure."""
+        errors: list[str] = []
+        if not pipeline.step_ids:
+            errors.append(f"pipeline '{pipeline.id}' must have at least one step")
+        if errors:
+            raise ValidationError("pipeline validation failed", errors)
+
+    def validate_step_instance(
+        self,
+        step: "StepInstance",
+        step_template: "StepTemplate | None" = None,
+    ) -> None:
+        """
+        Validate a step instance (structure only).
+        Full binding resolution requires validate_job_graph.
+        """
+        errors: list[str] = []
+        if not step.step_template_id:
+            errors.append(f"step '{step.id}' must have step_template_id")
+        if step_template is None and self._step_template_repo:
+            step_template = self._step_template_repo.get_by_id(step.step_template_id)
+        if step_template is None and step.step_template_id:
+            errors.append(
+                f"step '{step.id}' references unknown step_template_id '{step.step_template_id}'"
+            )
+        if errors:
+            raise ValidationError("step instance validation failed", errors)
+
+    def validate_trigger(self, trigger: "TriggerDefinition") -> None:
+        """Validate a trigger definition. Raises ValidationError on failure."""
+        errors: list[str] = []
+        if not trigger.path or not trigger.path.strip():
+            errors.append("trigger path is required")
+        if not trigger.job_id:
+            errors.append("trigger job_id is required")
+        if self._trigger_repo:
+            existing = self._trigger_repo.get_by_path(trigger.path, trigger.owner_user_id)
+            if existing is not None and existing.id != trigger.id:
+                errors.append(f"trigger path '{trigger.path}' already in use by another trigger for owner")
+        if errors:
+            raise ValidationError("trigger validation failed", errors)
+
+    def validate_data_target(self, target: "DataTarget") -> None:
+        """Validate a data target. Raises ValidationError on failure."""
+        errors: list[str] = []
+        if not target.target_template_id:
+            errors.append("target_template_id is required")
+        if not target.connector_instance_id:
+            errors.append("connector_instance_id is required")
+        if self._target_template_repo:
+            tmpl = self._target_template_repo.get_by_id(target.target_template_id)
+            if tmpl is None:
+                errors.append(f"target_template_id '{target.target_template_id}' not found")
+        if self._connector_instance_repo:
+            inst = self._connector_instance_repo.get_by_id(
+                target.connector_instance_id, target.owner_user_id
+            )
+            if inst is None:
+                errors.append(
+                    f"connector_instance_id '{target.connector_instance_id}' not found for owner"
+                )
+        if errors:
+            raise ValidationError("data target validation failed", errors)

@@ -1,5 +1,7 @@
 # p3_pr03 - YAML Catalog and Bootstrap Seed
 
+**Status:** Complete (2026-03-14)
+
 ## Objective
 
 Implement YAML repository implementations and seed the catalog and bootstrap content: connector templates, target templates, step templates, and the `Notion Place Inserter` job starter for authenticated users.
@@ -45,7 +47,7 @@ Implement YAML repository implementations and seed the catalog and bootstrap con
 
 ## Verification checklist
 
-- [ ] Catalog YAML files parse into domain objects.
-- [ ] Bootstrap `Notion Place Inserter` loads correctly.
-- [ ] Loader returns starter job for authenticated users.
-- [ ] Catalog and bootstrap are read-only; tenant layout supports ephemeral writes.
+- [x] Catalog YAML files parse into domain objects.
+- [x] Bootstrap `Notion Place Inserter` loads correctly.
+- [x] Loader returns starter job for authenticated users.
+- [x] Catalog and bootstrap are read-only; tenant layout supports ephemeral writes.

@@ -1,0 +1,20 @@
+kind: trigger_definition
+id: trigger_http_locations
+owner_user_id: bootstrap
+trigger_type: http
+display_name: Locations HTTP Trigger
+path: /locations
+method: POST
+request_body_schema:
+  type: object
+  required:
+    - keywords
+  properties:
+    keywords:
+      type: string
+      minLength: 1
+      maxLength: 300
+status: active
+job_id: job_notion_place_inserter
+auth_mode: bearer
+visibility: owner

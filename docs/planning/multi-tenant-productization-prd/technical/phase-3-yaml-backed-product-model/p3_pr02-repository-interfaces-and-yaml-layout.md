@@ -1,5 +1,7 @@
 # p3_pr02 - Repository Interfaces and YAML Layout
 
+**Status:** Complete (2026-03-14)
+
 ## Objective
 
 Define repository interfaces (protocols/abstract bases) and the YAML file layout contract so storage adapters have a clear, Phase-4-ready contract.
@@ -44,7 +46,7 @@ Define repository interfaces (protocols/abstract bases) and the YAML file layout
 
 ## Verification checklist
 
-- [ ] All repository interfaces are defined with correct method signatures.
-- [ ] YAML layout matches architecture doc.
-- [ ] Interfaces are storage-agnostic.
-- [ ] Layout is documented for implementers.
+- [x] All repository interfaces are defined with correct method signatures.
+- [x] YAML layout matches architecture doc.
+- [x] Interfaces are storage-agnostic.
+- [x] Layout is documented for implementers.

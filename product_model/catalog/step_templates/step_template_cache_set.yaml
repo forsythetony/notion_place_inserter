@@ -1,0 +1,18 @@
+id: step_template_cache_set
+slug: cache_set
+display_name: Cache Set
+step_kind: cache_set
+description: Store value into run-scoped shared cache for later stages
+input_contract:
+  fields:
+    value:
+      type: any
+output_contract: {}
+config_schema:
+  cache_key:
+    type: string
+    required: true
+runtime_binding: cache_set
+category: utility
+status: active
+visibility: platform

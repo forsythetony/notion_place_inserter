@@ -1,0 +1,21 @@
+id: step_template_extract_target_property_options
+slug: extract_target_property_options
+display_name: Extract Target Property Options
+step_kind: extract_target_property_options
+description: Return current option list for a target property
+input_contract: {}
+output_contract:
+  fields:
+    options:
+      type: array
+config_schema:
+  data_target_id:
+    type: string
+    required: true
+  schema_property_id:
+    type: string
+    required: true
+runtime_binding: extract_target_property_options
+category: utility
+status: active
+visibility: platform

@@ -1,0 +1,16 @@
+id: notion_oauth_workspace
+slug: notion_oauth_workspace
+display_name: Notion OAuth Workspace
+connector_type: notion_oauth
+provider: notion
+auth_strategy: oauth2
+capabilities:
+  - fetch_target_schema
+  - create_target_record
+config_schema: {}
+secret_schema:
+  access_token:
+    type: string
+    required: true
+status: active
+visibility: platform

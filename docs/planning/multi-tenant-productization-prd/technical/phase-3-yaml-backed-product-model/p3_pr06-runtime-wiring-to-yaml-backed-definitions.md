@@ -11,7 +11,7 @@ Migrate runtime execution from code-bound registries to YAML-backed definitions 
 - Implement signal/binding resolution: `signal_ref`, `cache_key_ref`, `static_value`, `target_schema_ref`
 - Map step templates to runtime step implementations (e.g., `step_template_optimize_input_claude` -> existing Optimize Input logic)
 - Preserve run-scoped cache behavior; pipelines can read/write shared cache keys
-- Ensure `places_service` (or trigger entry point) loads job from YAML/bootstrap and executes via snapshot
+- Trigger entry point is `POST /triggers/{user_id}/{path}`; user_id and path resolve the trigger and job from YAML/bootstrap
 
 ## Expected changes
 
@@ -40,7 +40,7 @@ Migrate runtime execution from code-bound registries to YAML-backed definitions 
 
 ## Manual validation steps (after implementation)
 
-1. Trigger a job run (e.g., via existing `/locations` or equivalent) and confirm execution completes.
+1. Trigger a job run via `POST /triggers/{user_id}/{path}` (e.g. `/triggers/bootstrap/locations`) and confirm execution completes.
 2. Verify stages and pipelines execute in correct order.
 3. Inspect logs or debug output to confirm snapshot is used, not code registries.
 4. Confirm run-scoped cache is populated and consumed across pipelines.

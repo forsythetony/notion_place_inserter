@@ -1,0 +1,18 @@
+id: step_template_cache_get
+slug: cache_get
+display_name: Cache Get
+step_kind: cache_get
+description: Retrieve previously stored cache value
+input_contract: {}
+output_contract:
+  fields:
+    value:
+      type: any
+config_schema:
+  cache_key:
+    type: string
+    required: true
+runtime_binding: cache_get
+category: utility
+status: active
+visibility: platform

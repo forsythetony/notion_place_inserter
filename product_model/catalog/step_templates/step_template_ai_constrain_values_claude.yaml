@@ -1,0 +1,28 @@
+id: step_template_ai_constrain_values_claude
+slug: ai_constrain_values_claude
+display_name: AI Constrain Values (Claude)
+step_kind: ai_constrain_values
+description: Select values from allowed list with optional suggestion behavior
+input_contract:
+  fields:
+    source_value:
+      type: any
+output_contract:
+  fields:
+    selected_values:
+      type: array
+config_schema:
+  allowable_values_source:
+    type: object
+  max_suggestible_values:
+    type: integer
+  allowable_value_eagerness:
+    type: integer
+  max_output_values:
+    type: integer
+  model:
+    type: string
+runtime_binding: claude_constrain_values
+category: transform
+status: active
+visibility: platform

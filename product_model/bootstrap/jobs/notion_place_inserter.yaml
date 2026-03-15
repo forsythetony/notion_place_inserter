@@ -1,0 +1,85 @@
+kind: job_definition
+id: job_notion_place_inserter
+owner_user_id: bootstrap
+display_name: Notion Place Inserter
+trigger_id: trigger_http_locations
+target_id: target_places_to_visit
+status: active
+stage_ids:
+  - stage_research
+  - stage_property_setting
+stages:
+  - id: stage_research
+    display_name: Research
+    sequence: 1
+    pipeline_run_mode: parallel
+    pipelines:
+      - id: pipeline_research
+        display_name: Research Pipeline
+        sequence: 1
+        steps:
+          - id: step_optimize_query
+            step_template_id: step_template_optimize_input_claude
+            sequence: 1
+            input_bindings:
+              query:
+                signal_ref: trigger.payload.raw_input
+            config:
+              prompt: Rewrite this input into an optimized Google Places query.
+              linked_step_id: step_google_places_lookup
+              include_target_query_schema: true
+          - id: step_google_places_lookup
+            step_template_id: step_template_google_places_lookup
+            sequence: 2
+            input_bindings:
+              query:
+                signal_ref: step.step_optimize_query.optimized_query
+            config:
+              connector_instance_id: connector_instance_google_places_default
+              fetch_details_if_needed: true
+          - id: step_cache_places
+            step_template_id: step_template_cache_set
+            sequence: 3
+            input_bindings:
+              value:
+                signal_ref: step.step_google_places_lookup.search_response
+            config:
+              cache_key: google_places_response
+  - id: stage_property_setting
+    display_name: Property Setting
+    sequence: 2
+    pipeline_run_mode: parallel
+    pipelines:
+      - id: pipeline_tags
+        display_name: Set Tags
+        sequence: 1
+        steps:
+          - id: step_cache_get_places
+            step_template_id: step_template_cache_get
+            sequence: 1
+            config:
+              cache_key: google_places_response
+          - id: step_constrain_tags
+            step_template_id: step_template_ai_constrain_values_claude
+            sequence: 2
+            input_bindings:
+              source_value:
+                signal_ref: step.step_cache_get_places.value
+            config:
+              allowable_values_source:
+                target_schema_ref:
+                  data_target_id: target_places_to_visit
+                  schema_property_id: prop_tags
+                  field: options
+              max_suggestible_values: 2
+              allowable_value_eagerness: 3
+              max_output_values: 3
+          - id: step_property_set_tags
+            step_template_id: step_template_property_set
+            sequence: 3
+            input_bindings:
+              value:
+                signal_ref: step.step_constrain_tags.selected_values
+            config:
+              data_target_id: target_places_to_visit
+              schema_property_id: prop_tags

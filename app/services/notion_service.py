@@ -51,6 +51,13 @@ class NotionService:
         """Return the data source ID for the given database name."""
         return self._cache.get(db_name).data_source_id
 
+    def get_raw_schema_for_sync(self, db_name: str) -> tuple[str, dict]:
+        """
+        Fetch raw properties for schema sync. Returns (data_source_id, raw_properties).
+        Used by SchemaSyncService to build TargetSchemaSnapshot.
+        """
+        return self._cache.get_raw_for_sync(db_name)
+
     def invalidate_schema(self, db_name: str | None = None) -> None:
         """Force schema refresh on next access. None = invalidate all."""
         self._cache.invalidate(db_name)

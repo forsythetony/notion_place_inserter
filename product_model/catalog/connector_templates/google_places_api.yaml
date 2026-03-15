@@ -1,0 +1,15 @@
+id: google_places_api
+slug: google_places_api
+display_name: Google Places API
+connector_type: google_places
+provider: google
+auth_strategy: api_key
+capabilities:
+  - google_places_search
+config_schema:
+  api_key:
+    type: string
+    required: true
+secret_schema: {}
+status: active
+visibility: platform

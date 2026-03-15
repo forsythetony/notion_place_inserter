@@ -1,0 +1,21 @@
+id: step_template_property_set
+slug: property_set
+display_name: Property Set
+step_kind: property_set
+description: Write value to a specific target schema property
+input_contract:
+  fields:
+    value:
+      type: any
+output_contract: {}
+config_schema:
+  data_target_id:
+    type: string
+    required: true
+  schema_property_id:
+    type: string
+    required: true
+runtime_binding: property_set
+category: output
+status: active
+visibility: platform

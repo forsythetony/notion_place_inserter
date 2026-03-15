@@ -1,0 +1,26 @@
+id: step_template_google_places_lookup
+slug: google_places_lookup
+display_name: Google Places Lookup
+step_kind: google_places_lookup
+description: Perform Google Places lookup from incoming search value
+input_contract:
+  fields:
+    query:
+      type: string
+      required: true
+output_contract:
+  fields:
+    search_response:
+      type: object
+    selected_place:
+      type: object
+config_schema:
+  connector_instance_id:
+    type: string
+  fetch_details_if_needed:
+    type: boolean
+    default: true
+runtime_binding: google_places_lookup
+category: lookup
+status: active
+visibility: platform

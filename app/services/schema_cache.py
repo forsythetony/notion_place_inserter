@@ -81,3 +81,33 @@ class SchemaCache:
                 raise
 
         raise KeyError(f"Unknown database: {db_name}")
+
+    def get_raw_for_sync(self, db_name: str) -> tuple[str, dict]:
+        """
+        Fetch raw properties and data_source_id for schema sync.
+        Returns (data_source_id, raw_properties). Does not cache.
+        """
+        for db_id in self._database_ids:
+            try:
+                database = self._client.databases.retrieve(database_id=db_id)
+                db_title = _extract_title_from_rich_text(
+                    database.get("title", [])
+                )
+                data_sources = database.get("data_sources", [])
+
+                for ds in data_sources:
+                    ds_id = ds.get("id")
+                    if not ds_id:
+                        continue
+                    ds_full = self._client.data_sources.retrieve(
+                        data_source_id=ds_id
+                    )
+                    ds_name = ds.get("name") or db_title
+                    if ds_name == db_name:
+                        raw_props = ds_full.get("properties", {})
+                        return (ds_id, raw_props)
+            except Exception as e:
+                logger.error("Failed to fetch database {}: {}", db_id, e)
+                raise
+
+        raise KeyError(f"Unknown database: {db_name}")

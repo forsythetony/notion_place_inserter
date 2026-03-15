@@ -45,7 +45,7 @@ Implement job-definition resolution and snapshotting so runs execute against a r
 
 ## Verification checklist
 
-- [ ] Snapshot contains job, stages, pipelines, steps, trigger, target, schema.
-- [ ] Resolution is owner-scoped.
-- [ ] Snapshot is immutable and persistable.
-- [ ] Execution integration point is clear.
+- [x] Snapshot contains job, stages, pipelines, steps, trigger, target, schema.
+- [x] Resolution is owner-scoped.
+- [x] Snapshot is immutable and persistable.
+- [x] Execution integration point is clear (queue payload includes definition_snapshot_ref; p3_pr06 will consume).

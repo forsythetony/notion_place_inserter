@@ -19,6 +19,21 @@ from app.services.places_service import PlacesService
 from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
+from app.repositories import (
+    YamlAppConfigRepository,
+    YamlConnectorInstanceRepository,
+    YamlJobRepository,
+    YamlStepTemplateRepository,
+    YamlTargetSchemaRepository,
+    YamlTargetTemplateRepository,
+    YamlTargetRepository,
+    YamlTriggerRepository,
+)
+from app.services.validation_service import ValidationService
+from app.services.trigger_service import TriggerService
+from app.services.target_service import TargetService
+from app.services.schema_sync_service import SchemaSyncService
+from app.services.job_definition_service import JobDefinitionService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.supabase_run_repository import SupabaseRunRepository
@@ -193,6 +208,52 @@ async def lifespan(app: FastAPI):
         freepik_service=freepik_svc,
         dry_run=dry_run,
     )
+
+    # Wire validation into save paths (p3_pr04)
+    step_template_repo = YamlStepTemplateRepository()
+    target_template_repo = YamlTargetTemplateRepository()
+    trigger_repo = YamlTriggerRepository()
+    target_repo = YamlTargetRepository()
+    target_schema_repo = YamlTargetSchemaRepository()
+    app_config_repo = YamlAppConfigRepository()
+    connector_instance_repo = YamlConnectorInstanceRepository()
+    validation_service = ValidationService(
+        trigger_repo=trigger_repo,
+        target_repo=target_repo,
+        target_schema_repo=target_schema_repo,
+        step_template_repo=step_template_repo,
+        app_config_repo=app_config_repo,
+        connector_instance_repo=connector_instance_repo,
+        target_template_repo=target_template_repo,
+    )
+    job_repo = YamlJobRepository(validation_service=validation_service)
+    trigger_repo.set_validation_service(validation_service)
+    target_repo.set_validation_service(validation_service)
+    app.state.job_repository = job_repo
+    app.state.trigger_repository = trigger_repo
+    app.state.target_repository = target_repo
+    app.state.target_schema_repository = target_schema_repo
+
+    trigger_service = TriggerService(trigger_repository=trigger_repo)
+    target_service = TargetService(
+        target_repository=target_repo,
+        target_schema_repository=target_schema_repo,
+    )
+    job_definition_service = JobDefinitionService(
+        job_repository=job_repo,
+        trigger_service=trigger_service,
+        target_service=target_service,
+    )
+    schema_sync_service = SchemaSyncService(
+        target_repository=target_repo,
+        target_schema_repository=target_schema_repo,
+        connector_instance_repository=connector_instance_repo,
+        notion_service=notion_svc,
+    )
+    app.state.trigger_service = trigger_service
+    app.state.target_service = target_service
+    app.state.job_definition_service = job_definition_service
+    app.state.schema_sync_service = schema_sync_service
 
     async_enabled = os.environ.get("LOCATIONS_ASYNC_ENABLED", "1").strip().lower() in (
         "1",

@@ -1,0 +1,18 @@
+id: notion_database
+slug: notion_database
+display_name: Notion Database
+target_kind: notion_database
+required_connector_template_id: notion_oauth_workspace
+supports_schema_snapshots: true
+property_types_supported:
+  - title
+  - rich_text
+  - select
+  - multi_select
+  - number
+  - url
+  - checkbox
+  - date
+  - email
+  - phone_number
+visibility: platform

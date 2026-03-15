@@ -1,0 +1,29 @@
+id: step_template_optimize_input_claude
+slug: optimize_input_claude
+display_name: Optimize Input (Claude)
+step_kind: optimize_input
+description: Reshape input signals for downstream consumption via Claude
+input_contract:
+  fields:
+    query:
+      type: string
+      required: true
+  query_schema:
+    type: string
+    description: Optimized Google Places text query
+output_contract:
+  fields:
+    optimized_query:
+      type: string
+config_schema:
+  prompt:
+    type: string
+  linked_step_id:
+    type: string
+  include_target_query_schema:
+    type: boolean
+    default: false
+runtime_binding: claude_optimize_input
+category: transform
+status: active
+visibility: platform

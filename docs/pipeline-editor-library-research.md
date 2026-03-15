@@ -116,10 +116,10 @@ If we optimize for **fastest path to production with React + Vite**, choose **Re
 
 If we optimize for **deep built-in nesting/interaction controls** and accept a heavier API, choose **AntV X6**.
 
-Practical decision:
+**Decision**: Option 1 — **React Flow** (`@xyflow/react`).
 
-- **Primary recommendation**: React Flow.
-- **Backup/alternative**: X6 (if we find ourselves implementing too many custom grouping/nesting mechanics).
+- Primary recommendation: React Flow.
+- Backup/alternative: X6 (if we find ourselves implementing too many custom grouping/nesting mechanics).
 
 ## Implementation sketch (recommended stack: React Flow)
 

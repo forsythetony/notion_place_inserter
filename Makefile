@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-create-users supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -36,7 +36,7 @@ help:
 	@echo "  make test-google-places - Test Google Places search (server must be running)"
 	@echo "  make test-random-location - Test random location endpoint"
 	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
-	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /locations enqueue"
+	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /triggers/bootstrap/locations enqueue"
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
@@ -51,6 +51,7 @@ help:
 	@echo "  make invite-validate CODE=<20-char> - Validate invitation code (token from clipboard)"
 	@echo "  make invite-issue-csv-help        - Show CSV invitation issuer usage"
 	@echo "  make invite-issue-csv CSV_PATH=... PASSWORD=... - Issue invitations from CSV"
+	@echo "  make invite-create-users CSV_PATH=... PASSWORD=... - Create users from CSV (invite + signup)"
 	@echo ""
 	@echo "Supabase (local stack, migrations):"
 	@echo "  make supabase-start    - Start local Supabase stack (Docker required)"
@@ -118,7 +119,7 @@ test-random-location:
 
 test-locations:
 	@curl -s -X POST -H "Authorization: $(SECRET)" -H "Content-Type: application/json" \
-		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/locations"
+		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/bootstrap/locations"
 
 test-remote:
 	@bash -c 'if [ -z "$(REMOTE_BASE_URL)" ]; then echo "Usage: make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> [KEYWORDS=\"...\"]"; exit 1; fi; \
@@ -127,16 +128,16 @@ test-remote:
 	curl -s -o /dev/null -w "HTTP %{http_code}\n" "$(REMOTE_BASE_URL)/"; \
 	echo "Testing remote root with auth (expect 200)..."; \
 	curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: $(REMOTE_SECRET)" "$(REMOTE_BASE_URL)/"; \
-	echo "Testing remote /locations enqueue (expect 200 accepted in async mode)..."; \
+	echo "Testing remote /triggers/bootstrap/locations enqueue (expect 200 accepted in async mode)..."; \
 	curl -s -X POST -H "Authorization: $(REMOTE_SECRET)" -H "Content-Type: application/json" \
-		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/locations"'
+		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/triggers/bootstrap/locations"'
 
 # CORS preflight test (server must be running). Use BASE_URL for local or REMOTE_BASE_URL for deployed.
 # Example: make test-cors  # local; or make test-cors REMOTE_BASE_URL=https://hello-world-api-r7h7.onrender.com
 test-cors:
 	@bash -c 'URL="$${REMOTE_BASE_URL:-$(BASE_URL)}"; \
-	echo "CORS preflight OPTIONS to $$URL/locations (Origin: https://notion-pipeliner-ui.onrender.com)..."; \
-	curl -s -i -X OPTIONS "$$URL/locations" \
+	echo "CORS preflight OPTIONS to $$URL/triggers/bootstrap/locations (Origin: https://notion-pipeliner-ui.onrender.com)..."; \
+	curl -s -i -X OPTIONS "$$URL/triggers/bootstrap/locations" \
 		-H "Origin: https://notion-pipeliner-ui.onrender.com" \
 		-H "Access-Control-Request-Method: POST" \
 		-H "Access-Control-Request-Headers: authorization,content-type" | head -20'
@@ -205,7 +206,13 @@ invite-issue-csv:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
-		python helper_scripts/invitation_csv_issuer/main.py --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
+		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
+
+invite-create-users:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
+		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
+		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
+		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
 
 tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \
