@@ -1140,3 +1140,75 @@ def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
         "external": {"url": "https://example.com/cover.jpg"},
     }
     assert call_kwargs["icon"] == {"type": "file_upload", "file_upload": {"id": "fu-123"}}
+
+
+def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
+    """When create_page_with_token raises, job_execution_notion_create_failed is logged and error is re-raised."""
+    get_token = MagicMock(return_value="oauth-token")
+    svc = JobExecutionService(
+        notion_service=MagicMock(),
+        dry_run=False,
+        get_notion_token_fn=get_token,
+    )
+
+    snapshot = {
+        "job": {
+            "stages": [
+                {
+                    "id": "stage_property_setting",
+                    "sequence": 1,
+                    "pipeline_run_mode": "sequential",
+                    "pipelines": [
+                        {
+                            "id": "pipeline_tags",
+                            "sequence": 1,
+                            "steps": [
+                                {
+                                    "id": "step_property_set_tags",
+                                    "step_template_id": "step_template_property_set",
+                                    "sequence": 1,
+                                    "input_bindings": {"value": {"static_value": ["History"]}},
+                                    "config": {
+                                        "data_target_id": "target_places_to_visit",
+                                        "schema_property_id": "prop_tags",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ]
+        },
+        "target": {"display_name": "Places", "external_target_id": "ds-fail-123"},
+        "active_schema": {
+            "properties": [
+                {
+                    "id": "prop_tags",
+                    "external_property_id": "tags",
+                    "property_type": "multi_select",
+                    "options": [{"id": "o1", "name": "History"}],
+                },
+            ],
+        },
+    }
+
+    with patch("app.services.notion_service.NotionService") as notion_cls:
+        notion_cls.create_page_with_token.side_effect = ValueError("Could not find data_source")
+
+        with patch("app.services.job_execution.job_execution_service.logger") as mock_logger:
+            with pytest.raises(ValueError, match="Could not find data_source"):
+                svc.execute_snapshot_run(
+                    snapshot=snapshot,
+                    run_id="run-1",
+                    job_id="job-1",
+                    trigger_payload={"raw_input": "test"},
+                    owner_user_id="user-1",
+                )
+
+    mock_logger.exception.assert_called_once()
+    call_args = mock_logger.exception.call_args[0]
+    assert "job_execution_notion_create_failed" in str(call_args)
+    assert "run_id=run-1" in str(call_args) or "run-1" in str(call_args)
+    assert "job_id=job-1" in str(call_args) or "job-1" in str(call_args)
+    assert "data_source_id=ds-fail-123" in str(call_args) or "ds-fail-123" in str(call_args)
+    assert "token_source=oauth" in str(call_args) or "oauth" in str(call_args)

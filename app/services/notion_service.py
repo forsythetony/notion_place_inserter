@@ -253,6 +253,20 @@ class NotionService:
                     and attempt < len(retry_delays_seconds)
                 )
                 if not should_retry:
+                    data_source_id = ""
+                    parent = payload.get("parent")
+                    if isinstance(parent, dict):
+                        data_source_id = str(parent.get("data_source_id", ""))
+                    error_kind = "data_source_not_found" if "Could not find data_source" in message else "notion_api_error"
+                    logger.error(
+                        "notion_create_page_data_source_failed | notion_data_source_id={} error_domain=notion error_kind={} "
+                        "notion_error_code={} notion_status={} error_message={}",
+                        data_source_id,
+                        error_kind,
+                        getattr(exc, "code", ""),
+                        getattr(exc, "status", ""),
+                        message[:500] if message else "",
+                    )
                     raise
                 delay_seconds = retry_delays_seconds[attempt]
                 logger.warning(

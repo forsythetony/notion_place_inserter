@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.queue.events import EventBus
-from app.queue.worker import run_worker_loop
+from app.queue.worker import _extract_notion_data_source_id_from_error, run_worker_loop
 from app.services.supabase_queue_repository import QueueMessage
 
 
@@ -483,3 +483,13 @@ def test_worker_read_count_ceiling_forces_terminal(
     assert "pipeline_failed" in event_types
     status_calls = [c[0][1] for c in mock_run_repo.update_job_status.call_args_list]
     assert "failed" in status_calls
+
+
+def test_extract_notion_data_source_id_from_error():
+    """_extract_notion_data_source_id_from_error extracts UUID from data_source error messages."""
+    err_msg = "Could not find data_source with ID: 1e2a5cd4-f107-490f-9b7a-4af865fd1beb. Make sure..."
+    assert _extract_notion_data_source_id_from_error(ValueError(err_msg)) == "1e2a5cd4-f107-490f-9b7a-4af865fd1beb"
+
+    assert _extract_notion_data_source_id_from_error(ValueError("Some other error")) is None
+    assert _extract_notion_data_source_id_from_error(ValueError("data_source foo bar")) is None
+    assert _extract_notion_data_source_id_from_error(ValueError("data_source id: abc-def-123")) is None

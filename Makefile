@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -43,6 +43,7 @@ help:
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
+	@echo "  make test-notion-oauth-db [DATABASE_ID_ARG=--data-source-id <id>] - Test Notion OAuth token access to data sources"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
 	@echo ""
 	@echo "Environment:"
@@ -192,6 +193,9 @@ test-api-%:
 
 notion-pull:
 	LOG_LEVEL=$(LOG_LEVEL) python scripts/notion_puller/main.py
+
+test-notion-oauth-db:
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_notion_oauth_db.py $(DATABASE_ID_ARG)'
 
 # Start a subshell with envs/local.env sourced. Use when you need env vars in your shell.
 env-source:

@@ -209,26 +209,40 @@ class JobExecutionService:
         access_token: str | None = None
         if self._get_notion_token and owner_user_id:
             access_token = self._get_notion_token(owner_user_id)
-        if access_token:
-            from app.services.notion_service import NotionService
+        token_source = "oauth" if access_token else "global"
+        try:
+            if access_token:
+                from app.services.notion_service import NotionService
 
-            result = NotionService.create_page_with_token(
-                access_token=access_token,
-                data_source_id=data_source_id,
-                properties=notion_props,
-                icon=ctx.icon,
-                cover=ctx.cover,
-                dry_run=self._dry_run,
+                result = NotionService.create_page_with_token(
+                    access_token=access_token,
+                    data_source_id=data_source_id,
+                    properties=notion_props,
+                    icon=ctx.icon,
+                    cover=ctx.cover,
+                    dry_run=self._dry_run,
+                )
+            elif self._notion:
+                result = self._notion.create_page(
+                    data_source_id=data_source_id,
+                    properties=notion_props,
+                    icon=ctx.icon,
+                    cover=ctx.cover,
+                )
+            else:
+                raise RuntimeError("NotionService not configured for target write")
+        except Exception as e:
+            logger.exception(
+                "job_execution_notion_create_failed | run_id={} job_id={} owner_user_id={} data_source_id={} "
+                "token_source={} error={}",
+                run_id,
+                job_id,
+                owner_user_id or "",
+                data_source_id,
+                token_source,
+                str(e)[:500],
             )
-        elif self._notion:
-            result = self._notion.create_page(
-                data_source_id=data_source_id,
-                properties=notion_props,
-                icon=ctx.icon,
-                cover=ctx.cover,
-            )
-        else:
-            raise RuntimeError("NotionService not configured for target write")
+            raise
         if self._run_repo and owner_user_id:
             try:
                 from app.domain.runs import UsageRecord

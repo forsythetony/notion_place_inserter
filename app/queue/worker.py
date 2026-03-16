@@ -1,6 +1,7 @@
 """Supabase-backed queue consumer and worker loop for location processing."""
 
 import asyncio
+import re
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -95,6 +96,19 @@ def _normalize_error(error: BaseException) -> str:
     """Produce a normalized error message for UI/history use."""
     msg = str(error).strip() or type(error).__name__
     return msg[:500] if len(msg) > 500 else msg
+
+
+def _extract_notion_data_source_id_from_error(error: BaseException) -> str | None:
+    """Extract Notion data_source UUID from error message when present (e.g. 'Could not find data_source with ID: ...')."""
+    msg = str(error)
+    if "data_source" not in msg.lower():
+        return None
+    match = re.search(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        msg,
+        re.IGNORECASE,
+    )
+    return match.group(0) if match else None
 
 
 def _extract_payload(
@@ -538,12 +552,15 @@ async def _process_message(
             )
         except Exception as e:
             err_msg = _normalize_error(e)
+            notion_ds_id = _extract_notion_data_source_id_from_error(e) or ""
             logger.exception(
-                "worker_pipeline_failed | job_id={} run_id={} error={} attempt={}",
+                "worker_pipeline_failed | job_id={} run_id={} error={} attempt={} exception_class={} notion_data_source_id={}",
                 job_id,
                 run_id,
                 err_msg,
                 retry_count + 1,
+                type(e).__name__,
+                notion_ds_id,
             )
             if _is_non_retriable(e):
                 logger.info(

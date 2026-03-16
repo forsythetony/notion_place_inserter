@@ -8,6 +8,41 @@ from notion_client.errors import APIResponseError
 from app.services.notion_service import NotionService
 
 
+def test_create_page_logs_data_source_failed_and_raises():
+    """create_page logs structured observability and re-raises on data_source not found."""
+    mock_client = MagicMock()
+    mock_client.pages.create.side_effect = APIResponseError(
+        code="object_not_found",
+        status=400,
+        message=(
+            "Could not find data_source with ID: 1e2a5cd4-f107-490f-9b7a-4af865fd1beb. "
+            "Make sure the relevant pages and databases are shared with your integration."
+        ),
+        headers=Headers(),
+        raw_body_text="",
+    )
+
+    svc = NotionService(api_key="test-key")
+    svc._client = mock_client
+
+    with patch("app.services.notion_service.logger") as mock_logger:
+        try:
+            svc.create_page(
+                data_source_id="ds-123",
+                properties={"Title": {"title": [{"text": {"content": "Test"}}]}},
+            )
+        except APIResponseError:
+            pass
+
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    msg = str(call_args)
+    assert "notion_create_page_data_source_failed" in msg
+    assert "ds-123" in msg
+    assert "error_domain=notion" in msg or "notion" in msg
+    assert "data_source_not_found" in msg
+
+
 def test_create_page_includes_icon_and_cover_when_provided():
     """create_page passes icon and cover to the Notion API when provided."""
     mock_client = MagicMock()
