@@ -47,12 +47,13 @@ def event_bus():
     return EventBus()
 
 
-def _valid_message(job_definition_id="job_notion_place_inserter", job_slug=None, owner_user_id="user_test"):
+def _valid_message(job_definition_id="job_notion_place_inserter", job_slug=None, owner_user_id="user_test", trigger_id="trigger_http_locations"):
     payload = {
         "job_id": "loc_abc",
         "run_id": "run-xyz",
         "keywords": "coffee shop",
         "job_definition_id": job_definition_id,
+        "trigger_id": trigger_id,
         "owner_user_id": owner_user_id,
     }
     if job_slug is not None:

@@ -254,12 +254,9 @@ class ValidationService:
                         f"({limits.max_steps_per_pipeline}): has {len(pipe_steps)}"
                     )
 
-        # Reference checks (trigger, target) - skip when entities not yet persisted
+        # Reference checks (target) - skip when entities not yet persisted
+        # Trigger-job linkage is many-to-many via trigger_job_links; validated at link time
         if not skip_reference_checks:
-            if self._trigger_repo:
-                trigger = self._trigger_repo.get_by_id(job.trigger_id, job.owner_user_id)
-                if trigger is None:
-                    errors.append(f"trigger_id '{job.trigger_id}' not found for owner")
             if self._target_repo:
                 target = self._target_repo.get_by_id(job.target_id, job.owner_user_id)
                 if target is None:
@@ -397,8 +394,7 @@ class ValidationService:
         errors: list[str] = []
         if not trigger.path or not trigger.path.strip():
             errors.append("trigger path is required")
-        if not trigger.job_id:
-            errors.append("trigger job_id is required")
+        # job_id may be None for triggers created before pipeline assignment
         if self._trigger_repo:
             existing = self._trigger_repo.get_by_path(trigger.path, trigger.owner_user_id)
             if existing is not None and existing.id != trigger.id:

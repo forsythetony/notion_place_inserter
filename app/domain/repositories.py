@@ -103,6 +103,20 @@ class TriggerRepository(Protocol):
 
 
 @runtime_checkable
+class TriggerJobLinkRepository(Protocol):
+    """Repository for many-to-many trigger-job associations."""
+
+    def list_job_ids_for_trigger(
+        self, trigger_id: str, owner_user_id: str
+    ) -> list[str]: ...
+    def list_trigger_ids_for_job(
+        self, job_id: str, owner_user_id: str
+    ) -> list[str]: ...
+    def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None: ...
+    def detach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None: ...
+
+
+@runtime_checkable
 class JobRepository(Protocol):
     """Repository for owner-scoped job definitions."""
 

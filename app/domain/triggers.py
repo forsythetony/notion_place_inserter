@@ -17,8 +17,9 @@ class TriggerDefinition:
     method: str
     request_body_schema: dict[str, Any]
     status: str
-    job_id: str
     auth_mode: str
+    secret_value: str
+    secret_last_rotated_at: datetime | None = None
     workspace_id: str | None = None
     visibility: str = "owner"
     created_at: datetime | None = None

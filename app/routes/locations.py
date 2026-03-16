@@ -1,12 +1,14 @@
 """Trigger and locations API routes."""
 
+import hmac
+import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel
 
-from app.dependencies import require_auth
+from app.dependencies import _extract_bearer_token
 
 router = APIRouter()
 
@@ -31,16 +33,37 @@ class TriggerLocationsRequest(BaseModel):
     keywords: str
 
 
+def _validate_trigger_secret(authorization: str | None, expected_secret: str) -> None:
+    """Validate Authorization: Bearer <secret> against expected trigger secret. Raises 401 if invalid."""
+    token = _extract_bearer_token(authorization)
+    if not token or not expected_secret or not hmac.compare_digest(token, expected_secret):
+        logger.warning("trigger_auth_rejected | reason=missing_or_invalid_bearer_secret")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _validate_legacy_secret(authorization: str | None) -> None:
+    """Validate Authorization against env SECRET for legacy fallback path (no trigger). Raises 401 if invalid."""
+    secret = os.environ.get("SECRET", "")
+    if not secret:
+        logger.error("SECRET environment variable is not set")
+        raise HTTPException(status_code=500, detail="Server misconfiguration")
+    token = _extract_bearer_token(authorization)
+    if not token or not hmac.compare_digest(token, secret):
+        logger.warning("trigger_auth_rejected | reason=missing_or_invalid_legacy_secret")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 @router.post("/triggers/{user_id}/{path:path}")
 def invoke_trigger(
     request: Request,
     user_id: str,
     path: str,
     body: TriggerLocationsRequest,
-    _: None = Depends(require_auth),
+    authorization: str | None = Header(default=None),
 ):
     """
     Invoke an HTTP trigger by user and path.
+    Auth: Authorization: Bearer <trigger_secret> (per-trigger secret from DB).
     User-scoped so Tony's /locations does not conflict with Patrick's.
     When async is enabled, returns immediately with job_id; pipeline runs in background.
     """
@@ -72,11 +95,20 @@ def invoke_trigger(
                     user_id,
                     e,
                 )
-        if job_execution_service and trigger_service_sync and job_def_svc:
+        link_repo_sync = getattr(request.app.state, "trigger_job_link_repository", None)
+        if job_execution_service and trigger_service_sync and job_def_svc and link_repo_sync:
             normalized_path = _normalize_trigger_path(path)
             trigger = trigger_service_sync.resolve_by_path(normalized_path, user_id)
             if trigger:
-                snapshot = job_def_svc.resolve_for_run(trigger.job_id, user_id)
+                _validate_trigger_secret(authorization, trigger.secret_value)
+                job_ids = link_repo_sync.list_job_ids_for_trigger(trigger.id, user_id)
+                if not job_ids:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Trigger is not linked to a pipeline. Assign this trigger to a pipeline before invoking.",
+                    )
+                # Sync: run first linked job and return its result (backward compat for single job)
+                snapshot = job_def_svc.resolve_for_run(job_ids[0], user_id, trigger.id)
                 if snapshot:
                     run_id = str(uuid.uuid4())
                     trigger_payload = {"raw_input": body.keywords}
@@ -91,19 +123,21 @@ def invoke_trigger(
                     return result
         places_service = getattr(request.app.state, "places_service", None)
         if places_service:
+            _validate_legacy_secret(authorization)
             return places_service.create_place_from_query(body.keywords)
         raise HTTPException(
             status_code=503,
             detail="Unable to run pipeline (sync mode)",
         )
 
-    # Async path: enqueue for worker
+    # Async path: enqueue for worker (fan-out across all linked jobs)
     queue_repo = getattr(request.app.state, "supabase_queue_repository", None)
     run_repo = getattr(request.app.state, "supabase_run_repository", None)
     job_definition_service = getattr(
         request.app.state, "job_definition_service", None
     )
     trigger_service = getattr(request.app.state, "trigger_service", None)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
     if queue_repo is None or run_repo is None:
         logger.warning("locations_enqueue_skipped | supabase_repos_unavailable")
         raise HTTPException(
@@ -120,6 +154,12 @@ def invoke_trigger(
         )
     if trigger_service is None:
         logger.warning("locations_enqueue_skipped | trigger_service_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to enqueue request",
+        )
+    if link_repo is None:
+        logger.warning("locations_enqueue_skipped | trigger_job_link_repository_unavailable")
         raise HTTPException(
             status_code=503,
             detail="Unable to enqueue request",
@@ -148,68 +188,85 @@ def invoke_trigger(
             status_code=503,
             detail=f"Trigger not found for path '{normalized_path}' and user",
         )
-    snapshot = job_definition_service.resolve_for_run(
-        trigger.job_id, user_id
-    )
-    if snapshot is None:
-        logger.error(
-            "locations_enqueue_skipped | job_unavailable job_id={} owner={}",
-            trigger.job_id,
-            user_id,
+    _validate_trigger_secret(authorization, trigger.secret_value)
+    job_ids = link_repo.list_job_ids_for_trigger(trigger.id, user_id)
+    if not job_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Trigger is not linked to a pipeline. Assign this trigger to a pipeline before invoking.",
         )
+
+    job_ids_accepted: list[str] = []
+    run_ids_accepted: list[str] = []
+    recipient_whatsapp = None
+
+    for job_definition_id in job_ids:
+        snapshot = job_definition_service.resolve_for_run(
+            job_definition_id, user_id, trigger.id
+        )
+        if snapshot is None:
+            logger.warning(
+                "locations_enqueue_skipped_job | job_id={} owner={}",
+                job_definition_id,
+                user_id,
+            )
+            continue
+
+        job_id = _job_id()
+        run_id = str(uuid.uuid4())
+        target_data = snapshot.snapshot.get("target") or {}
+        target_id = target_data.get("id", "")
+
+        try:
+            run_repo.create_job(
+                job_id=job_id,
+                keywords=body.keywords,
+                status="queued",
+                owner_user_id=user_id,
+                run_id=run_id,
+                job_definition_id=job_definition_id,
+                trigger_id=trigger.id,
+                target_id=target_id,
+                definition_snapshot_ref=snapshot.snapshot_ref,
+            )
+            payload = {
+                "job_id": job_id,
+                "run_id": run_id,
+                "keywords": body.keywords,
+                "job_definition_id": job_definition_id,
+                "trigger_id": trigger.id,
+                "job_slug": "notion_place_inserter",
+                "definition_snapshot_ref": snapshot.snapshot_ref,
+                "owner_user_id": user_id,
+            }
+            if recipient_whatsapp is not None:
+                payload["recipient_whatsapp"] = recipient_whatsapp
+            queue_repo.send(payload, delay_seconds=0)
+            job_ids_accepted.append(job_id)
+            run_ids_accepted.append(run_id)
+            logger.info(
+                "locations_enqueued | job_id={} run_id={} job_definition_id={} definition_snapshot_ref={} keywords_preview={}",
+                job_id,
+                run_id,
+                job_definition_id,
+                snapshot.snapshot_ref,
+                body.keywords[:50] + "..." if len(body.keywords) > 50 else body.keywords,
+            )
+        except Exception:
+            logger.exception(
+                "locations_enqueue_failed | job_id={} run_id={}",
+                job_id,
+                run_id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Unable to enqueue request",
+            )
+
+    if not job_ids_accepted:
         raise HTTPException(
             status_code=503,
             detail="Bootstrap job definition unavailable",
         )
 
-    job_id = _job_id()
-    run_id = str(uuid.uuid4())
-    recipient_whatsapp = None
-    job_definition_id = snapshot.snapshot["job"]["id"]
-    target_data = snapshot.snapshot.get("target") or {}
-    target_id = target_data.get("id", "")
-
-    try:
-        run_repo.create_job(
-            job_id=job_id,
-            keywords=body.keywords,
-            status="queued",
-            owner_user_id=user_id,
-            run_id=run_id,
-            job_definition_id=job_definition_id,
-            trigger_id=trigger.id,
-            target_id=target_id,
-            definition_snapshot_ref=snapshot.snapshot_ref,
-        )
-        payload = {
-            "job_id": job_id,
-            "run_id": run_id,
-            "keywords": body.keywords,
-            "job_definition_id": job_definition_id,
-            "job_slug": "notion_place_inserter",
-            "definition_snapshot_ref": snapshot.snapshot_ref,
-            "owner_user_id": user_id,
-        }
-        if recipient_whatsapp is not None:
-            payload["recipient_whatsapp"] = recipient_whatsapp
-        queue_repo.send(payload, delay_seconds=0)
-        logger.info(
-            "locations_enqueued | job_id={} run_id={} job_definition_id={} definition_snapshot_ref={} keywords_preview={}",
-            job_id,
-            run_id,
-            job_definition_id,
-            snapshot.snapshot_ref,
-            body.keywords[:50] + "..." if len(body.keywords) > 50 else body.keywords,
-        )
-    except Exception:
-        logger.exception(
-            "locations_enqueue_failed | job_id={} run_id={}",
-            job_id,
-            run_id,
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="Unable to enqueue request",
-        )
-
-    return {"status": "accepted", "job_id": job_id}
+    return {"status": "accepted", "job_ids": job_ids_accepted, "run_ids": run_ids_accepted}

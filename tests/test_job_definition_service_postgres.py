@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.domain import DataTarget
 from app.domain.jobs import PipelineDefinition, StageDefinition, StepInstance
 from app.repositories.postgres_repositories import (
     PostgresJobRepository,
@@ -25,7 +26,6 @@ def _make_job_graph():
         id="job_test",
         owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
         display_name="Test Job",
-        trigger_id="trigger_http_locations",
         target_id="target_places_to_visit",
         status="active",
         stage_ids=["stage_1"],
@@ -71,7 +71,6 @@ def test_job_definition_service_postgres_resolves_snapshot_when_all_present():
         "id": "job_test",
         "owner_user_id": owner,
         "display_name": "Test",
-        "trigger_id": "trigger_http_locations",
         "target_id": "target_places_to_visit",
         "status": "active",
         "stage_ids": ["stage_1"],
@@ -142,6 +141,7 @@ def test_job_definition_service_postgres_resolves_snapshot_when_all_present():
                     "status": "active",
                     "job_id": "job_test",
                     "auth_mode": "bearer",
+                    "secret_value": "trigger_secret_abc",
                     "visibility": "owner",
                 }]
             )
@@ -178,6 +178,7 @@ def test_job_definition_service_postgres_resolves_snapshot_when_all_present():
                     "status": "active",
                     "job_id": "job_test",
                     "auth_mode": "bearer",
+                    "secret_value": "trigger_secret_abc",
                     "visibility": "owner",
                 }]
             )
@@ -219,6 +220,7 @@ def test_job_definition_service_postgres_resolves_snapshot_when_all_present():
                     "status": "active",
                     "job_id": "job_test",
                     "auth_mode": "bearer",
+                    "secret_value": "trigger_secret_abc",
                     "visibility": "owner",
                 }]
             )
@@ -258,7 +260,7 @@ def test_job_definition_service_postgres_resolves_snapshot_when_all_present():
         target_service=target_service,
     )
 
-    snapshot = service.resolve_for_run("job_test", owner)
+    snapshot = service.resolve_for_run("job_test", owner, "trigger_http_locations")
     assert snapshot is not None
     assert isinstance(snapshot, ResolvedJobSnapshot)
     assert snapshot.snapshot_ref.startswith("job_snapshot:871ba2fa-fd5d-4a81-9f0d-0d98b348ccde:job_test:")
@@ -291,5 +293,5 @@ def test_job_definition_service_postgres_returns_none_when_job_missing():
         trigger_service=trigger_service,
         target_service=target_service,
     )
-    snapshot = service.resolve_for_run("job_missing", owner)
+    snapshot = service.resolve_for_run("job_missing", owner, "trigger_http_locations")
     assert snapshot is None

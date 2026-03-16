@@ -13,8 +13,15 @@ def mock_client():
 
 
 @pytest.fixture
-def service(mock_client):
-    return PostgresBootstrapProvisioningService(mock_client)
+def mock_link_repo():
+    link_repo = MagicMock()
+    link_repo.attach = MagicMock()
+    return link_repo
+
+
+@pytest.fixture
+def service(mock_client, mock_link_repo):
+    return PostgresBootstrapProvisioningService(mock_client, link_repo=mock_link_repo)
 
 
 def test_ensure_owner_starter_definitions_saves_job_before_trigger(service):

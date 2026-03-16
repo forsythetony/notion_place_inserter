@@ -109,7 +109,7 @@ def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
         )
 
         snapshot = service.resolve_for_run(
-            "job_notion_place_inserter", "user_1"
+            "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is not None
         assert isinstance(snapshot, ResolvedJobSnapshot)
@@ -169,7 +169,7 @@ def test_job_definition_service_returns_none_when_target_missing():
         )
 
         snapshot = service.resolve_for_run(
-            "job_notion_place_inserter", "user_1"
+            "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is None
 
@@ -195,7 +195,7 @@ def test_job_definition_service_returns_none_when_job_missing():
             target_service=target_service,
         )
 
-        snapshot = service.resolve_for_run("job_nonexistent", "user_1")
+        snapshot = service.resolve_for_run("job_nonexistent", "user_1", "trigger_http_locations")
         assert snapshot is None
 
 
@@ -269,7 +269,7 @@ def test_job_definition_service_includes_active_schema_when_present():
         )
 
         snapshot = service.resolve_for_run(
-            "job_notion_place_inserter", "user_1"
+            "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is not None
         assert snapshot.snapshot["active_schema"] is not None
@@ -334,8 +334,8 @@ def test_job_definition_service_snapshot_ref_stable_for_same_content():
             target_service=target_service,
         )
 
-        snap1 = service.resolve_for_run("job_notion_place_inserter", "user_1")
-        snap2 = service.resolve_for_run("job_notion_place_inserter", "user_1")
+        snap1 = service.resolve_for_run("job_notion_place_inserter", "user_1", "trigger_http_locations")
+        snap2 = service.resolve_for_run("job_notion_place_inserter", "user_1", "trigger_http_locations")
         assert snap1 is not None
         assert snap2 is not None
         assert snap1.snapshot_ref == snap2.snapshot_ref

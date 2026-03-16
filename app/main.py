@@ -28,6 +28,7 @@ from app.repositories import (
     PostgresTargetRepository,
     PostgresTargetSchemaRepository,
     PostgresTargetTemplateRepository,
+    PostgresTriggerJobLinkRepository,
     PostgresTriggerRepository,
 )
 from app.repositories.id_mapping import verify_mapping_consistency
@@ -41,7 +42,7 @@ from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.routes import auth_context, invitations, locations, signup, test
+from app.routes import auth_context, invitations, locations, management, signup, test
 from app.services.signup_orchestration_service import SignupOrchestrationService
 
 # Bootstrap env at import so all runtime lookups see file values (unless overridden)
@@ -180,6 +181,7 @@ async def lifespan(app: FastAPI):
     )
     postgres_run_repo = PostgresRunRepository(supabase_client)
     app.state.supabase_run_repository = postgres_run_repo
+    app.state.trigger_job_link_repository = PostgresTriggerJobLinkRepository(supabase_client)
 
     enable_bootstrap = os.environ.get("ENABLE_BOOTSTRAP_PROVISIONING", "1").strip().lower() in (
         "1", "true", "yes",
@@ -187,7 +189,9 @@ async def lifespan(app: FastAPI):
     if enable_bootstrap:
         try:
             verify_mapping_consistency(supabase_client)
-            bootstrap_svc: BootstrapProvisioningService = PostgresBootstrapProvisioningService(supabase_client)
+            bootstrap_svc: BootstrapProvisioningService = PostgresBootstrapProvisioningService(
+                supabase_client, link_repo=app.state.trigger_job_link_repository
+            )
             bootstrap_svc.seed_catalog_if_needed()
             app.state.bootstrap_provisioning_service = bootstrap_svc
         except Exception as e:
@@ -250,6 +254,8 @@ async def lifespan(app: FastAPI):
     app.state.trigger_repository = trigger_repo
     app.state.target_repository = target_repo
     app.state.target_schema_repository = target_schema_repo
+    app.state.app_config_repository = app_config_repo
+    app.state.connector_instance_repository = connector_instance_repo
 
     trigger_service = TriggerService(trigger_repository=trigger_repo)
     target_service = TargetService(
@@ -309,6 +315,7 @@ if _cors_origins:
     )
 
 app.include_router(auth_context.router)
+app.include_router(management.router)
 app.include_router(signup.router)
 app.include_router(invitations.router)
 app.include_router(locations.router)

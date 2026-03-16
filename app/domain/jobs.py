@@ -12,7 +12,6 @@ class JobDefinition:
     id: str
     owner_user_id: str
     display_name: str
-    trigger_id: str
     target_id: str
     status: str
     stage_ids: list[str]

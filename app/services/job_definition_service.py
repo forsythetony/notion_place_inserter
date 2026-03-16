@@ -77,10 +77,11 @@ class JobDefinitionService:
         self._target_service = target_service
 
     def resolve_for_run(
-        self, job_id: str, owner_user_id: str
+        self, job_id: str, owner_user_id: str, trigger_id: str
     ) -> ResolvedJobSnapshot | None:
         """
         Resolve a job by ID into a complete snapshot for execution.
+        Requires trigger_id (from trigger invocation context) for snapshot assembly.
         Returns None if job, trigger, or target cannot be resolved for the owner.
         Snapshot is owner-scoped; cross-tenant resolution is rejected.
         """
@@ -89,7 +90,7 @@ class JobDefinitionService:
             return None
 
         job = graph.job
-        trigger = self._trigger_service.get_by_id(job.trigger_id, owner_user_id)
+        trigger = self._trigger_service.get_by_id(trigger_id, owner_user_id)
         if trigger is None:
             return None
 

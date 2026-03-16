@@ -29,6 +29,7 @@ from app.repositories.postgres_repositories import (
     PostgresTargetRepository,
     PostgresTargetSchemaRepository,
     PostgresTargetTemplateRepository,
+    PostgresTriggerJobLinkRepository,
     PostgresTriggerRepository,
 )
 from app.repositories.postgres_run_repository import PostgresRunRepository
@@ -58,6 +59,7 @@ __all__ = [
     "PostgresTargetRepository",
     "PostgresTargetSchemaRepository",
     "PostgresTargetTemplateRepository",
+    "PostgresTriggerJobLinkRepository",
     "PostgresTriggerRepository",
     "PostgresRunRepository",
 ]

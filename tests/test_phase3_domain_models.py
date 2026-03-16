@@ -177,8 +177,8 @@ def test_trigger_definition_instantiation():
         method="POST",
         request_body_schema={"type": "object", "properties": {"keywords": {"type": "string"}}},
         status="active",
-        job_id="job-1",
         auth_mode="bearer",
+        secret_value="test_secret_abc",
     )
     assert t.owner_user_id == "user_123"
     assert t.visibility == "owner"
@@ -190,7 +190,6 @@ def test_job_definition_instantiation():
         id="job-1",
         owner_user_id="user_123",
         display_name="Notion Place Inserter",
-        trigger_id="tr-1",
         target_id="dt-1",
         status="active",
         stage_ids=["stage-1"],
@@ -337,7 +336,6 @@ def test_domain_module_has_no_storage_dependencies():
         id="j1",
         owner_user_id="u1",
         display_name="Test",
-        trigger_id="t1",
         target_id="d1",
         status="active",
         stage_ids=[],

@@ -66,9 +66,16 @@ def _run_pipeline_sync(
     job_id: str,
     keywords: str,
     definition_snapshot_ref: str | None,
+    trigger_id: str | None,
 ) -> dict:
     """Run snapshot-driven pipeline (call from worker thread)."""
-    snapshot_obj = job_definition_service.resolve_for_run(job_definition_id, owner_user_id)
+    if not trigger_id:
+        raise RuntimeError(
+            f"trigger_id required for resolve_for_run: job_id={job_definition_id} owner={owner_user_id}"
+        )
+    snapshot_obj = job_definition_service.resolve_for_run(
+        job_definition_id, owner_user_id, trigger_id
+    )
     if not snapshot_obj:
         raise RuntimeError(
             f"Job definition unavailable: job_id={job_definition_id} owner={owner_user_id}"
@@ -92,10 +99,10 @@ def _normalize_error(error: BaseException) -> str:
 
 def _extract_payload(
     msg: QueueMessage,
-) -> tuple[str, str, str, str | None, str | None, str | None, str | None, str | None] | None:
+) -> tuple[str, str, str, str | None, str | None, str | None, str | None, str | None, str | None] | None:
     """
     Extract job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug,
-    owner_user_id, definition_snapshot_ref from message payload.
+    owner_user_id, definition_snapshot_ref, trigger_id from message payload.
     Returns None if payload is malformed.
     """
     p = msg.payload or {}
@@ -109,6 +116,7 @@ def _extract_payload(
     job_slug = p.get("job_slug")
     owner_user_id = p.get("owner_user_id")
     snapshot_ref = p.get("definition_snapshot_ref")
+    trigger_id = p.get("trigger_id")
     return (
         str(job_id),
         str(run_id),
@@ -118,6 +126,7 @@ def _extract_payload(
         str(job_slug) if job_slug else None,
         str(owner_user_id) if owner_user_id else None,
         str(snapshot_ref) if snapshot_ref else None,
+        str(trigger_id) if trigger_id else None,
     )
 
 
@@ -282,7 +291,7 @@ def _handle_final_failure(
     if extracted is None:
         queue_repo.archive(msg.message_id)
         return
-    job_id, run_id, keywords, recipient_whatsapp, _jd, _js, _owner, _snap = extracted
+    job_id, run_id, keywords, recipient_whatsapp, _jd, _js, _owner, _snap, _tid = extracted
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
     try:
@@ -383,6 +392,7 @@ async def _process_message(
         job_slug,
         owner_user_id,
         definition_snapshot_ref,
+        trigger_id,
     ) = extracted
 
     # Idempotency: skip if run already terminal
@@ -507,9 +517,9 @@ async def _process_message(
             return
 
         # Execute pipeline (snapshot-driven)
-        if not owner_user_id or not job_definition_id:
+        if not owner_user_id or not job_definition_id or not trigger_id:
             raise ValueError(
-                "owner_user_id and job_definition_id required for snapshot execution"
+                "owner_user_id, job_definition_id, and trigger_id required for snapshot execution"
             )
         try:
             result = await loop.run_in_executor(
@@ -523,6 +533,7 @@ async def _process_message(
                     job_id,
                     keywords,
                     definition_snapshot_ref,
+                    trigger_id,
                 ),
             )
         except Exception as e:

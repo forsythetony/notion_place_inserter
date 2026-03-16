@@ -128,7 +128,7 @@ test-random-location:
 	@curl -s -X POST -H "Authorization: $(SECRET)" "http://localhost:$(PORT)/test/randomLocation"
 
 test-locations:
-	@curl -s -X POST -H "Authorization: $(SECRET)" -H "Content-Type: application/json" \
+	@curl -s -X POST -H "Authorization: Bearer $(SECRET)" -H "Content-Type: application/json" \
 		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/bootstrap/locations"
 
 # (Deprecated) Show persisted run/usage YAML files (p3_pr08). Phase 4 uses Postgres; use show-runs-db instead.
@@ -171,7 +171,7 @@ test-remote:
 	echo "Testing remote root with auth (expect 200)..."; \
 	curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: $(REMOTE_SECRET)" "$(REMOTE_BASE_URL)/"; \
 	echo "Testing remote /triggers/bootstrap/locations enqueue (expect 200 accepted in async mode)..."; \
-	curl -s -X POST -H "Authorization: $(REMOTE_SECRET)" -H "Content-Type: application/json" \
+	curl -s -X POST -H "Authorization: Bearer $(REMOTE_SECRET)" -H "Content-Type: application/json" \
 		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/triggers/bootstrap/locations"'
 
 # CORS preflight test (server must be running). Use BASE_URL for local or REMOTE_BASE_URL for deployed.

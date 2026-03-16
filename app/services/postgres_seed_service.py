@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 
 from loguru import logger
@@ -21,6 +23,7 @@ from app.domain.yaml_layout import (
     catalog_step_template_path,
     catalog_target_template_path,
 )
+from app.domain.repositories import TriggerJobLinkRepository
 from app.repositories.postgres_repositories import (
     PostgresConnectorInstanceRepository,
     PostgresConnectorTemplateRepository,
@@ -67,8 +70,9 @@ class PostgresBootstrapProvisioningService:
     No direct bootstrap YAML parsing from routes, worker, or repositories.
     """
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: Client, link_repo: TriggerJobLinkRepository) -> None:
         self._client = client
+        self._link_repo = link_repo
         self._connector_templates = PostgresConnectorTemplateRepository(client)
         self._target_templates = PostgresTargetTemplateRepository(client)
         self._step_templates = PostgresStepTemplateRepository(client)
@@ -175,11 +179,12 @@ class PostgresBootstrapProvisioningService:
         # 3. Parse trigger to get trigger_id for job wiring
         trigger = parse_trigger_definition(trigger_data)
         trigger.owner_user_id = uid
+        trigger.secret_value = secrets.token_hex(15)  # ~30 chars
+        trigger.secret_last_rotated_at = datetime.now(timezone.utc)
 
-        # 4. Job graph first (trigger_definitions has FK to job_definitions; job must exist before trigger)
+        # 4. Job graph first (job must exist before trigger; linkage via trigger_job_links)
         graph = parse_job_graph(job_data, owner_user_id_override=uid)
         graph.job.owner_user_id = uid
-        graph.job.trigger_id = trigger.id
         graph.job.target_id = target_id
 
         # Ensure all step templates referenced by the bootstrap graph exist.
@@ -202,6 +207,10 @@ class PostgresBootstrapProvisioningService:
         self._jobs.save_job_graph(graph, skip_reference_checks=True)
         logger.info("bootstrap_provision_job | id={} owner={}", graph.job.id, owner_user_id)
 
-        # 5. Trigger (after job so fk_job is satisfied)
+        # 5. Trigger (after job so link can reference both)
         self._triggers.save(trigger)
         logger.info("bootstrap_provision_trigger | id={} owner={}", trigger.id, owner_user_id)
+
+        # 6. Link trigger to job (many-to-many)
+        self._link_repo.attach(trigger.id, graph.job.id, uid)
+        logger.info("bootstrap_provision_link | trigger_id={} job_id={} owner={}", trigger.id, graph.job.id, owner_user_id)

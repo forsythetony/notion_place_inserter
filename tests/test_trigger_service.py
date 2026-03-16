@@ -19,7 +19,6 @@ def test_trigger_service_resolve_by_path_bootstrap():
     trigger = service.resolve_by_path("/locations", "bootstrap")
     assert trigger is not None
     assert trigger.path == "/locations"
-    assert trigger.job_id == "job_notion_place_inserter"
     assert trigger.owner_user_id == "bootstrap"
 
 
@@ -31,7 +30,6 @@ def test_trigger_service_resolve_by_path_fallback_to_bootstrap():
     trigger = service.resolve_by_path("/locations", "user_123")
     assert trigger is not None
     assert trigger.path == "/locations"
-    assert trigger.job_id == "job_notion_place_inserter"
 
 
 def test_trigger_service_resolve_by_path_tenant_override():
@@ -51,15 +49,15 @@ def test_trigger_service_resolve_by_path_tenant_override():
             method="POST",
             request_body_schema={},
             status="active",
-            job_id="job_custom",
             auth_mode="bearer",
+            secret_value="tenant_secret_123",
         )
         trigger_repo.save(tenant_trigger)
 
         trigger = service.resolve_by_path("/locations", "user_1")
         assert trigger is not None
-        assert trigger.job_id == "job_custom"
         assert trigger.owner_user_id == "user_1"
+        assert trigger.id == "t_custom"
 
 
 def test_trigger_service_resolve_by_path_missing():

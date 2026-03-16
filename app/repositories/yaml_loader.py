@@ -79,7 +79,21 @@ def load_yaml_file(relative_path: str) -> dict[str, Any] | None:
 
 
 def parse_trigger_definition(data: dict[str, Any]) -> TriggerDefinition:
-    """Parse YAML dict into TriggerDefinition."""
+    """Parse YAML dict into TriggerDefinition.
+    secret_value/secret_last_rotated_at come from DB or are set by provisioning.
+    """
+    from datetime import datetime, timezone
+
+    secret_val = data.get("secret_value", "")
+    secret_rotated = data.get("secret_last_rotated_at")
+    if isinstance(secret_rotated, str):
+        try:
+            secret_rotated = datetime.fromisoformat(secret_rotated.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            secret_rotated = None
+    elif secret_rotated is None and secret_val:
+        secret_rotated = datetime.now(timezone.utc)
+
     return TriggerDefinition(
         id=data["id"],
         owner_user_id=data["owner_user_id"],
@@ -89,8 +103,9 @@ def parse_trigger_definition(data: dict[str, Any]) -> TriggerDefinition:
         method=data["method"],
         request_body_schema=data.get("request_body_schema", {}),
         status=data.get("status", "active"),
-        job_id=data["job_id"],
         auth_mode=data.get("auth_mode", "bearer"),
+        secret_value=secret_val,
+        secret_last_rotated_at=secret_rotated,
         workspace_id=data.get("workspace_id"),
         visibility=data.get("visibility", "owner"),
         created_at=None,
@@ -256,7 +271,6 @@ def parse_job_definition(data: dict[str, Any], owner_user_id_override: str | Non
         id=data["id"],
         owner_user_id=owner,
         display_name=data["display_name"],
-        trigger_id=data["trigger_id"],
         target_id=data["target_id"],
         status=data.get("status", "active"),
         stage_ids=stage_ids,

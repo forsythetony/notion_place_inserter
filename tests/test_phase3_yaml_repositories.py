@@ -254,7 +254,6 @@ def test_yaml_job_repository_save_job_graph_rejects_invalid_job():
             id="j_invalid",
             owner_user_id="u1",
             display_name="Invalid",
-            trigger_id="t1",
             target_id="d1",
             status="active",
             stage_ids=[],
@@ -301,8 +300,8 @@ def test_yaml_trigger_repository_save_rejects_invalid_trigger():
             method="POST",
             request_body_schema={},
             status="active",
-            job_id="j1",
             auth_mode="bearer",
+            secret_value="placeholder",
         )
         with pytest.raises(ValidationError) as exc_info:
             trigger_repo.save(trigger)
@@ -326,8 +325,8 @@ def test_yaml_trigger_repository_save_accepts_valid_trigger():
             method="POST",
             request_body_schema={},
             status="active",
-            job_id="j1",
             auth_mode="bearer",
+            secret_value="yaml_test_secret",
         )
         trigger_repo.save(trigger)
         loaded = trigger_repo.get_by_id("t1", "u1")

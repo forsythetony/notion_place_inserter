@@ -115,7 +115,6 @@ def test_postgres_trigger_get_by_id_returns_trigger(mock_client):
             "method": "POST",
             "request_body_schema": {},
             "status": "active",
-            "job_id": "job_notion_place_inserter",
             "auth_mode": "bearer",
             "visibility": "owner",
         }]
@@ -126,7 +125,6 @@ def test_postgres_trigger_get_by_id_returns_trigger(mock_client):
     assert isinstance(t, TriggerDefinition)
     assert t.id == "trigger_http_locations"
     assert t.path == "locations"
-    assert t.job_id == "job_notion_place_inserter"
 
 
 def test_postgres_trigger_get_by_path_returns_trigger(mock_client):
@@ -141,7 +139,6 @@ def test_postgres_trigger_get_by_path_returns_trigger(mock_client):
             "method": "POST",
             "request_body_schema": {},
             "status": "active",
-            "job_id": "job_notion_place_inserter",
             "auth_mode": "bearer",
             "visibility": "owner",
         }]
@@ -171,7 +168,6 @@ def test_postgres_job_get_graph_by_id_returns_full_graph(mock_client):
         "id": "job_test",
         "owner_user_id": "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
         "display_name": "Test Job",
-        "trigger_id": "t1",
         "target_id": "target_1",
         "status": "active",
         "stage_ids": ["stage_1"],
@@ -255,7 +251,6 @@ def test_postgres_job_get_by_id_delegates_to_get_graph(mock_client):
         "id": "job_test",
         "owner_user_id": "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
         "display_name": "Test",
-        "trigger_id": "t1",
         "target_id": "t2",
         "status": "active",
         "stage_ids": [],
@@ -293,7 +288,6 @@ def test_postgres_job_save_job_graph_upserts_job_stages_pipelines_steps(mock_cli
         id="job_save",
         owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
         display_name="Save Test",
-        trigger_id="t1",
         target_id="t2",
         status="active",
         stage_ids=["s1"],

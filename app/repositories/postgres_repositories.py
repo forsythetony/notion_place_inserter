@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -150,6 +151,12 @@ def _row_to_target_schema_snapshot(row: dict[str, Any], owner: str) -> TargetSch
 
 
 def _row_to_trigger(row: dict[str, Any], owner: str) -> TriggerDefinition:
+    secret_rotated = row.get("secret_last_rotated_at")
+    if isinstance(secret_rotated, str):
+        try:
+            secret_rotated = datetime.fromisoformat(secret_rotated.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            secret_rotated = None
     return TriggerDefinition(
         id=row["id"],
         owner_user_id=owner,
@@ -159,8 +166,9 @@ def _row_to_trigger(row: dict[str, Any], owner: str) -> TriggerDefinition:
         method=row.get("method", "POST"),
         request_body_schema=row.get("request_body_schema") or {},
         status=str(row.get("status", "active")),
-        job_id=row["job_id"],
         auth_mode=row.get("auth_mode", "bearer"),
+        secret_value=row.get("secret_value", ""),
+        secret_last_rotated_at=secret_rotated,
         visibility=str(row.get("visibility", "owner")),
     )
 
@@ -173,7 +181,6 @@ def _row_to_job(row: dict[str, Any], owner: str) -> JobDefinition:
         id=row["id"],
         owner_user_id=owner,
         display_name=row["display_name"],
-        trigger_id=row["trigger_id"],
         target_id=row["target_id"],
         status=str(row.get("status", "active")),
         stage_ids=stage_ids,
@@ -665,6 +672,9 @@ class PostgresTriggerRepository:
         if self._validation_service:
             self._validation_service.validate_trigger(trigger)
         uid = str(_ensure_uuid(trigger.owner_user_id))
+        secret_rotated = trigger.secret_last_rotated_at
+        if hasattr(secret_rotated, "isoformat"):
+            secret_rotated = secret_rotated.isoformat()
         row = {
             "id": trigger.id,
             "owner_user_id": uid,
@@ -674,8 +684,9 @@ class PostgresTriggerRepository:
             "method": trigger.method,
             "request_body_schema": trigger.request_body_schema,
             "status": trigger.status,
-            "job_id": trigger.job_id,
             "auth_mode": trigger.auth_mode,
+            "secret_value": trigger.secret_value,
+            "secret_last_rotated_at": secret_rotated,
             "visibility": trigger.visibility,
         }
         try:
@@ -690,6 +701,127 @@ class PostgresTriggerRepository:
             self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_trigger_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
+            raise
+
+    def rotate_secret(self, id: str, owner_user_id: str) -> tuple[TriggerDefinition, str]:
+        """
+        Generate a new secret for the trigger, persist it, and return (updated trigger, new_plaintext_secret).
+        """
+        trigger = self.get_by_id(id, owner_user_id)
+        if not trigger:
+            raise ValueError(f"Trigger not found: id={id} owner={owner_user_id}")
+        new_secret = secrets.token_hex(15)  # ~30 chars
+        now = datetime.now(timezone.utc)
+        updated = TriggerDefinition(
+            id=trigger.id,
+            owner_user_id=trigger.owner_user_id,
+            trigger_type=trigger.trigger_type,
+            display_name=trigger.display_name,
+            path=trigger.path,
+            method=trigger.method,
+            request_body_schema=trigger.request_body_schema,
+            status=trigger.status,
+            auth_mode=trigger.auth_mode,
+            secret_value=new_secret,
+            secret_last_rotated_at=now,
+            visibility=trigger.visibility,
+            created_at=trigger.created_at,
+            updated_at=now,
+        )
+        self.save(updated)
+        return updated, new_secret
+
+
+class PostgresTriggerJobLinkRepository:
+    """Postgres-backed many-to-many trigger-job associations."""
+
+    TABLE = "trigger_job_links"
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+
+    def list_job_ids_for_trigger(
+        self, trigger_id: str, owner_user_id: str
+    ) -> list[str]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table(self.TABLE)
+                .select("job_id")
+                .eq("trigger_id", trigger_id)
+                .eq("owner_user_id", uid)
+                .execute()
+            )
+        except ValueError:
+            return []
+        except Exception as e:
+            logger.exception(
+                "postgres_trigger_job_links_list_jobs_failed | trigger_id={} owner={} error={}",
+                trigger_id,
+                owner_user_id,
+                e,
+            )
+            raise
+        return [row["job_id"] for row in (r.data or [])]
+
+    def list_trigger_ids_for_job(
+        self, job_id: str, owner_user_id: str
+    ) -> list[str]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table(self.TABLE)
+                .select("trigger_id")
+                .eq("job_id", job_id)
+                .eq("owner_user_id", uid)
+                .execute()
+            )
+        except ValueError:
+            return []
+        except Exception as e:
+            logger.exception(
+                "postgres_trigger_job_links_list_triggers_failed | job_id={} owner={} error={}",
+                job_id,
+                owner_user_id,
+                e,
+            )
+            raise
+        return [row["trigger_id"] for row in (r.data or [])]
+
+    def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
+        uid = str(_ensure_uuid(owner_user_id))
+        row = {
+            "trigger_id": trigger_id,
+            "job_id": job_id,
+            "owner_user_id": uid,
+        }
+        try:
+            self._client.table(self.TABLE).upsert(
+                row, on_conflict="trigger_id,job_id,owner_user_id"
+            ).execute()
+        except Exception as e:
+            logger.exception(
+                "postgres_trigger_job_links_attach_failed | trigger_id={} job_id={} error={}",
+                trigger_id,
+                job_id,
+                e,
+            )
+            raise
+
+    def detach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            self._client.table(self.TABLE).delete().eq(
+                "trigger_id", trigger_id
+            ).eq("job_id", job_id).eq("owner_user_id", uid).execute()
+        except Exception as e:
+            logger.exception(
+                "postgres_trigger_job_links_detach_failed | trigger_id={} job_id={} owner={} error={}",
+                trigger_id,
+                job_id,
+                owner_user_id,
+                e,
+            )
             raise
 
 
@@ -800,7 +932,6 @@ class PostgresJobRepository:
             "id": job.id,
             "owner_user_id": uid,
             "display_name": job.display_name,
-            "trigger_id": job.trigger_id,
             "target_id": job.target_id,
             "status": job.status,
             "stage_ids": job.stage_ids,
