@@ -36,6 +36,7 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-15 | notion-file-upload-propagation-retry | Added a targeted retry in Notion page creation when Notion briefly returns "Could not find file_upload with ID" immediately after upload status is `uploaded`; added regression test coverage. |
 | 2026-03-15 | deploy-ts-fixes | Fixed notion_pipeliner_ui TypeScript build errors: DashboardTrigger job_id→job_ids; AuthState.session access via accessToken extraction in AccountPage, ConnectionsPage, PipelinesPage, TriggersPage; PipelineEditorPlaceholder useParams for id; router.test.tsx removed job_id from ManagementTriggerItem mocks. |
 | 2026-03-15 | flow-pipeliner-legal-pages | Added Privacy Policy and Terms of Use pages at /about/privacypolicy and /about/termsofuse for Flow Pipeliner Notion integration submission; public routes outside PublicOnlyRoute; full draft content for Lucid Path Solutions; PublicLayout nav links; router tests; legal-page CSS. |
 | 2026-03-15 | notion-oauth-reconnect | Resettable Notion connection flow: migrations (oauth_connection_states, connector_credentials, connector_external_sources, connector lifecycle columns); OAuth start/callback, disconnect, refresh/list/select sources endpoints; NotionOAuthService; schema sync and JobExecutionService use per-connection OAuth tokens; ConnectionsPage Connect/Disconnect/Refresh/Select databases UI; bootstrap target update on select; notion-oauth-app-setup-guide.md; backend tests. |

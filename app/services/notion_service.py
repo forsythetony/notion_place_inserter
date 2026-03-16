@@ -5,6 +5,7 @@ from io import BytesIO
 
 from loguru import logger
 from notion_client import Client
+from notion_client.errors import APIResponseError
 
 from app.models.schema import DatabaseSchema, PropertySchema
 from app.pipeline_lib.table_format import format_table_log
@@ -374,7 +375,38 @@ class NotionService:
                 **({"icon": icon} if icon is not None else {}),
                 **({"cover": cover} if cover is not None else {}),
             }
-        result = self._client.pages.create(**payload)
+        has_file_upload_payload = False
+        for media_payload in (icon, cover):
+            if not isinstance(media_payload, dict):
+                continue
+            file_upload = media_payload.get("file_upload")
+            if isinstance(file_upload, dict) and file_upload.get("id"):
+                has_file_upload_payload = True
+                break
+
+        retry_delays_seconds = (0.75, 1.5)
+        for attempt in range(len(retry_delays_seconds) + 1):
+            try:
+                result = self._client.pages.create(**payload)
+                break
+            except APIResponseError as exc:
+                message = str(exc)
+                should_retry = (
+                    has_file_upload_payload
+                    and "Could not find file_upload with ID" in message
+                    and attempt < len(retry_delays_seconds)
+                )
+                if not should_retry:
+                    raise
+                delay_seconds = retry_delays_seconds[attempt]
+                logger.warning(
+                    "notion_create_page_file_upload_not_ready_retry | attempt={} delay_seconds={} error={}",
+                    attempt + 1,
+                    delay_seconds,
+                    message,
+                )
+                time.sleep(delay_seconds)
+
         page_id = result.get("id", "") if isinstance(result, dict) else ""
         obj_type = result.get("object", "") if isinstance(result, dict) else ""
         success_table = format_table_log(

@@ -2,6 +2,9 @@
 
 from unittest.mock import MagicMock
 
+from httpx import Headers
+from notion_client.errors import APIResponseError
+
 from app.services.notion_service import NotionService
 
 
@@ -110,3 +113,34 @@ def test_upload_cover_from_bytes_completes_when_pending_then_uploaded():
     assert result == {"type": "file_upload", "file_upload": {"id": "fu-123"}}
     mock_client.file_uploads.send.assert_called_once()
     mock_client.file_uploads.complete.assert_called_once_with("fu-123")
+
+
+def test_create_page_retries_on_file_upload_not_ready_then_succeeds():
+    """create_page retries specific Notion file_upload propagation failures."""
+    mock_client = MagicMock()
+    mock_client.pages.create.side_effect = [
+        APIResponseError(
+            code="object_not_found",
+            status=400,
+            message=(
+                "Could not find file_upload with ID: fu-123. Confirm the status of the file "
+                "upload is `uploaded` and that your integration has capabilities to update or "
+                "insert content."
+            ),
+            headers=Headers(),
+            raw_body_text="",
+        ),
+        {"id": "page-123", "object": "page"},
+    ]
+
+    svc = NotionService(api_key="test-key")
+    svc._client = mock_client
+
+    result = svc.create_page(
+        data_source_id="ds-123",
+        properties={"Title": {"title": [{"text": {"content": "Test"}}]}},
+        cover={"type": "file_upload", "file_upload": {"id": "fu-123"}},
+    )
+
+    assert result["id"] == "page-123"
+    assert mock_client.pages.create.call_count == 2
