@@ -558,6 +558,47 @@ def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_availab
     )
 
 
+def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
+    """UploadImageToNotionHandler logs fallback when owner_user_id set but token_getter returns None."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+        owner_user_id="owner-123",
+    )
+    notion = MagicMock()
+    notion.upload_cover_from_bytes.return_value = {"type": "file_upload", "file_upload": {"id": "fu-1"}}
+    ctx._services["notion"] = notion
+    ctx._services["google_places"] = MagicMock()
+    ctx._services["get_notion_token"] = MagicMock(return_value=None)
+    handler = UploadImageToNotionHandler()
+
+    with patch(
+        "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
+        return_value=b"fake-image-bytes",
+    ):
+        with patch("app.services.job_execution.handlers.upload_image_to_notion.logger") as mock_logger:
+            result = handler.execute(
+                step_id="step_upload",
+                config={},
+                input_bindings={"value": {}},
+                resolved_inputs={"value": "https://example.com/image.jpg"},
+                ctx=ctx,
+                snapshot={},
+            )
+
+    assert result["notion_image_url"] == {"type": "file_upload", "file_upload": {"id": "fu-1"}}
+    call_kwargs = notion.upload_cover_from_bytes.call_args.kwargs
+    assert "access_token" not in call_kwargs
+    mock_logger.warning.assert_called()
+    fallback_calls = [c for c in mock_logger.warning.call_args_list if "notion_upload_fallback_to_global_token" in str(c)]
+    assert len(fallback_calls) == 1
+    call_str = str(fallback_calls[0])
+    assert "owner-123" in call_str
+    assert "oauth_token_unavailable" in call_str
+
+
 def test_optimize_input_claude_handler_returns_optimized_query():
     """OptimizeInputClaudeHandler returns optimized_query (or passthrough when no Claude)."""
     ctx = ExecutionContext(
@@ -1212,3 +1253,75 @@ def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
     assert "job_id=job-1" in str(call_args) or "job-1" in str(call_args)
     assert "data_source_id=ds-fail-123" in str(call_args) or "ds-fail-123" in str(call_args)
     assert "token_source=oauth" in str(call_args) or "oauth" in str(call_args)
+
+
+def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
+    """When owner_user_id is set but OAuth token is unavailable, logs fallback to global token."""
+    notion = MagicMock()
+    notion.create_page.return_value = {"id": "page-1", "object": "page"}
+    get_token = MagicMock(return_value=None)
+    svc = JobExecutionService(
+        notion_service=notion,
+        dry_run=False,
+        get_notion_token_fn=get_token,
+    )
+
+    snapshot = {
+        "job": {
+            "stages": [
+                {
+                    "id": "stage_property_setting",
+                    "sequence": 1,
+                    "pipeline_run_mode": "sequential",
+                    "pipelines": [
+                        {
+                            "id": "pipeline_tags",
+                            "sequence": 1,
+                            "steps": [
+                                {
+                                    "id": "step_tags",
+                                    "step_template_id": "step_template_property_set",
+                                    "sequence": 1,
+                                    "input_bindings": {"value": {"static_value": ["History"]}},
+                                    "config": {
+                                        "data_target_id": "target_places",
+                                        "schema_property_id": "prop_tags",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ]
+        },
+        "target": {"display_name": "Places", "external_target_id": "ds-123"},
+        "active_schema": {
+            "properties": [
+                {
+                    "id": "prop_tags",
+                    "external_property_id": "tags",
+                    "property_type": "multi_select",
+                    "options": [{"id": "o1", "name": "History"}],
+                },
+            ],
+        },
+    }
+
+    with patch("app.services.job_execution.job_execution_service.logger") as mock_logger:
+        svc.execute_snapshot_run(
+            snapshot=snapshot,
+            run_id="run-1",
+            job_id="job-1",
+            trigger_payload={},
+            owner_user_id="user-oauth-missing",
+        )
+
+    mock_logger.warning.assert_called()
+    fallback_calls = [c for c in mock_logger.warning.call_args_list if "notion_create_page_fallback_to_global_token" in str(c)]
+    assert len(fallback_calls) == 1
+    call_str = str(fallback_calls[0])
+    assert "run_id=run-1" in call_str or "run-1" in call_str
+    assert "user-oauth-missing" in call_str
+    assert "ds-123" in call_str
+    assert "oauth_token_unavailable" in call_str
+    notion.create_page.assert_called_once()

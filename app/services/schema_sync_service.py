@@ -138,6 +138,7 @@ class SchemaSyncService:
             if use_oauth and self._credentials_repo:
                 return self._sync_notion_target_oauth(target, owner_user_id)
             if self._notion_service:
+                # TODO: Remove global token fallback in future PR. Require OAuth for schema sync.
                 return self._sync_notion_target(target, owner_user_id)
 
         raise SchemaSyncServiceError(

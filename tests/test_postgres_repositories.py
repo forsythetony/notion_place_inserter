@@ -14,6 +14,7 @@ from app.domain import (
 from app.domain.jobs import PipelineDefinition, StageDefinition, StepInstance
 from app.repositories.postgres_repositories import (
     PostgresConnectorTemplateRepository,
+    PostgresConnectorCredentialsRepository,
     PostgresJobRepository,
     PostgresTargetRepository,
     PostgresTargetSchemaRepository,
@@ -25,6 +26,41 @@ from app.services.validation_service import JobGraph
 @pytest.fixture
 def mock_client():
     return MagicMock()
+
+
+# ---- PostgresConnectorCredentialsRepository ----
+def test_postgres_connector_credentials_upsert_clears_revoked_at(mock_client):
+    """Upsert should un-revoke credentials when reconnecting OAuth."""
+    mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock()
+    repo = PostgresConnectorCredentialsRepository(mock_client)
+
+    repo.upsert(
+        connector_instance_id="connector_instance_notion_default",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        provider="notion",
+        secret_ref="notion_oauth:871ba2fa-fd5d-4a81-9f0d-0d98b348ccde:connector_instance_notion_default",
+        token_payload={"access_token": "at", "workspace_id": "w1"},
+    )
+
+    upsert_row = mock_client.table.return_value.upsert.call_args[0][0]
+    assert upsert_row["credential_type"] == "oauth2"
+    assert upsert_row["revoked_at"] is None
+
+
+def test_postgres_connector_credentials_get_for_instance_filters_revoked(mock_client):
+    """get_for_instance excludes rows with revoked_at set."""
+    mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.is_.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    repo = PostgresConnectorCredentialsRepository(mock_client)
+
+    result = repo.get_for_instance(
+        "connector_instance_notion_default",
+        "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        "notion",
+    )
+
+    assert result is None
 
 
 # ---- PostgresConnectorTemplateRepository ----

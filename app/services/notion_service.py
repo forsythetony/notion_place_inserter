@@ -301,6 +301,7 @@ class NotionService:
             logger.warning("notion_file_upload_skipped_empty_bytes")
             return None
         try:
+            # TODO: Remove global token fallback in future PR. Require OAuth access_token for all Notion uploads.
             upload_client = Client(auth=access_token) if access_token else self._client
             logger.info(
                 "notion_file_upload_create_started | bytes_len={} filename={} content_type={}",
@@ -383,6 +384,8 @@ class NotionService:
     ) -> dict:
         """Create a new page in the given data source with the provided properties.
         Optionally include top-level icon and cover (Notion page metadata, not properties).
+
+        TODO: Deprecated. Remove in future PR. Use create_page_with_token with OAuth for all writes.
         """
         cover_url = self._extract_media_url(cover)
         icon_url = self._extract_media_url(icon)

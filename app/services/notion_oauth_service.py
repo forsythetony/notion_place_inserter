@@ -237,9 +237,20 @@ class NotionOAuthService:
             NOTION_CONNECTOR_INSTANCE_ID, owner_user_id, "notion"
         )
         if not cred:
+            logger.debug(
+                "notion_oauth_token_missing | owner_user_id={} reason=credential_not_found_or_revoked",
+                owner_user_id,
+            )
             return None
         payload = cred.get("token_payload") or {}
-        return payload.get("access_token")
+        token = payload.get("access_token")
+        if not token:
+            logger.debug(
+                "notion_oauth_token_missing | owner_user_id={} reason=access_token_empty_in_payload",
+                owner_user_id,
+            )
+            return None
+        return token
 
     def refresh_sources(self, owner_user_id: str) -> list[dict[str, Any]]:
         """

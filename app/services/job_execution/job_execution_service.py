@@ -210,6 +210,15 @@ class JobExecutionService:
         if self._get_notion_token and owner_user_id:
             access_token = self._get_notion_token(owner_user_id)
         token_source = "oauth" if access_token else "global"
+        if not access_token and owner_user_id:
+            logger.warning(
+                "notion_create_page_fallback_to_global_token | run_id={} job_id={} owner_user_id={} data_source_id={} "
+                "reason=oauth_token_unavailable",
+                run_id,
+                job_id,
+                owner_user_id,
+                data_source_id,
+            )
         try:
             if access_token:
                 from app.services.notion_service import NotionService
@@ -223,6 +232,7 @@ class JobExecutionService:
                     dry_run=self._dry_run,
                 )
             elif self._notion:
+                # TODO: Remove global token fallback in future PR. Require OAuth for all Notion writes.
                 result = self._notion.create_page(
                     data_source_id=data_source_id,
                     properties=notion_props,

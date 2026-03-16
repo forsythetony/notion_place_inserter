@@ -1198,6 +1198,8 @@ class PostgresConnectorCredentialsRepository:
             "token_expires_at": token_expires_at.isoformat() if token_expires_at else None,
             "last_refreshed_at": now.isoformat(),
             "updated_at": now.isoformat(),
+            # Re-connecting should reactivate credentials that were previously revoked.
+            "revoked_at": None,
         }
         self._client.table(self.TABLE).upsert(
             row, on_conflict="owner_user_id,connector_instance_id,provider,credential_type"
