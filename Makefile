@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -43,7 +43,8 @@ help:
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
-	@echo "  make test-notion-oauth-db [DATABASE_ID_ARG=--data-source-id <id>] - Test Notion OAuth token access to data sources"
+	@echo "  make test-notion-oauth-db [DATABASE_ID_ARG=...] [OAUTH_ARGS=...] - Test Notion OAuth token access (e.g. OAUTH_ARGS='--list-pages --query Places')"
+	@echo "  make patch-local-oauth-from-prod [EMAIL=...] - Copy prod Notion OAuth credentials into local DB for testing"
 	@echo "  make tag VERSION=vX.Y.Z - Create and push an annotated git tag (e.g. VERSION=v1.0.0)"
 	@echo ""
 	@echo "Environment:"
@@ -195,7 +196,14 @@ notion-pull:
 	LOG_LEVEL=$(LOG_LEVEL) python scripts/notion_puller/main.py
 
 test-notion-oauth-db:
-	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_notion_oauth_db.py $(DATABASE_ID_ARG)'
+	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_notion_oauth_db.py $(DATABASE_ID_ARG) $(OAUTH_ARGS)'
+
+# Copy prod Notion OAuth credentials into local DB. Requires forsythetony@gmail.com in local auth.
+# Script reads envs independently; do not source env files into shell.
+# Usage: make patch-local-oauth-from-prod  or  make patch-local-oauth-from-prod EMAIL=other@example.com
+EMAIL ?= forsythetony@gmail.com
+patch-local-oauth-from-prod:
+	@python scripts/patch_local_oauth_from_prod.py --prod-env envs/prod.env --local-env envs/local.env --email "$(EMAIL)"
 
 # Start a subshell with envs/local.env sourced. Use when you need env vars in your shell.
 env-source:

@@ -17,7 +17,7 @@ from app.domain.connectors import ConnectorInstance
 
 NOTION_OAUTH_AUTHORIZE = "https://api.notion.com/v1/oauth/authorize"
 NOTION_OAUTH_TOKEN = "https://api.notion.com/v1/oauth/token"
-NOTION_API_VERSION = "2022-06-28"  # OAuth endpoints support this version
+NOTION_API_VERSION = "2025-09-03"  # Required for data_sources in databases.retrieve; 2022-06-28 returns legacy format without data_sources
 
 NOTION_CONNECTOR_TEMPLATE_ID = "notion_oauth_workspace"
 NOTION_CONNECTOR_INSTANCE_ID = "connector_instance_notion_default"
@@ -252,24 +252,69 @@ class NotionOAuthService:
             return None
         return token
 
+    def _resolve_to_data_source_id(
+        self, token: str, item_id: str, obj: str, headers: dict[str, str]
+    ) -> str | None:
+        """
+        Resolve a search result to a data source ID. For object=database, call
+        databases.retrieve and use data_sources[0].id. For object=data_source,
+        return item_id as-is.
+        """
+        if obj == "data_source":
+            return item_id
+        if obj != "database":
+            return None
+        with httpx.Client() as client:
+            r = client.get(
+                f"https://api.notion.com/v1/databases/{item_id}",
+                headers=headers,
+                timeout=30,
+            )
+        if r.status_code != 200:
+            logger.warning(
+                "notion_oauth_resolve_database_failed | database_id={} status={}",
+                item_id,
+                r.status_code,
+            )
+            return None
+        data = r.json()
+        data_sources = data.get("data_sources") or []
+        if not data_sources:
+            logger.warning(
+                "notion_oauth_database_no_data_sources | database_id={} response_keys={}",
+                item_id,
+                list(data.keys()),
+            )
+            return None
+        ds_id = data_sources[0].get("id")
+        if not ds_id:
+            logger.warning(
+                "notion_oauth_database_empty_ds_id | database_id={}",
+                item_id,
+            )
+            return None
+        return ds_id
+
     def refresh_sources(self, owner_user_id: str) -> list[dict[str, Any]]:
         """
         Call Notion search to discover databases, upsert into connector_external_sources.
+        Stores data source IDs (not database IDs) so pages.create works correctly.
         Returns list of {external_source_id, display_name, is_accessible}.
         """
         token = self.get_access_token(owner_user_id)
         if not token:
             raise ValueError("Not connected to Notion")
 
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": NOTION_API_VERSION,
+            "Content-Type": "application/json",
+        }
         with httpx.Client() as client:
             r = client.post(
                 "https://api.notion.com/v1/search",
                 json={"filter": {"property": "object", "value": "data_source"}},
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Notion-Version": NOTION_API_VERSION,
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
                 timeout=30,
             )
         if r.status_code != 200:
@@ -284,8 +329,11 @@ class NotionOAuthService:
             obj = item.get("object")
             if obj not in ("database", "data_source"):
                 continue
-            db_id = item.get("id")
-            if not db_id:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            data_source_id = self._resolve_to_data_source_id(token, item_id, obj, headers)
+            if not data_source_id:
                 continue
             name = item.get("name") or ""
             if not name:
@@ -295,10 +343,10 @@ class NotionOAuthService:
                         if isinstance(b, dict):
                             name += b.get("plain_text", "") or b.get("text", {}).get("content", "")
             if not name:
-                name = db_id or "Untitled"
+                name = item_id or "Untitled"
             parent = item.get("parent") or {}
             sources.append({
-                "external_source_id": db_id,
+                "external_source_id": data_source_id,
                 "display_name": name,
                 "is_accessible": True,
                 "external_parent_id": parent.get("database_id") or parent.get("data_source_id"),

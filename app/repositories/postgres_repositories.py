@@ -527,6 +527,31 @@ class PostgresTargetRepository:
             raise
         return [_row_to_data_target(row, owner_user_id) for row in (r.data or [])]
 
+    def list_by_connector(
+        self, connector_instance_id: str, owner_user_id: str
+    ) -> list[DataTarget]:
+        """List data targets for a connector instance (e.g. Notion)."""
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table(self.TABLE)
+                .select("*")
+                .eq("owner_user_id", uid)
+                .eq("connector_instance_id", connector_instance_id)
+                .execute()
+            )
+        except ValueError:
+            return []
+        except Exception as e:
+            logger.exception(
+                "postgres_target_list_by_connector_failed | connector={} owner={} error={}",
+                connector_instance_id,
+                owner_user_id,
+                e,
+            )
+            raise
+        return [_row_to_data_target(row, owner_user_id) for row in (r.data or [])]
+
     def save(self, target: DataTarget) -> None:
         if self._validation_service:
             self._validation_service.validate_data_target(target)
@@ -599,6 +624,39 @@ class PostgresTargetSchemaRepository:
             if snap.data_target_id == data_target_id and snap.is_active:
                 return snap
         return None
+
+    def get_fetched_at_for_snapshots(
+        self, snapshot_ids: list[str], owner_user_id: str
+    ) -> dict[str, datetime]:
+        """Batch fetch fetched_at for given snapshot ids. Returns {id: fetched_at}."""
+        if not snapshot_ids:
+            return {}
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table(self.TABLE)
+                .select("id, fetched_at")
+                .eq("owner_user_id", uid)
+                .in_("id", snapshot_ids)
+                .execute()
+            )
+        except ValueError:
+            return {}
+        except Exception as e:
+            logger.exception(
+                "postgres_target_schema_get_fetched_at_failed | owner={} error={}",
+                owner_user_id,
+                e,
+            )
+            raise
+        result: dict[str, datetime] = {}
+        for row in r.data or []:
+            fetched = row.get("fetched_at")
+            if fetched is not None:
+                parsed = _parse_opt_datetime(fetched)
+                if parsed:
+                    result[row["id"]] = parsed
+        return result
 
     def save(self, snapshot: TargetSchemaSnapshot) -> None:
         uid = str(_ensure_uuid(snapshot.owner_user_id))

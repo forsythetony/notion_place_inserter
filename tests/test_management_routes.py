@@ -7,11 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.domain.connectors import ConnectorInstance
-from app.domain.jobs import JobDefinition
+from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition, StepInstance, StepTemplate
 from app.domain.limits import AppLimits
 from app.domain.triggers import TriggerDefinition
 from app.main import app
 from app.services.supabase_auth_repository import USER_TYPE_STANDARD
+from app.services.validation_service import JobGraph
 
 
 @pytest.fixture
@@ -95,6 +96,50 @@ def test_management_pipelines_200_list_shape(client):
     assert item["status"] == "active"
     assert "2026-03-15" in (item["updated_at"] or "")
     mock_job_repo.list_by_owner.assert_called_once_with(user_id)
+
+
+def test_management_step_templates_401_without_auth(client):
+    """GET /management/step-templates without Authorization returns 401."""
+    resp = client.get("/management/step-templates")
+    assert resp.status_code == 401
+
+
+def test_management_step_templates_200_list_shape(client):
+    """GET /management/step-templates with valid auth returns items list."""
+    _setup_auth(client)
+    mock_step_template_repo = MagicMock()
+    mock_step_template_repo.list_all.return_value = [
+        StepTemplate(
+            id="step_template_property_set",
+            slug="property-set",
+            display_name="Property Set",
+            step_kind="transform",
+            description="Set a property on the target",
+            input_contract={},
+            output_contract={},
+            config_schema={},
+            runtime_binding="property_set",
+            category="transform",
+            status="active",
+        ),
+    ]
+    app.state.step_template_repository = mock_step_template_repo
+
+    resp = client.get(
+        "/management/step-templates",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert len(data["items"]) == 1
+    item = data["items"][0]
+    assert item["id"] == "step_template_property_set"
+    assert item["display_name"] == "Property Set"
+    assert item["category"] == "transform"
+    assert item["status"] == "active"
+    assert "description" in item
+    mock_step_template_repo.list_all.assert_called_once()
 
 
 def test_management_connections_401_without_auth(client):
@@ -371,3 +416,233 @@ def test_management_account_200_with_limits(client):
     assert data["limits"]["max_pipelines_per_stage"] == 20
     assert data["limits"]["max_steps_per_pipeline"] == 50
     mock_app_config.get_by_owner.assert_called_once_with(user_id)
+
+
+def _make_minimal_job_graph(user_id: str, job_id: str = "job_test"):
+    """Build minimal valid JobGraph for tests."""
+    stage_id = "stage_1"
+    pipeline_id = "pipeline_1"
+    step_id = "step_1"
+    job = JobDefinition(
+        id=job_id,
+        owner_user_id=user_id,
+        display_name="Test Job",
+        target_id="tgt1",
+        status="active",
+        stage_ids=[stage_id],
+    )
+    stage = StageDefinition(
+        id=stage_id,
+        job_id=job_id,
+        display_name="Stage 1",
+        sequence=1,
+        pipeline_ids=[pipeline_id],
+        pipeline_run_mode="parallel",
+    )
+    pipeline = PipelineDefinition(
+        id=pipeline_id,
+        stage_id=stage_id,
+        display_name="Pipeline 1",
+        sequence=1,
+        step_ids=[step_id],
+    )
+    step = StepInstance(
+        id=step_id,
+        pipeline_id=pipeline_id,
+        step_template_id="step_template_property_set",
+        display_name="Property Set",
+        sequence=1,
+        input_bindings={},
+        config={"data_target_id": "tgt1", "schema_property_id": "prop_title"},
+    )
+    return JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
+
+
+def test_management_pipeline_get_404_when_not_found(client):
+    """GET /management/pipelines/{id} returns 404 when pipeline not found."""
+    user_id = _setup_auth(client)
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = None
+    app.state.job_repository = mock_job_repo
+
+    resp = client.get(
+        "/management/pipelines/job_missing",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+    mock_job_repo.get_graph_by_id.assert_called_once_with("job_missing", user_id)
+
+
+def test_management_pipeline_get_200_returns_full_graph(client):
+    """GET /management/pipelines/{id} returns full editable graph when found."""
+    user_id = _setup_auth(client)
+    graph = _make_minimal_job_graph(user_id, "job_test")
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = graph
+    app.state.job_repository = mock_job_repo
+
+    resp = client.get(
+        "/management/pipelines/job_test",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "job_test"
+    assert data["display_name"] == "Test Job"
+    assert "stages" in data
+    assert len(data["stages"]) == 1
+    assert data["stages"][0]["id"] == "stage_1"
+    assert "pipelines" in data["stages"][0]
+    assert len(data["stages"][0]["pipelines"]) == 1
+    assert "steps" in data["stages"][0]["pipelines"][0]
+    mock_job_repo.get_graph_by_id.assert_called_once_with("job_test", user_id)
+
+
+def test_management_pipeline_put_200_saves_and_returns_canonical(client):
+    """PUT /management/pipelines/{id} saves graph and returns canonical payload."""
+    user_id = _setup_auth(client)
+    graph = _make_minimal_job_graph(user_id, "job_save")
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = graph
+    app.state.job_repository = mock_job_repo
+
+    payload = {
+        "id": "job_save",
+        "owner_user_id": user_id,
+        "display_name": "Saved Job",
+        "target_id": "tgt1",
+        "status": "active",
+        "stage_ids": ["stage_1"],
+        "stages": [
+            {
+                "id": "stage_1",
+                "job_id": "job_save",
+                "display_name": "Stage 1",
+                "sequence": 1,
+                "pipeline_ids": ["pipeline_1"],
+                "pipelines": [
+                    {
+                        "id": "pipeline_1",
+                        "stage_id": "stage_1",
+                        "display_name": "Pipeline 1",
+                        "sequence": 1,
+                        "step_ids": ["step_1"],
+                        "steps": [
+                            {
+                                "id": "step_1",
+                                "pipeline_id": "pipeline_1",
+                                "step_template_id": "step_template_property_set",
+                                "display_name": "Property Set",
+                                "sequence": 1,
+                                "input_bindings": {},
+                                "config": {"data_target_id": "tgt1", "schema_property_id": "prop_title"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    resp = client.put(
+        "/management/pipelines/job_save",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json=payload,
+    )
+    assert resp.status_code == 200
+    mock_job_repo.save_job_graph.assert_called_once()
+    mock_job_repo.get_graph_by_id.assert_called_with("job_save", user_id)
+    data = resp.json()
+    assert data["id"] == "job_save"
+    assert "stages" in data
+
+
+def test_management_pipeline_put_422_on_validation_error(client):
+    """PUT /management/pipelines/{id} returns 422 with validation_errors when invalid."""
+    from app.services.validation_service import ValidationError
+
+    user_id = _setup_auth(client)
+    mock_job_repo = MagicMock()
+    mock_job_repo.save_job_graph.side_effect = ValidationError(
+        "validation failed",
+        errors=["pipeline 'p1' must terminate with Cache Set or Property Set"],
+    )
+    app.state.job_repository = mock_job_repo
+
+    payload = {
+        "id": "job_bad",
+        "owner_user_id": user_id,
+        "display_name": "Bad",
+        "target_id": "tgt1",
+        "status": "active",
+        "stage_ids": ["s1"],
+        "stages": [
+            {
+                "id": "s1",
+                "job_id": "job_bad",
+                "display_name": "S1",
+                "sequence": 1,
+                "pipeline_ids": ["p1"],
+                "pipelines": [
+                    {
+                        "id": "p1",
+                        "stage_id": "s1",
+                        "display_name": "P1",
+                        "sequence": 1,
+                        "step_ids": ["st1"],
+                        "steps": [
+                            {
+                                "id": "st1",
+                                "pipeline_id": "p1",
+                                "step_template_id": "step_template_google_places_lookup",
+                                "display_name": "Lookup",
+                                "sequence": 1,
+                                "input_bindings": {},
+                                "config": {},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    resp = client.put(
+        "/management/pipelines/job_bad",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json=payload,
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "validation_errors" in data
+    assert any("terminate" in e.lower() for e in data["validation_errors"])
+
+
+def test_management_pipeline_post_200_creates_and_returns_graph(client):
+    """POST /management/pipelines creates new pipeline and returns full graph."""
+    user_id = _setup_auth(client)
+
+    def mock_get_graph(job_id, owner):
+        g = _make_minimal_job_graph(owner, job_id)
+        g.job.display_name = "My New Pipeline"
+        return g
+
+    mock_job_repo = MagicMock()
+    mock_job_repo.save_job_graph.return_value = None
+    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    app.state.job_repository = mock_job_repo
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"display_name": "My New Pipeline"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "id" in data
+    assert data["id"].startswith("job_")
+    assert data["display_name"] == "My New Pipeline"
+    assert "stages" in data
+    mock_job_repo.save_job_graph.assert_called_once()
+    mock_job_repo.get_graph_by_id.assert_called_once()

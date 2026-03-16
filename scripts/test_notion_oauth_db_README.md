@@ -54,6 +54,43 @@ python scripts/test_notion_oauth_db.py --data-source-id 1e2a5cd4-f107-490f-9b7a-
 make test-notion-oauth-db DATABASE_ID_ARG="--data-source-id 1e2a5cd4-f107-490f-9b7a-4af865fd1beb"
 ```
 
+### List accessible pages
+
+```bash
+# List all pages shared with the integration
+python scripts/test_notion_oauth_db.py --list-pages
+
+# List both data sources and pages
+python scripts/test_notion_oauth_db.py --list-all
+```
+
+### Search by title
+
+```bash
+# Filter results by title (works with --list-only, --list-pages, --list-all)
+python scripts/test_notion_oauth_db.py --list-pages --query "Places"
+python scripts/test_notion_oauth_db.py --query "Locations"
+```
+
+### Save to CSV (gitignored)
+
+Results are saved to `temp/` (already gitignored). Use `--fetch-titles` for complete metadata (parent_type, url, timestamps, etc.):
+
+```bash
+python scripts/test_notion_oauth_db.py --list-pages --output-csv
+python scripts/test_notion_oauth_db.py --list-all --fetch-titles --output-csv
+```
+
+CSV columns: `type`, `id`, `display_name`, `parent_type`, `parent_id`, `created_time`, `last_edited_time`, `url`, `public_url`, `in_trash`, `database_parent_type`, `database_parent_id`
+
+### Fetch full titles (when search returns partial)
+
+If display names show as IDs, the search API may have returned partial objects. Use `--fetch-titles` to retrieve each item for proper titles (slower, more API calls):
+
+```bash
+python scripts/test_notion_oauth_db.py --list-pages --fetch-titles --output-csv
+```
+
 ### Verbose output
 
 ```bash

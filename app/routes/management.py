@@ -4,12 +4,14 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
 from app.domain.triggers import TriggerDefinition
+from app.repositories.yaml_loader import job_graph_to_yaml_dict, parse_job_graph
+from app.services.validation_service import ValidationError
 
 router = APIRouter(prefix="/management", tags=["management"])
 
@@ -58,6 +60,179 @@ def list_pipelines(
             "updated_at": _serialize_datetime(j.updated_at),
         }
         for j in jobs
+    ]
+    return {"items": items}
+
+
+@router.get("/pipelines/{pipeline_id}")
+def get_pipeline(
+    request: Request,
+    pipeline_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Fetch full job graph for editing. Returns editable payload (kind, id, display_name,
+    target_id, stages with nested pipelines and steps).
+    """
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: job repository not available"},
+        )
+    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    payload = job_graph_to_yaml_dict(graph)
+    return payload
+
+
+@router.put("/pipelines/{pipeline_id}")
+def save_pipeline(
+    request: Request,
+    pipeline_id: str,
+    body: dict = Body(...),
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Persist job graph. Accepts full editable payload. Creates or updates.
+    Returns 422 with validation_errors when validation fails.
+    """
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: job repository not available"},
+        )
+    try:
+        graph = parse_job_graph(body, owner_user_id_override=ctx.user_id)
+    except (KeyError, TypeError, ValueError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid payload: {e!s}",
+        )
+    # Enforce path id and owner for security
+    graph.job.id = pipeline_id
+    graph.job.owner_user_id = ctx.user_id
+    for stage in graph.stages:
+        stage.job_id = pipeline_id
+        stage.owner_user_id = ctx.user_id
+    for pipeline in graph.pipelines:
+        pipeline.owner_user_id = ctx.user_id
+    for step in graph.steps:
+        step.owner_user_id = ctx.user_id
+    try:
+        job_repo.save_job_graph(graph, skip_reference_checks=True)
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Validation failed", "validation_errors": e.errors},
+        )
+    # Return canonical saved payload
+    saved = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    return job_graph_to_yaml_dict(saved) if saved else {"id": pipeline_id}
+
+
+@router.post("/pipelines")
+def create_pipeline(
+    request: Request,
+    body: dict = Body(default_factory=dict),
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Create a new pipeline. Accepts minimal payload (display_name, target_id optional).
+    Returns full graph payload with generated id for editor load.
+    """
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: job repository not available"},
+        )
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    display_name = (body.get("display_name") or "").strip() or "New Pipeline"
+    target_id = (body.get("target_id") or "").strip() or "placeholder"
+    # Build minimal valid graph: job + 1 stage + 1 pipeline + 1 property_set step
+    from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition, StepInstance
+
+    stage_id = f"stage_{uuid.uuid4().hex[:8]}"
+    pipeline_id = f"pipeline_{uuid.uuid4().hex[:8]}"
+    step_id = f"step_{uuid.uuid4().hex[:8]}"
+    job = JobDefinition(
+        id=job_id,
+        owner_user_id=ctx.user_id,
+        display_name=display_name,
+        target_id=target_id,
+        status="active",
+        stage_ids=[stage_id],
+    )
+    stage = StageDefinition(
+        id=stage_id,
+        job_id=job_id,
+        display_name="Stage 1",
+        sequence=1,
+        pipeline_ids=[pipeline_id],
+        pipeline_run_mode="parallel",
+    )
+    pipeline = PipelineDefinition(
+        id=pipeline_id,
+        stage_id=stage_id,
+        display_name="Pipeline 1",
+        sequence=1,
+        step_ids=[step_id],
+    )
+    step = StepInstance(
+        id=step_id,
+        pipeline_id=pipeline_id,
+        step_template_id="step_template_property_set",
+        display_name="Property Set",
+        sequence=1,
+        input_bindings={},
+        config={
+            "data_target_id": target_id,
+            "target_kind": "page_metadata",
+            "target_field": "cover_image",
+        },
+    )
+    from app.services.validation_service import JobGraph
+
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
+    try:
+        job_repo.save_job_graph(graph, skip_reference_checks=True)
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Validation failed", "validation_errors": e.errors},
+        )
+    saved = job_repo.get_graph_by_id(job_id, ctx.user_id)
+    return job_graph_to_yaml_dict(saved) if saved else {"id": job_id}
+
+
+@router.get("/step-templates")
+def list_step_templates(
+    request: Request,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    List step templates for the pipeline editor picker.
+    Returns id, display_name, category, status, description.
+    """
+    step_template_repo = getattr(request.app.state, "step_template_repository", None)
+    if not step_template_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: step template repository not available"},
+        )
+    templates = step_template_repo.list_all()
+    items = [
+        {
+            "id": t.id,
+            "display_name": t.display_name,
+            "category": t.category,
+            "status": t.status,
+            "description": t.description or "",
+        }
+        for t in templates
     ]
     return {"items": items}
 

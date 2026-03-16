@@ -257,6 +257,7 @@ async def lifespan(app: FastAPI):
     app.state.job_repository = job_repo
     app.state.trigger_repository = trigger_repo
     app.state.target_repository = target_repo
+    app.state.step_template_repository = step_template_repo
     app.state.target_schema_repository = target_schema_repo
     app.state.app_config_repository = app_config_repo
     app.state.connector_instance_repository = connector_instance_repo

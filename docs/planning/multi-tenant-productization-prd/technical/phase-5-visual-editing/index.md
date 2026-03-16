@@ -2,7 +2,7 @@
 
 ## Status
 
-- p5_pr01–p5_pr03 complete (2026-03-15); p5_pr04 remaining
+- p5_pr01–p5_pr04 complete (2026-03-16)
 - Scope: add rich visual pipeline editor; dual view (visual + structured); style guide foundation; dashboard management surfaces
 
 ## Phase 5 PR Task Index

@@ -258,14 +258,18 @@ class NotionService:
                     if isinstance(parent, dict):
                         data_source_id = str(parent.get("data_source_id", ""))
                     error_kind = "data_source_not_found" if "Could not find data_source" in message else "notion_api_error"
+                    hint = ""
+                    if error_kind == "data_source_not_found":
+                        hint = " configured_id may be a database_id; pages.create requires data_source_id. Reconnect and refresh sources in Connections."
                     logger.error(
                         "notion_create_page_data_source_failed | notion_data_source_id={} error_domain=notion error_kind={} "
-                        "notion_error_code={} notion_status={} error_message={}",
+                        "notion_error_code={} notion_status={} error_message={} hint={}",
                         data_source_id,
                         error_kind,
                         getattr(exc, "code", ""),
                         getattr(exc, "status", ""),
                         message[:500] if message else "",
+                        hint,
                     )
                     raise
                 delay_seconds = retry_delays_seconds[attempt]

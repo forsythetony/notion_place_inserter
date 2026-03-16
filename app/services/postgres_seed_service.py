@@ -50,6 +50,8 @@ STARTER_JOB_SLUG = "notion_place_inserter"
 # TODO: Before production, replace with per-tenant resolution (e.g. OAuth binding,
 #       user-selected DB, or env override) — this value must not be hardcoded.
 PLACEHOLDER_EXTERNAL_TARGET_ID = "9592d56b-899e-440e-9073-b2f0768669ad"
+# Placeholder for Locations target until user selects via OAuth. Same convention as above.
+PLACEHOLDER_LOCATIONS_EXTERNAL_TARGET_ID = "cfecaf05-306e-48ac-9d8b-bb14e8243d44"
 
 
 def _project_root() -> Path:
@@ -160,21 +162,24 @@ class PostgresBootstrapProvisioningService:
                 self._connector_instances.save(inst)
                 logger.info("bootstrap_provision_connector | id={} owner={}", conn_id, owner_user_id)
 
-        # 2. Target (required by job)
-        target_id = "target_places_to_visit"
-        if not self._targets.get_by_id(target_id, uid):
-            target = DataTarget(
-                id=target_id,
-                owner_user_id=uid,
-                target_template_id="notion_database",
-                connector_instance_id="connector_instance_notion_default",
-                display_name="Places to Visit",
-                external_target_id=PLACEHOLDER_EXTERNAL_TARGET_ID,
-                status="active",
-                visibility="owner",
-            )
-            self._targets.save(target)
-            logger.info("bootstrap_provision_target | id={} owner={}", target_id, owner_user_id)
+        # 2. Targets (required by job and ai_select_relation)
+        for target_id, display_name, placeholder_id in [
+            ("target_places_to_visit", "Places to Visit", PLACEHOLDER_EXTERNAL_TARGET_ID),
+            ("target_locations", "Locations", PLACEHOLDER_LOCATIONS_EXTERNAL_TARGET_ID),
+        ]:
+            if not self._targets.get_by_id(target_id, uid):
+                target = DataTarget(
+                    id=target_id,
+                    owner_user_id=uid,
+                    target_template_id="notion_database",
+                    connector_instance_id="connector_instance_notion_default",
+                    display_name=display_name,
+                    external_target_id=placeholder_id,
+                    status="active",
+                    visibility="owner",
+                )
+                self._targets.save(target)
+                logger.info("bootstrap_provision_target | id={} owner={}", target_id, owner_user_id)
 
         # 3. Parse trigger to get trigger_id for job wiring
         trigger = parse_trigger_definition(trigger_data)
