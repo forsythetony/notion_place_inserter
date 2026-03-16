@@ -39,3 +39,11 @@ class ConnectorInstance:
     visibility: str = "owner"
     last_validated_at: datetime | None = None
     last_error: str | None = None
+    # OAuth connection lifecycle (from connector_instances extensions)
+    auth_status: str = "pending"
+    authorized_at: datetime | None = None
+    disconnected_at: datetime | None = None
+    provider_account_id: str | None = None
+    provider_account_name: str | None = None
+    last_synced_at: datetime | None = None
+    metadata: dict[str, Any] | None = None

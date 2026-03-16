@@ -21,8 +21,11 @@ from app.integrations.supabase_config import load_supabase_config
 from app.integrations.supabase_client import create_supabase_client
 from app.repositories import (
     PostgresAppConfigRepository,
+    PostgresConnectorCredentialsRepository,
+    PostgresConnectorExternalSourcesRepository,
     PostgresConnectorInstanceRepository,
     PostgresJobRepository,
+    PostgresOAuthConnectionStateRepository,
     PostgresRunRepository,
     PostgresStepTemplateRepository,
     PostgresTargetRepository,
@@ -40,9 +43,10 @@ from app.services.target_service import TargetService
 from app.services.schema_sync_service import SchemaSyncService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
+from app.services.notion_oauth_service import NotionOAuthService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.routes import auth_context, invitations, locations, management, signup, test
+from app.routes import auth_context, invitations, locations, management, notion_oauth, signup, test
 from app.services.signup_orchestration_service import SignupOrchestrationService
 
 # Bootstrap env at import so all runtime lookups see file values (unless overridden)
@@ -257,6 +261,19 @@ async def lifespan(app: FastAPI):
     app.state.app_config_repository = app_config_repo
     app.state.connector_instance_repository = connector_instance_repo
 
+    oauth_state_repo = PostgresOAuthConnectionStateRepository(supabase_client)
+    credentials_repo = PostgresConnectorCredentialsRepository(supabase_client)
+    external_sources_repo = PostgresConnectorExternalSourcesRepository(supabase_client)
+    app.state.connector_external_sources_repository = external_sources_repo
+
+    notion_oauth_svc = NotionOAuthService(
+        oauth_state_repo=oauth_state_repo,
+        credentials_repo=credentials_repo,
+        external_sources_repo=external_sources_repo,
+        connector_instance_repo=connector_instance_repo,
+    )
+    app.state.notion_oauth_service = notion_oauth_svc
+
     trigger_service = TriggerService(trigger_repository=trigger_repo)
     target_service = TargetService(
         target_repository=target_repo,
@@ -272,6 +289,7 @@ async def lifespan(app: FastAPI):
         target_schema_repository=target_schema_repo,
         connector_instance_repository=connector_instance_repo,
         notion_service=notion_svc,
+        connector_credentials_repository=credentials_repo,
     )
     app.state.trigger_service = trigger_service
     app.state.target_service = target_service
@@ -285,6 +303,7 @@ async def lifespan(app: FastAPI):
         freepik_service=freepik_svc,
         dry_run=dry_run,
         run_repository=postgres_run_repo,
+        get_notion_token_fn=notion_oauth_svc.get_access_token,
     )
     app.state.job_execution_service = job_execution_service
 
@@ -316,6 +335,7 @@ if _cors_origins:
 
 app.include_router(auth_context.router)
 app.include_router(management.router)
+app.include_router(notion_oauth.router)
 app.include_router(signup.router)
 app.include_router(invitations.router)
 app.include_router(locations.router)

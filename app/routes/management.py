@@ -88,6 +88,8 @@ def list_connections(
             "connector_template_id": c.connector_template_id,
             "last_validated_at": _serialize_datetime(c.last_validated_at),
             "last_error": c.last_error,
+            "auth_status": getattr(c, "auth_status", "pending"),
+            "provider_account_name": getattr(c, "provider_account_name", None),
         }
         for c in instances
     ]

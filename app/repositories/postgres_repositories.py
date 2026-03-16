@@ -84,6 +84,20 @@ def _row_to_step_template(row: dict[str, Any]) -> StepTemplate:
     )
 
 
+def _parse_opt_datetime(val: Any) -> datetime | None:
+    """Parse datetime from row value. Returns None if invalid or missing."""
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 def _row_to_connector_instance(row: dict[str, Any], owner: str) -> ConnectorInstance:
     return ConnectorInstance(
         id=row["id"],
@@ -94,6 +108,15 @@ def _row_to_connector_instance(row: dict[str, Any], owner: str) -> ConnectorInst
         config=row.get("config") or {},
         secret_ref=row.get("secret_ref"),
         visibility=str(row.get("visibility", "owner")),
+        last_validated_at=_parse_opt_datetime(row.get("last_validated_at")),
+        last_error=row.get("last_error"),
+        auth_status=str(row.get("auth_status", "pending")),
+        authorized_at=_parse_opt_datetime(row.get("authorized_at")),
+        disconnected_at=_parse_opt_datetime(row.get("disconnected_at")),
+        provider_account_id=row.get("provider_account_id"),
+        provider_account_name=row.get("provider_account_name"),
+        last_synced_at=_parse_opt_datetime(row.get("last_synced_at")),
+        metadata=row.get("metadata") or {},
     )
 
 
@@ -438,6 +461,15 @@ class PostgresConnectorInstanceRepository:
             "config": instance.config,
             "secret_ref": instance.secret_ref,
             "visibility": instance.visibility,
+            "last_validated_at": instance.last_validated_at.isoformat() if instance.last_validated_at else None,
+            "last_error": instance.last_error,
+            "auth_status": instance.auth_status,
+            "authorized_at": instance.authorized_at.isoformat() if instance.authorized_at else None,
+            "disconnected_at": instance.disconnected_at.isoformat() if instance.disconnected_at else None,
+            "provider_account_id": instance.provider_account_id,
+            "provider_account_name": instance.provider_account_name,
+            "last_synced_at": instance.last_synced_at.isoformat() if instance.last_synced_at else None,
+            "metadata": instance.metadata or {},
         }
         try:
             self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
@@ -1063,3 +1095,166 @@ class PostgresAppConfigRepository:
         except Exception as e:
             logger.exception("postgres_app_config_save_failed | owner={} error={}", owner_user_id, e)
             raise
+
+
+class PostgresOAuthConnectionStateRepository:
+    """Postgres-backed OAuth state for CSRF/anti-replay."""
+
+    TABLE = "oauth_connection_states"
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+
+    def create(
+        self,
+        owner_user_id: str,
+        provider: str,
+        state_token_hash: str,
+        redirect_uri: str,
+        expires_at: datetime,
+        pkce_verifier_encrypted: str | None = None,
+    ) -> str:
+        uid = str(_ensure_uuid(owner_user_id))
+        row = {
+            "owner_user_id": uid,
+            "provider": provider,
+            "state_token_hash": state_token_hash,
+            "pkce_verifier_encrypted": pkce_verifier_encrypted,
+            "redirect_uri": redirect_uri,
+            "expires_at": expires_at.isoformat() if hasattr(expires_at, "isoformat") else expires_at,
+        }
+        r = self._client.table(self.TABLE).insert(row).execute()
+        rows = r.data or []
+        if not rows:
+            raise RuntimeError("oauth_state_insert_failed")
+        return str(rows[0]["id"])
+
+    def consume_by_state_hash(self, state_token_hash: str) -> dict[str, Any] | None:
+        """Find and consume state by hash. Returns row with owner_user_id; None if invalid/expired."""
+        now = datetime.now(timezone.utc).isoformat()
+        r = (
+            self._client.table(self.TABLE)
+            .select("*")
+            .eq("state_token_hash", state_token_hash)
+            .is_("consumed_at", "null")
+            .execute()
+        )
+        rows = r.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        exp = row.get("expires_at")
+        if exp:
+            exp_str = exp.isoformat() if hasattr(exp, "isoformat") else str(exp)
+            if exp_str < now:
+                return None
+        self._client.table(self.TABLE).update({"consumed_at": now}).eq("id", row["id"]).execute()
+        return row
+
+
+class PostgresConnectorCredentialsRepository:
+    """Postgres-backed connector OAuth credentials."""
+
+    TABLE = "connector_credentials"
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+
+    def get_for_instance(
+        self, connector_instance_id: str, owner_user_id: str, provider: str = "notion"
+    ) -> dict[str, Any] | None:
+        uid = str(_ensure_uuid(owner_user_id))
+        r = (
+            self._client.table(self.TABLE)
+            .select("*")
+            .eq("connector_instance_id", connector_instance_id)
+            .eq("owner_user_id", uid)
+            .eq("provider", provider)
+            .is_("revoked_at", "null")
+            .limit(1)
+            .execute()
+        )
+        rows = r.data or []
+        return rows[0] if rows else None
+
+    def upsert(
+        self,
+        connector_instance_id: str,
+        owner_user_id: str,
+        provider: str,
+        secret_ref: str,
+        token_payload: dict[str, Any],
+        token_expires_at: datetime | None = None,
+    ) -> None:
+        uid = str(_ensure_uuid(owner_user_id))
+        now = datetime.now(timezone.utc)
+        row = {
+            "owner_user_id": uid,
+            "connector_instance_id": connector_instance_id,
+            "provider": provider,
+            "credential_type": "oauth2",
+            "secret_ref": secret_ref,
+            "token_payload": token_payload,
+            "token_expires_at": token_expires_at.isoformat() if token_expires_at else None,
+            "last_refreshed_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        self._client.table(self.TABLE).upsert(
+            row, on_conflict="owner_user_id,connector_instance_id,provider,credential_type"
+        ).execute()
+
+    def revoke(self, connector_instance_id: str, owner_user_id: str, provider: str = "notion") -> None:
+        uid = str(_ensure_uuid(owner_user_id))
+        now = datetime.now(timezone.utc).isoformat()
+        self._client.table(self.TABLE).update({"revoked_at": now}).eq(
+            "connector_instance_id", connector_instance_id
+        ).eq("owner_user_id", uid).eq("provider", provider).execute()
+
+
+class PostgresConnectorExternalSourcesRepository:
+    """Postgres-backed discovered external sources (e.g. Notion databases)."""
+
+    TABLE = "connector_external_sources"
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+
+    def list_for_instance(
+        self, connector_instance_id: str, owner_user_id: str, provider: str = "notion"
+    ) -> list[dict[str, Any]]:
+        uid = str(_ensure_uuid(owner_user_id))
+        r = (
+            self._client.table(self.TABLE)
+            .select("*")
+            .eq("connector_instance_id", connector_instance_id)
+            .eq("owner_user_id", uid)
+            .eq("provider", provider)
+            .execute()
+        )
+        return r.data or []
+
+    def upsert_batch(
+        self,
+        connector_instance_id: str,
+        owner_user_id: str,
+        provider: str,
+        sources: list[dict[str, Any]],
+    ) -> None:
+        uid = str(_ensure_uuid(owner_user_id))
+        now = datetime.now(timezone.utc).isoformat()
+        for s in sources:
+            row = {
+                "owner_user_id": uid,
+                "connector_instance_id": connector_instance_id,
+                "provider": provider,
+                "external_source_id": s["external_source_id"],
+                "external_parent_id": s.get("external_parent_id"),
+                "display_name": s.get("display_name", s["external_source_id"]),
+                "is_accessible": s.get("is_accessible", True),
+                "last_seen_at": now,
+                "last_sync_error": s.get("last_sync_error"),
+                "updated_at": now,
+            }
+            self._client.table(self.TABLE).upsert(
+                row, on_conflict="owner_user_id,connector_instance_id,external_source_id"
+            ).execute()

@@ -6,9 +6,10 @@ ALTER TABLE trigger_definitions
   ADD COLUMN IF NOT EXISTS secret_last_rotated_at timestamptz;
 
 -- Backfill existing triggers with a generated secret (~30 chars)
+-- Uses built-ins only (no pgcrypto); md5+random gives sufficient entropy for bearer tokens
 UPDATE trigger_definitions
 SET
-  secret_value = encode(gen_random_bytes(15), 'hex'),
+  secret_value = substring(md5(random()::text || clock_timestamp()::text), 1, 30),
   secret_last_rotated_at = now()
 WHERE secret_value IS NULL;
 

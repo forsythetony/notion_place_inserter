@@ -22,8 +22,11 @@ from app.queue.memory_diagnostics import (
 from app.queue.worker import _parse_retry_delays, run_worker_loop
 from app.repositories import (
     PostgresAppConfigRepository,
+    PostgresConnectorCredentialsRepository,
     PostgresConnectorInstanceRepository,
+    PostgresConnectorExternalSourcesRepository,
     PostgresJobRepository,
+    PostgresOAuthConnectionStateRepository,
     PostgresRunRepository,
     PostgresStepTemplateRepository,
     PostgresTargetRepository,
@@ -37,6 +40,7 @@ from app.services.freepik_service import FreepikService
 from app.services.google_places_service import GooglePlacesService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
+from app.services.notion_oauth_service import NotionOAuthService
 from app.services.notion_service import NotionService
 from app.services.supabase_queue_repository import SupabaseQueueRepository
 from app.services.target_service import TargetService
@@ -184,6 +188,15 @@ def main() -> None:
         trigger_service=trigger_service,
         target_service=target_service,
     )
+    oauth_state_repo = PostgresOAuthConnectionStateRepository(supabase_client)
+    credentials_repo = PostgresConnectorCredentialsRepository(supabase_client)
+    external_sources_repo = PostgresConnectorExternalSourcesRepository(supabase_client)
+    notion_oauth_svc = NotionOAuthService(
+        oauth_state_repo=oauth_state_repo,
+        credentials_repo=credentials_repo,
+        external_sources_repo=external_sources_repo,
+        connector_instance_repo=connector_instance_repo,
+    )
     job_execution_service = JobExecutionService(
         notion_service=notion_svc,
         claude_service=claude_svc,
@@ -191,6 +204,7 @@ def main() -> None:
         freepik_service=freepik_svc,
         dry_run=dry_run,
         run_repository=run_repo,
+        get_notion_token_fn=notion_oauth_svc.get_access_token,
     )
 
     event_bus = EventBus()

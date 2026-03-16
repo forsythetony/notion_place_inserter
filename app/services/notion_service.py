@@ -185,6 +185,43 @@ class NotionService:
         """
         return self._cache.get_raw_for_sync(db_name)
 
+    @staticmethod
+    def get_raw_schema_for_data_source(access_token: str, data_source_id: str) -> tuple[str, dict]:
+        """
+        Fetch raw properties for a data source using the given OAuth access token.
+        Returns (data_source_id, raw_properties). Used for OAuth-connected targets.
+        """
+        client = Client(auth=access_token)
+        ds = client.data_sources.retrieve(data_source_id=data_source_id)
+        raw_props = ds.get("properties") or {}
+        return data_source_id, raw_props
+
+    @staticmethod
+    def create_page_with_token(
+        access_token: str,
+        data_source_id: str,
+        properties: dict,
+        *,
+        icon: dict | None = None,
+        cover: dict | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Create a page using the given OAuth access token. Used for OAuth-connected targets.
+        """
+        client = Client(auth=access_token)
+        payload = {
+            "parent": {"data_source_id": data_source_id},
+            "properties": properties,
+        }
+        if icon is not None:
+            payload["icon"] = icon
+        if cover is not None:
+            payload["cover"] = cover
+        if dry_run:
+            return {"mode": "dry_run", **payload}
+        return client.pages.create(**payload)
+
     def invalidate_schema(self, db_name: str | None = None) -> None:
         """Force schema refresh on next access. None = invalidate all."""
         self._cache.invalidate(db_name)

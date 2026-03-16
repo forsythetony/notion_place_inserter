@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
@@ -86,6 +86,7 @@ class JobExecutionService:
         freepik_service: Any = None,
         dry_run: bool = False,
         run_repository: RunRepository | None = None,
+        get_notion_token_fn: Callable[[str], str | None] | None = None,
     ) -> None:
         self._registry = step_registry or _default_registry()
         self._notion = notion_service
@@ -94,6 +95,7 @@ class JobExecutionService:
         self._freepik = freepik_service
         self._dry_run = dry_run
         self._run_repo = run_repository
+        self._get_notion_token = get_notion_token_fn
 
     def execute_snapshot_run(
         self,
@@ -201,17 +203,31 @@ class JobExecutionService:
                 raise
 
         # Build final Notion payload and write.
-        # Dry-run behavior is centralized in NotionService.create_page.
+        # Prefer OAuth token when available; otherwise use global NotionService.
         notion_props = build_notion_properties_payload(ctx.properties, active_schema)
-        if not self._notion:
-            raise RuntimeError("NotionService not configured for target write")
+        access_token: str | None = None
+        if self._get_notion_token and owner_user_id:
+            access_token = self._get_notion_token(owner_user_id)
+        if access_token:
+            from app.services.notion_service import NotionService
 
-        result = self._notion.create_page(
-            data_source_id=data_source_id,
-            properties=notion_props,
-            icon=ctx.icon,
-            cover=ctx.cover,
-        )
+            result = NotionService.create_page_with_token(
+                access_token=access_token,
+                data_source_id=data_source_id,
+                properties=notion_props,
+                icon=ctx.icon,
+                cover=ctx.cover,
+                dry_run=self._dry_run,
+            )
+        elif self._notion:
+            result = self._notion.create_page(
+                data_source_id=data_source_id,
+                properties=notion_props,
+                icon=ctx.icon,
+                cover=ctx.cover,
+            )
+        else:
+            raise RuntimeError("NotionService not configured for target write")
         if self._run_repo and owner_user_id:
             try:
                 from app.domain.runs import UsageRecord
