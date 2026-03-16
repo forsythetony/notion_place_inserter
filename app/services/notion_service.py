@@ -221,7 +221,48 @@ class NotionService:
             payload["cover"] = cover
         if dry_run:
             return {"mode": "dry_run", **payload}
-        return client.pages.create(**payload)
+        return NotionService._create_page_with_retry(client, payload, icon=icon, cover=cover)
+
+    @staticmethod
+    def _create_page_with_retry(
+        client: Client,
+        payload: dict[str, object],
+        *,
+        icon: dict | None = None,
+        cover: dict | None = None,
+    ) -> dict:
+        """Retry short Notion propagation race for file_upload payloads."""
+        has_file_upload_payload = False
+        for media_payload in (icon, cover):
+            if not isinstance(media_payload, dict):
+                continue
+            file_upload = media_payload.get("file_upload")
+            if isinstance(file_upload, dict) and file_upload.get("id"):
+                has_file_upload_payload = True
+                break
+
+        retry_delays_seconds = (0.75, 1.5)
+        for attempt in range(len(retry_delays_seconds) + 1):
+            try:
+                return client.pages.create(**payload)
+            except APIResponseError as exc:
+                message = str(exc)
+                should_retry = (
+                    has_file_upload_payload
+                    and "Could not find file_upload with ID" in message
+                    and attempt < len(retry_delays_seconds)
+                )
+                if not should_retry:
+                    raise
+                delay_seconds = retry_delays_seconds[attempt]
+                logger.warning(
+                    "notion_create_page_file_upload_not_ready_retry | attempt={} delay_seconds={} error={}",
+                    attempt + 1,
+                    delay_seconds,
+                    message,
+                )
+                time.sleep(delay_seconds)
+        raise RuntimeError("Unreachable create_page retry loop")
 
     def invalidate_schema(self, db_name: str | None = None) -> None:
         """Force schema refresh on next access. None = invalidate all."""
@@ -235,6 +276,7 @@ class NotionService:
         content_type: str = "image/jpeg",
         poll_interval: float = 1.0,
         poll_max_attempts: int = 30,
+        access_token: str | None = None,
     ) -> dict | None:
         """
         Upload image bytes to Notion and return a cover payload for pages.create.
@@ -245,13 +287,14 @@ class NotionService:
             logger.warning("notion_file_upload_skipped_empty_bytes")
             return None
         try:
+            upload_client = Client(auth=access_token) if access_token else self._client
             logger.info(
                 "notion_file_upload_create_started | bytes_len={} filename={} content_type={}",
                 len(image_bytes),
                 filename,
                 content_type,
             )
-            created = self._client.file_uploads.create(
+            created = upload_client.file_uploads.create(
                 mode="single_part",
                 filename=filename,
                 content_type=content_type,
@@ -262,12 +305,12 @@ class NotionService:
                 return None
 
             logger.info("notion_file_upload_send_started | upload_id={}", upload_id)
-            self._client.file_uploads.send(
+            upload_client.file_uploads.send(
                 upload_id,
                 file=(filename, BytesIO(image_bytes), content_type),
             )
 
-            initial_status = self._client.file_uploads.retrieve(upload_id).get("status")
+            initial_status = upload_client.file_uploads.retrieve(upload_id).get("status")
             logger.info(
                 "notion_file_upload_status_after_send | upload_id={} status={}",
                 upload_id,
@@ -282,7 +325,7 @@ class NotionService:
             if initial_status == "pending":
                 logger.info("notion_file_upload_complete_started | upload_id={}", upload_id)
                 try:
-                    self._client.file_uploads.complete(upload_id)
+                    upload_client.file_uploads.complete(upload_id)
                 except Exception as exc:
                     logger.warning(
                         "notion_file_upload_complete_exception | upload_id={} error={}",
@@ -290,14 +333,14 @@ class NotionService:
                         str(exc),
                     )
                     # Handle race where upload transitions to "uploaded" before complete call.
-                    status_after_exception = self._client.file_uploads.retrieve(upload_id).get("status")
+                    status_after_exception = upload_client.file_uploads.retrieve(upload_id).get("status")
                     if status_after_exception == "uploaded":
                         logger.info("notion_file_upload_uploaded | upload_id={}", upload_id)
                         return {"type": "file_upload", "file_upload": {"id": upload_id}}
                     return None
 
             for _ in range(poll_max_attempts):
-                status = self._client.file_uploads.retrieve(upload_id)
+                status = upload_client.file_uploads.retrieve(upload_id)
                 s = status.get("status")
                 if s == "uploaded":
                     logger.info("notion_file_upload_uploaded | upload_id={}", upload_id)
@@ -375,37 +418,7 @@ class NotionService:
                 **({"icon": icon} if icon is not None else {}),
                 **({"cover": cover} if cover is not None else {}),
             }
-        has_file_upload_payload = False
-        for media_payload in (icon, cover):
-            if not isinstance(media_payload, dict):
-                continue
-            file_upload = media_payload.get("file_upload")
-            if isinstance(file_upload, dict) and file_upload.get("id"):
-                has_file_upload_payload = True
-                break
-
-        retry_delays_seconds = (0.75, 1.5)
-        for attempt in range(len(retry_delays_seconds) + 1):
-            try:
-                result = self._client.pages.create(**payload)
-                break
-            except APIResponseError as exc:
-                message = str(exc)
-                should_retry = (
-                    has_file_upload_payload
-                    and "Could not find file_upload with ID" in message
-                    and attempt < len(retry_delays_seconds)
-                )
-                if not should_retry:
-                    raise
-                delay_seconds = retry_delays_seconds[attempt]
-                logger.warning(
-                    "notion_create_page_file_upload_not_ready_retry | attempt={} delay_seconds={} error={}",
-                    attempt + 1,
-                    delay_seconds,
-                    message,
-                )
-                time.sleep(delay_seconds)
+        result = self._create_page_with_retry(self._client, payload, icon=icon, cover=cover)
 
         page_id = result.get("id", "") if isinstance(result, dict) else ""
         obj_type = result.get("object", "") if isinstance(result, dict) else ""

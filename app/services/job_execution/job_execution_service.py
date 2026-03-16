@@ -136,6 +136,7 @@ class JobExecutionService:
         ctx._services["google_places"] = self._google
         ctx._services["notion"] = self._notion
         ctx._services["freepik"] = getattr(self, "_freepik", None)
+        ctx._services["get_notion_token"] = self._get_notion_token
         if self._run_repo and owner_user_id:
             from app.services.usage_accounting_service import UsageAccountingService
 

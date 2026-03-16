@@ -520,6 +520,44 @@ def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_o
     notion.upload_cover_from_bytes.assert_not_called()
 
 
+def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_available():
+    """UploadImageToNotionHandler passes owner OAuth token to Notion upload."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+        owner_user_id="owner-123",
+    )
+    notion = MagicMock()
+    notion.upload_cover_from_bytes.return_value = {"type": "file_upload", "file_upload": {"id": "fu-1"}}
+    ctx._services["notion"] = notion
+    ctx._services["google_places"] = MagicMock()
+    ctx._services["get_notion_token"] = MagicMock(return_value="oauth-token-abc")
+    handler = UploadImageToNotionHandler()
+
+    with patch(
+        "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
+        return_value=b"fake-image-bytes",
+    ):
+        result = handler.execute(
+            step_id="step_upload",
+            config={},
+            input_bindings={"value": {}},
+            resolved_inputs={"value": "https://example.com/image.jpg"},
+            ctx=ctx,
+            snapshot={},
+        )
+
+    assert result["notion_image_url"] == {"type": "file_upload", "file_upload": {"id": "fu-1"}}
+    notion.upload_cover_from_bytes.assert_called_once_with(
+        b"fake-image-bytes",
+        filename="image.jpg",
+        content_type="image/jpeg",
+        access_token="oauth-token-abc",
+    )
+
+
 def test_optimize_input_claude_handler_returns_optimized_query():
     """OptimizeInputClaudeHandler returns optimized_query (or passthrough when no Claude)."""
     ctx = ExecutionContext(

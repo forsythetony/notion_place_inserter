@@ -85,6 +85,7 @@ class UploadImageToNotionHandler(StepRuntime):
 
         notion = ctx.get_service("notion")
         google = ctx.get_service("google_places")
+        token_getter = ctx.get_service("get_notion_token")
         dry_run = getattr(ctx, "dry_run", False)
 
         if dry_run:
@@ -115,9 +116,16 @@ class UploadImageToNotionHandler(StepRuntime):
         if not image_bytes or not notion:
             return {"notion_image_url": None}
 
-        payload = notion.upload_cover_from_bytes(
-            image_bytes,
-            filename="image.jpg",
-            content_type="image/jpeg",
-        )
+        upload_kwargs: dict[str, Any] = {
+            "filename": "image.jpg",
+            "content_type": "image/jpeg",
+        }
+        owner_user_id = getattr(ctx, "owner_user_id", "") or ""
+        if callable(token_getter) and owner_user_id:
+            access_token = token_getter(owner_user_id)
+            if access_token:
+                # Keep upload + page creation on the same Notion credential context.
+                upload_kwargs["access_token"] = access_token
+
+        payload = notion.upload_cover_from_bytes(image_bytes, **upload_kwargs)
         return {"notion_image_url": payload}
