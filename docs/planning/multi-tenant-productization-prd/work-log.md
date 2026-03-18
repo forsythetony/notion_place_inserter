@@ -43,6 +43,8 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-18 | graph-view-iconography-impl | Implemented graph view iconography in notion_pipeliner_ui: lucide-react + @icons-pack/react-simple-icons; graphVisualRegistry.ts with STEP_TEMPLATE_VISUALS and CONNECTOR_TEMPLATE_VISUALS; StepIcon and ProviderLogo components; StepNode/TargetNode/AddStepControl/ConnectionsPage updated to use icons; compact step layout and picker styling. |
+| 2026-03-18 | graph-view-iconography-doc | Added a Phase 5 deep-dive document recommending a consistent graph-view icon system, open-source icon pack choices, and frontend-vs-database mapping trade-offs with a frontend-first recommendation. |
 | 2026-03-16 | pipeline-archive-delete | Added Delete button with confirmation modal to pipeline list; backend soft-deletes via archive (status=archived); archived pipelines excluded from list/get and no longer execute. |
 | 2026-03-16 | data-targets-dedup | Deduplicated GET /management/data-targets by (connector_instance_id, external_target_id); prefer bootstrap targets (target_places_to_visit, target_locations) over per-source targets when both exist for same Notion DB. |
 | 2026-03-16 | trigger-target-boundary-nodes | Implemented trigger+target pipeline creation: modal-first create flow with required trigger/target selection; trigger node at top and target node at bottom in graph; TriggerInspector and TargetInspector in details pane; GET /management/data-targets and /data-targets/{id}/schema; POST /management/pipelines requires trigger_id and target_id with owner validation and trigger-job linking. |

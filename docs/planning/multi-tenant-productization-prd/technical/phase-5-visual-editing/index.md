@@ -62,7 +62,8 @@ Phase 5 adds the visual-first pipeline authoring experience described in the PRD
 ### Architecture anchors
 
 - [PRD Phase 5](https://github.com/your-org/notion_place_inserter/blob/main/docs/planning/multi-tenant-productization-prd/initial-planning/multi-tenant-productization-prd.md#phase-5-visual-editing)
-- [Design direction (Option A - Calm Graphite](../../../style-guide/design-direction-options.md)
+- [Design direction (Option A - Calm Graphite)](../../../style-guide/design-direction-options.md)
 - [Pipeline editor library research (React Flow)](../../../pipeline-editor-library-research.md)
+- [Graph view iconography deep dive](./graph-view-iconography-deep-dive.md)
 - [Phase 4 datastore-backed definitions](../phase-4-datastore-backed-definitions/index.md)
 - [Notion onboarding and database selection deep dive](./notion-onboarding-and-database-selection-deep-dive.md)
