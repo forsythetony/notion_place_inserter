@@ -956,6 +956,8 @@ class PostgresJobRepository:
         if not rows:
             return None
         job_row = rows[0]
+        if str(job_row.get("status", "active")) == "archived":
+            return None
         job = _row_to_job(job_row, owner_user_id)
 
         # Load stages
@@ -1008,7 +1010,13 @@ class PostgresJobRepository:
     def list_by_owner(self, owner_user_id: str) -> list[JobDefinition]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.JOB_TABLE).select("*").eq("owner_user_id", uid).execute()
+            r = (
+                self._client.table(self.JOB_TABLE)
+                .select("*")
+                .eq("owner_user_id", uid)
+                .neq("status", "archived")
+                .execute()
+            )
         except ValueError:
             return []
         except Exception as e:
@@ -1089,6 +1097,18 @@ class PostgresJobRepository:
                     "failure_policy": step.failure_policy,
                 }
                 self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
+
+    def archive(self, id: str, owner_user_id: str) -> None:
+        """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            now = datetime.now(timezone.utc).isoformat()
+            self._client.table(self.JOB_TABLE).update(
+                {"status": "archived", "updated_at": now}
+            ).eq("id", id).eq("owner_user_id", uid).execute()
+        except Exception as e:
+            logger.exception("postgres_job_archive_failed | id={} owner={} error={}", id, owner_user_id, e)
+            raise
 
     def delete(self, id: str, owner_user_id: str) -> None:
         try:

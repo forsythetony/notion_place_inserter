@@ -29,6 +29,14 @@ class CreateTriggerRequest(BaseModel):
     display_name: str | None = Field(default=None, description="Optional display name")
 
 
+class CreatePipelineRequest(BaseModel):
+    """Request body for POST /management/pipelines."""
+
+    trigger_id: str = Field(..., min_length=1, description="ID of the trigger that starts this pipeline")
+    target_id: str = Field(..., min_length=1, description="ID of the data target where output lands")
+    display_name: str | None = Field(default=None, description="Optional display name")
+
+
 def _serialize_datetime(dt):
     """Serialize datetime to ISO string or None."""
     if dt is None:
@@ -84,6 +92,12 @@ def get_pipeline(
     if not graph:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     payload = job_graph_to_yaml_dict(graph)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    if link_repo:
+        trigger_ids = link_repo.list_trigger_ids_for_job(pipeline_id, ctx.user_id)
+        payload["trigger_ids"] = trigger_ids
+        if trigger_ids:
+            payload["trigger_id"] = trigger_ids[0]
     return payload
 
 
@@ -136,12 +150,12 @@ def save_pipeline(
 @router.post("/pipelines")
 def create_pipeline(
     request: Request,
-    body: dict = Body(default_factory=dict),
+    body: CreatePipelineRequest,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
     """
-    Create a new pipeline. Accepts minimal payload (display_name, target_id optional).
-    Returns full graph payload with generated id for editor load.
+    Create a new pipeline. Requires trigger_id and target_id.
+    Links the trigger to the job and returns full graph payload for editor load.
     """
     job_repo = getattr(request.app.state, "job_repository", None)
     if not job_repo:
@@ -149,9 +163,57 @@ def create_pipeline(
             status_code=500,
             content={"detail": "Server misconfiguration: job repository not available"},
         )
+    target_repo = getattr(request.app.state, "target_repository", None)
+    if not target_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: target repository not available"},
+        )
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    if not trigger_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: trigger repository not available"},
+        )
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    if not link_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: trigger job link repository not available"},
+        )
+
+    trigger_id = (body.trigger_id or "").strip()
+    target_id = (body.target_id or "").strip()
+    display_name = (body.display_name or "").strip() or "New Pipeline"
+
+    if not trigger_id:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "trigger_id is required", "code": "NO_TRIGGER"},
+        )
+    if not target_id or target_id == "placeholder":
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "target_id is required. Create a target first by connecting a Notion database in Database Targets.",
+                "code": "NO_TARGET",
+            },
+        )
+
+    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    if not trigger:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Trigger not found or not owned by you", "code": "INVALID_TRIGGER"},
+        )
+    target = target_repo.get_by_id(target_id, ctx.user_id)
+    if not target:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Data target not found or not owned by you", "code": "INVALID_TARGET"},
+        )
+
     job_id = f"job_{uuid.uuid4().hex[:12]}"
-    display_name = (body.get("display_name") or "").strip() or "New Pipeline"
-    target_id = (body.get("target_id") or "").strip() or "placeholder"
     # Build minimal valid graph: job + 1 stage + 1 pipeline + 1 property_set step
     from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition, StepInstance
 
@@ -204,8 +266,134 @@ def create_pipeline(
             status_code=422,
             content={"detail": "Validation failed", "validation_errors": e.errors},
         )
+    link_repo.attach(trigger_id, job_id, ctx.user_id)
     saved = job_repo.get_graph_by_id(job_id, ctx.user_id)
-    return job_graph_to_yaml_dict(saved) if saved else {"id": job_id}
+    payload = job_graph_to_yaml_dict(saved) if saved else {"id": job_id}
+    payload["trigger_id"] = trigger_id
+    return payload
+
+
+@router.delete("/pipelines/{pipeline_id}")
+def delete_pipeline(
+    request: Request,
+    pipeline_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Archive a pipeline (soft-delete). Sets status to archived.
+    Archived pipelines are excluded from list and get; they no longer execute.
+    """
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: job repository not available"},
+        )
+    # Verify pipeline exists and is owned before archiving
+    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    job_repo.archive(pipeline_id, ctx.user_id)
+    return {"status": "archived", "id": pipeline_id}
+
+
+@router.get("/data-targets")
+def list_data_targets(
+    request: Request,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    List data targets for the authenticated owner.
+    Returns id, display_name, target_template_id, connector_instance_id,
+    external_target_id, status, active_schema_snapshot_id.
+    """
+    target_repo = getattr(request.app.state, "target_repository", None)
+    if not target_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: target repository not available"},
+        )
+    targets = target_repo.list_by_owner(ctx.user_id)
+    # Deduplicate by (connector_instance_id, external_target_id): same Notion DB can appear
+    # as both a bootstrap target (target_places_to_visit, target_locations) and a
+    # per-source target (target_notion_*). Prefer bootstrap IDs for consistency with jobs.
+    bootstrap_ids = {"target_places_to_visit", "target_locations"}
+    seen: dict[tuple[str, str], dict] = {}
+    for t in targets:
+        key = (t.connector_instance_id or "", t.external_target_id or "")
+        item = {
+            "id": t.id,
+            "display_name": t.display_name,
+            "target_template_id": t.target_template_id,
+            "connector_instance_id": t.connector_instance_id,
+            "external_target_id": t.external_target_id,
+            "status": t.status,
+            "active_schema_snapshot_id": t.active_schema_snapshot_id,
+        }
+        if key not in seen or t.id in bootstrap_ids:
+            seen[key] = item
+        elif seen[key]["id"] not in bootstrap_ids and t.id in bootstrap_ids:
+            seen[key] = item
+    items = list(seen.values())
+    return {"items": items}
+
+
+@router.get("/data-targets/{target_id}/schema")
+def get_data_target_schema(
+    request: Request,
+    target_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Fetch active schema for a data target. Owner-scoped.
+    Returns target summary plus properties with name, type, id, select/multi_select options.
+    """
+    target_repo = getattr(request.app.state, "target_repository", None)
+    if not target_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: target repository not available"},
+        )
+    target_schema_repo = getattr(request.app.state, "target_schema_repository", None)
+    if not target_schema_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: target schema repository not available"},
+        )
+    target = target_repo.get_by_id(target_id, ctx.user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Data target not found")
+    schema = None
+    if target.active_schema_snapshot_id:
+        schema = target_schema_repo.get_by_id(target.active_schema_snapshot_id, ctx.user_id)
+    if not schema:
+        schema = target_schema_repo.get_active_for_target(target_id, ctx.user_id)
+    properties = []
+    if schema:
+        for p in schema.properties:
+            prop = {
+                "id": p.id,
+                "external_property_id": p.external_property_id,
+                "name": p.name,
+                "normalized_slug": p.normalized_slug,
+                "property_type": p.property_type,
+                "required": p.required,
+                "readonly": p.readonly,
+            }
+            if p.options:
+                prop["options"] = p.options
+            if p.metadata:
+                prop["metadata"] = p.metadata
+            properties.append(prop)
+    return {
+        "target_id": target_id,
+        "display_name": target.display_name,
+        "connector_instance_id": target.connector_instance_id,
+        "external_target_id": target.external_target_id,
+        "last_synced_at": _serialize_datetime(schema.fetched_at) if schema else None,
+        "schema_snapshot_id": schema.id if schema else None,
+        "properties": properties,
+    }
 
 
 @router.get("/step-templates")

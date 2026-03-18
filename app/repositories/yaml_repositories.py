@@ -200,6 +200,8 @@ class YamlJobRepository:
         path = bootstrap_job_path("notion_place_inserter", self._base)
         data = load_yaml_file(path)
         if data and data.get("id") == id:
+            if str(data.get("status", "active")) == "archived":
+                return None
             return parse_job_definition(data, owner_user_id_override=owner_user_id)
         # Tenant path: product_model/tenants/<owner>/jobs/*.yaml
         from app.domain.yaml_layout import tenant_jobs_dir
@@ -212,6 +214,8 @@ class YamlJobRepository:
                 rel = f.relative_to(root).as_posix()
                 data = load_yaml_file(rel)
                 if data and data.get("id") == id:
+                    if str(data.get("status", "active")) == "archived":
+                        return None
                     return parse_job_definition(data, owner_user_id_override=owner_user_id)
         return None
 
@@ -221,6 +225,8 @@ class YamlJobRepository:
         path = bootstrap_job_path("notion_place_inserter", self._base)
         data = load_yaml_file(path)
         if data and data.get("id") == id:
+            if str(data.get("status", "active")) == "archived":
+                return None
             try:
                 return parse_job_graph(data, owner_user_id_override=owner_user_id)
             except (KeyError, TypeError):
@@ -236,6 +242,8 @@ class YamlJobRepository:
                 rel = f.relative_to(root).as_posix()
                 data = load_yaml_file(rel)
                 if data and data.get("id") == id:
+                    if str(data.get("status", "active")) == "archived":
+                        return None
                     try:
                         return parse_job_graph(data, owner_user_id_override=owner_user_id)
                     except (KeyError, TypeError):
@@ -247,7 +255,7 @@ class YamlJobRepository:
         # Bootstrap job: same starter for all signed-in users
         path = bootstrap_job_path("notion_place_inserter", self._base)
         data = load_yaml_file(path)
-        if data:
+        if data and str(data.get("status", "active")) != "archived":
             try:
                 result.append(parse_job_definition(data, owner_user_id_override=owner_user_id))
             except (KeyError, TypeError):
@@ -262,7 +270,7 @@ class YamlJobRepository:
             for f in jobs_path.glob("*.yaml"):
                 rel = f.relative_to(root).as_posix()
                 data = load_yaml_file(rel)
-                if data:
+                if data and str(data.get("status", "active")) != "archived":
                     try:
                         result.append(parse_job_definition(data, owner_user_id_override=owner_user_id))
                     except (KeyError, TypeError):
@@ -294,6 +302,21 @@ class YamlJobRepository:
             )
         path = tenant_job_path(graph.job.owner_user_id, graph.job.id, self._base)
         data = job_graph_to_yaml_dict(graph)
+        dump_yaml_file(path, data)
+
+    def archive(self, id: str, owner_user_id: str) -> None:
+        """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""
+        if owner_user_id == "bootstrap":
+            return  # Bootstrap is read-only
+        path = tenant_job_path(owner_user_id, id, self._base)
+        root = _project_root()
+        full_path = root / path
+        if not full_path.exists():
+            return
+        data = load_yaml_file(path)
+        if data is None:
+            return
+        data["status"] = "archived"
         dump_yaml_file(path, data)
 
     def delete(self, id: str, owner_user_id: str) -> None:

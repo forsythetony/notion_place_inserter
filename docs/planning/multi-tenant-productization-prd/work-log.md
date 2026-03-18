@@ -30,12 +30,26 @@ Significant decisions with rationale, alternatives considered, and context.
 
 ---
 
+## Next thing to work on
+
+1. **Fix pipeline zoom** — When clicking on a node (especially a stage), the view is way zoomed out. Improve zoom/viewport behavior on node selection.
+2. **Flesh out add-pipeline/step/stage functionality** — Add Pipeline, Add Step, and Add Stage controls are currently janky and may not be persisting changes. Implement proper save flow and UX.
+
+---
+
 ## Log
 
 Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-16 | pipeline-archive-delete | Added Delete button with confirmation modal to pipeline list; backend soft-deletes via archive (status=archived); archived pipelines excluded from list/get and no longer execute. |
+| 2026-03-16 | data-targets-dedup | Deduplicated GET /management/data-targets by (connector_instance_id, external_target_id); prefer bootstrap targets (target_places_to_visit, target_locations) over per-source targets when both exist for same Notion DB. |
+| 2026-03-16 | trigger-target-boundary-nodes | Implemented trigger+target pipeline creation: modal-first create flow with required trigger/target selection; trigger node at top and target node at bottom in graph; TriggerInspector and TargetInspector in details pane; GET /management/data-targets and /data-targets/{id}/schema; POST /management/pipelines requires trigger_id and target_id with owner validation and trigger-job linking. |
+| 2026-03-16 | p5-proposal-graph-boundary-nodes | Updated the trigger+target pipeline creation proposal to require a top trigger node and bottom terminal target node in the initial draft graph, including inspector and transform implications. |
+| 2026-03-16 | p5-proposal-trigger-target-create-flow | Authored Phase 5 proposal for trigger+target-required pipeline creation modal, explicit terminal target node in graph, and target schema/property inspector details (including select/multi-select options). |
+| 2026-03-16 | create-pipeline-fk-fix | POST /management/pipelines no longer defaults to target_id=placeholder (FK violation). When target_id omitted, uses owner's first data target; returns 422 NO_TARGET if none exist. |
+| 2026-03-16 | stage-shrink-after-delete | Stage container shrinks after pipeline delete: wrapped onNodesChange to detect remove changes, sync payload via flowToGraph, and log remove ids/types + payload sync to console. |
 | 2026-03-16 | pipeline-add-controls | Pipeline editor add controls: Add Pipeline (inspector + stage node header), Add Step (centered below steps, hidden when last step is step_template_property_set, template picker from GET /management/step-templates), Add Stage (below final stage); backend step-templates endpoint; frontend API client and route tests. |
 | 2026-03-16 | step-inspector-selection | Fixed details pane: step node selection now shows editable Step inspector; reordered NodeInspector branches (step before pipeline); added regression tests for step vs pipeline selection. |
 | 2026-03-16 | pipeline-right-inspector | Right-hand inspector panel in Pipeline Editor: stage/pipeline/step views; clickable lists to select child nodes; editable step form (display_name, step_template_id, sequence, failure_policy, input_bindings/config JSON); state wired to nodes + payload for save. |

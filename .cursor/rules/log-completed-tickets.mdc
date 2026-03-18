@@ -14,6 +14,8 @@ Add a new row at the top of the Log table with:
 - **Ticket / Task** — PR number, ticket ID, or short task name
 - **Summary** — Brief description of what was done
 
+**If the completed item matches the "Next thing to work on" section:** Clear that section (remove or empty its content) when adding the log entry.
+
 Example:
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|

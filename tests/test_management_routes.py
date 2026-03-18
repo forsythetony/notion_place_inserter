@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.domain.connectors import ConnectorInstance
 from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition, StepInstance, StepTemplate
 from app.domain.limits import AppLimits
+from app.domain.targets import DataTarget
 from app.domain.triggers import TriggerDefinition
 from app.main import app
 from app.services.supabase_auth_repository import USER_TYPE_STANDARD
@@ -458,6 +459,49 @@ def _make_minimal_job_graph(user_id: str, job_id: str = "job_test"):
     return JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
 
 
+def test_management_pipeline_delete_401_without_auth(client):
+    """DELETE /management/pipelines/{id} without Authorization returns 401."""
+    resp = client.delete("/management/pipelines/job_1")
+    assert resp.status_code == 401
+
+
+def test_management_pipeline_delete_404_when_not_found(client):
+    """DELETE /management/pipelines/{id} returns 404 when pipeline not found."""
+    user_id = _setup_auth(client)
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = None
+    app.state.job_repository = mock_job_repo
+
+    resp = client.delete(
+        "/management/pipelines/job_missing",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+    mock_job_repo.get_graph_by_id.assert_called_once_with("job_missing", user_id)
+    mock_job_repo.archive.assert_not_called()
+
+
+def test_management_pipeline_delete_200_archives(client):
+    """DELETE /management/pipelines/{id} archives pipeline and returns status."""
+    user_id = _setup_auth(client)
+    graph = _make_minimal_job_graph(user_id, "job_to_archive")
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = graph
+    app.state.job_repository = mock_job_repo
+
+    resp = client.delete(
+        "/management/pipelines/job_to_archive",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "archived"
+    assert data["id"] == "job_to_archive"
+    mock_job_repo.get_graph_by_id.assert_called_once_with("job_to_archive", user_id)
+    mock_job_repo.archive.assert_called_once_with("job_to_archive", user_id)
+
+
 def test_management_pipeline_get_404_when_not_found(client):
     """GET /management/pipelines/{id} returns 404 when pipeline not found."""
     user_id = _setup_auth(client)
@@ -482,6 +526,10 @@ def test_management_pipeline_get_200_returns_full_graph(client):
     mock_job_repo.get_graph_by_id.return_value = graph
     app.state.job_repository = mock_job_repo
 
+    mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_1"]
+    app.state.trigger_job_link_repository = mock_link_repo
+
     resp = client.get(
         "/management/pipelines/job_test",
         headers={"Authorization": "Bearer valid-jwt"},
@@ -496,7 +544,10 @@ def test_management_pipeline_get_200_returns_full_graph(client):
     assert "pipelines" in data["stages"][0]
     assert len(data["stages"][0]["pipelines"]) == 1
     assert "steps" in data["stages"][0]["pipelines"][0]
+    assert data.get("trigger_ids") == ["trigger_1"]
+    assert data.get("trigger_id") == "trigger_1"
     mock_job_repo.get_graph_by_id.assert_called_once_with("job_test", user_id)
+    mock_link_repo.list_trigger_ids_for_job.assert_called_once_with("job_test", user_id)
 
 
 def test_management_pipeline_put_200_saves_and_returns_canonical(client):
@@ -620,7 +671,7 @@ def test_management_pipeline_put_422_on_validation_error(client):
 
 
 def test_management_pipeline_post_200_creates_and_returns_graph(client):
-    """POST /management/pipelines creates new pipeline and returns full graph."""
+    """POST /management/pipelines creates new pipeline and returns full graph with trigger link."""
     user_id = _setup_auth(client)
 
     def mock_get_graph(job_id, owner):
@@ -633,16 +684,393 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
     mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
     app.state.job_repository = mock_job_repo
 
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = DataTarget(
+        id="tgt1",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="Places to Visit",
+        external_target_id="ds-xxx",
+        status="active",
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+        id="trigger_1",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="/locations",
+        path="/locations",
+        method="POST",
+        request_body_schema={"keywords": "string"},
+        status="active",
+        auth_mode="bearer",
+        secret_value="mock_secret",
+    )
+    app.state.trigger_repository = mock_trigger_repo
+
+    mock_link_repo = MagicMock()
+    app.state.trigger_job_link_repository = mock_link_repo
+
     resp = client.post(
         "/management/pipelines",
         headers={"Authorization": "Bearer valid-jwt"},
-        json={"display_name": "My New Pipeline"},
+        json={
+            "display_name": "My New Pipeline",
+            "trigger_id": "trigger_1",
+            "target_id": "tgt1",
+        },
     )
     assert resp.status_code == 200
     data = resp.json()
     assert "id" in data
     assert data["id"].startswith("job_")
     assert data["display_name"] == "My New Pipeline"
+    assert data["trigger_id"] == "trigger_1"
     assert "stages" in data
     mock_job_repo.save_job_graph.assert_called_once()
     mock_job_repo.get_graph_by_id.assert_called_once()
+    mock_target_repo.get_by_id.assert_called_once_with("tgt1", user_id)
+    mock_trigger_repo.get_by_id.assert_called_once_with("trigger_1", user_id)
+    mock_link_repo.attach.assert_called_once()
+    call_args = mock_link_repo.attach.call_args[0]
+    assert call_args[0] == "trigger_1"
+    assert call_args[1] == data["id"]
+    assert call_args[2] == user_id
+
+
+def test_management_pipeline_post_200_with_explicit_target_id(client):
+    """POST /management/pipelines with target_id and trigger_id uses them and validates ownership."""
+    user_id = _setup_auth(client)
+
+    def mock_get_graph(job_id, owner):
+        g = _make_minimal_job_graph(owner, job_id)
+        g.job.target_id = "tgt_explicit"
+        g.job.display_name = "Pipeline"
+        return g
+
+    mock_job_repo = MagicMock()
+    mock_job_repo.save_job_graph.return_value = None
+    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    app.state.job_repository = mock_job_repo
+
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = DataTarget(
+        id="tgt_explicit",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="My DB",
+        external_target_id="ds-xxx",
+        status="active",
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+        id="trigger_explicit",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="/my-path",
+        path="/my-path",
+        method="POST",
+        request_body_schema={},
+        status="active",
+        auth_mode="bearer",
+        secret_value="mock_secret",
+    )
+    app.state.trigger_repository = mock_trigger_repo
+
+    mock_link_repo = MagicMock()
+    app.state.trigger_job_link_repository = mock_link_repo
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "display_name": "Pipeline",
+            "target_id": "tgt_explicit",
+            "trigger_id": "trigger_explicit",
+        },
+    )
+    assert resp.status_code == 200
+    mock_job_repo.save_job_graph.assert_called_once()
+    call_args = mock_job_repo.save_job_graph.call_args[0][0]
+    assert call_args.job.target_id == "tgt_explicit"
+    mock_target_repo.get_by_id.assert_called_once_with("tgt_explicit", user_id)
+    mock_link_repo.attach.assert_called_once_with("trigger_explicit", call_args.job.id, user_id)
+
+
+def test_management_pipeline_post_422_when_target_invalid(client):
+    """POST /management/pipelines returns 422 INVALID_TARGET when target not found."""
+    user_id = _setup_auth(client)
+
+    mock_job_repo = MagicMock()
+    app.state.job_repository = mock_job_repo
+
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = None
+    app.state.target_repository = mock_target_repo
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+        id="trigger_1",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="/locations",
+        path="/locations",
+        method="POST",
+        request_body_schema={},
+        status="active",
+        auth_mode="bearer",
+        secret_value="mock_secret",
+    )
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "display_name": "New Pipeline",
+            "trigger_id": "trigger_1",
+            "target_id": "tgt_nonexistent",
+        },
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "not found" in data["detail"].lower()
+    assert data.get("code") == "INVALID_TARGET"
+    mock_target_repo.get_by_id.assert_called_once_with("tgt_nonexistent", user_id)
+    mock_job_repo.save_job_graph.assert_not_called()
+
+
+def test_management_pipeline_post_422_when_trigger_invalid(client):
+    """POST /management/pipelines returns 422 INVALID_TRIGGER when trigger not found."""
+    user_id = _setup_auth(client)
+
+    mock_job_repo = MagicMock()
+    app.state.job_repository = mock_job_repo
+
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = DataTarget(
+        id="tgt1",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="Places",
+        external_target_id="ds-xxx",
+        status="active",
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = None
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "display_name": "New Pipeline",
+            "trigger_id": "trigger_nonexistent",
+            "target_id": "tgt1",
+        },
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "not found" in data["detail"].lower()
+    assert data.get("code") == "INVALID_TRIGGER"
+    mock_trigger_repo.get_by_id.assert_called_once_with("trigger_nonexistent", user_id)
+    mock_job_repo.save_job_graph.assert_not_called()
+
+
+def test_management_pipeline_post_422_when_missing_trigger_or_target(client):
+    """POST /management/pipelines returns 422 when trigger_id or target_id missing."""
+    _setup_auth(client)
+    mock_job_repo = MagicMock()
+    app.state.job_repository = mock_job_repo
+    app.state.target_repository = MagicMock()
+    app.state.trigger_repository = MagicMock()
+    app.state.trigger_job_link_repository = MagicMock()
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"display_name": "New Pipeline"},
+    )
+    assert resp.status_code == 422
+    mock_job_repo.save_job_graph.assert_not_called()
+
+
+def test_management_data_targets_401_without_auth(client):
+    """GET /management/data-targets without Authorization returns 401."""
+    resp = client.get("/management/data-targets")
+    assert resp.status_code == 401
+
+
+def test_management_data_targets_200_list_shape(client):
+    """GET /management/data-targets with valid auth returns items list."""
+    user_id = _setup_auth(client)
+    mock_target_repo = MagicMock()
+    mock_target_repo.list_by_owner.return_value = [
+        DataTarget(
+            id="tgt1",
+            owner_user_id=user_id,
+            target_template_id="tt_notion_db",
+            connector_instance_id="conn_1",
+            display_name="Places to Visit",
+            external_target_id="ds-xxx",
+            status="active",
+        ),
+    ]
+    app.state.target_repository = mock_target_repo
+
+    resp = client.get(
+        "/management/data-targets",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == "tgt1"
+    assert data["items"][0]["display_name"] == "Places to Visit"
+
+
+def test_management_data_targets_deduplicates_by_external_target(client):
+    """When bootstrap and per-source targets share the same DB, only one is returned (prefer bootstrap)."""
+    user_id = _setup_auth(client)
+    mock_target_repo = MagicMock()
+    mock_target_repo.list_by_owner.return_value = [
+        DataTarget(
+            id="target_notion_abc",
+            owner_user_id=user_id,
+            target_template_id="tt_notion_db",
+            connector_instance_id="conn_1",
+            display_name="Places to Visit",
+            external_target_id="ds-xxx",
+            status="active",
+        ),
+        DataTarget(
+            id="target_places_to_visit",
+            owner_user_id=user_id,
+            target_template_id="tt_notion_db",
+            connector_instance_id="conn_1",
+            display_name="Places to Visit",
+            external_target_id="ds-xxx",
+            status="active",
+        ),
+        DataTarget(
+            id="target_notion_def",
+            owner_user_id=user_id,
+            target_template_id="tt_notion_db",
+            connector_instance_id="conn_1",
+            display_name="Locations",
+            external_target_id="ds-yyy",
+            status="active",
+        ),
+        DataTarget(
+            id="target_locations",
+            owner_user_id=user_id,
+            target_template_id="tt_notion_db",
+            connector_instance_id="conn_1",
+            display_name="Locations",
+            external_target_id="ds-yyy",
+            status="active",
+        ),
+    ]
+    app.state.target_repository = mock_target_repo
+
+    resp = client.get(
+        "/management/data-targets",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert len(data["items"]) == 2
+    ids = {i["id"] for i in data["items"]}
+    assert ids == {"target_places_to_visit", "target_locations"}
+
+
+def test_management_data_target_schema_404_when_target_not_found(client):
+    """GET /management/data-targets/{id}/schema returns 404 when target not found."""
+    user_id = _setup_auth(client)
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = None
+    app.state.target_repository = mock_target_repo
+    app.state.target_schema_repository = MagicMock()
+
+    resp = client.get(
+        "/management/data-targets/tgt_missing/schema",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+
+
+def test_management_data_target_schema_200_returns_properties(client):
+    """GET /management/data-targets/{id}/schema returns schema with properties."""
+    from app.domain.targets import TargetSchemaProperty, TargetSchemaSnapshot
+    from datetime import datetime, timezone
+
+    user_id = _setup_auth(client)
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = DataTarget(
+        id="tgt1",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="Places",
+        external_target_id="ds-xxx",
+        status="active",
+        active_schema_snapshot_id="snap1",
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_schema_repo = MagicMock()
+    mock_schema_repo.get_by_id.return_value = TargetSchemaSnapshot(
+        id="snap1",
+        owner_user_id=user_id,
+        data_target_id="tgt1",
+        version="1",
+        fetched_at=datetime.now(timezone.utc),
+        is_active=True,
+        source_connector_instance_id="conn_1",
+        properties=[
+            TargetSchemaProperty(
+                id="prop1",
+                external_property_id="title",
+                name="Name",
+                normalized_slug="name",
+                property_type="title",
+                required=False,
+                readonly=False,
+            ),
+            TargetSchemaProperty(
+                id="prop2",
+                external_property_id="sel",
+                name="Status",
+                normalized_slug="status",
+                property_type="select",
+                required=False,
+                readonly=False,
+                options=[{"id": "a", "name": "Active"}, {"id": "b", "name": "Done"}],
+            ),
+        ],
+    )
+    app.state.target_schema_repository = mock_schema_repo
+
+    resp = client.get(
+        "/management/data-targets/tgt1/schema",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["target_id"] == "tgt1"
+    assert data["display_name"] == "Places"
+    assert len(data["properties"]) == 2
+    assert data["properties"][0]["name"] == "Name"
+    assert data["properties"][0]["property_type"] == "title"
+    assert data["properties"][1]["options"] == [{"id": "a", "name": "Active"}, {"id": "b", "name": "Done"}]

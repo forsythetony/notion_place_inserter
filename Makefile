@@ -1,4 +1,4 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-migrate supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
@@ -67,6 +67,7 @@ help:
 	@echo "  make supabase-stop     - Stop local Supabase stack"
 	@echo "  make supabase-status   - Show Supabase stack status"
 	@echo "  make supabase-reset    - Reset DB and reapply all migrations"
+	@echo "  make supabase-migrate  - Apply pending migrations to local database"
 	@echo "  make supabase-dashboard - Open local Supabase Studio in browser"
 	@echo "  make supabase-migration-new NAME=<name> - Create new migration file"
 	@echo ""
@@ -313,6 +314,9 @@ supabase-status:
 
 supabase-reset:
 	supabase db reset
+
+supabase-migrate:
+	supabase migration up
 
 supabase-dashboard:
 	@python -m webbrowser http://localhost:54323
