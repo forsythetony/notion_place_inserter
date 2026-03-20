@@ -64,6 +64,7 @@ class StepTemplate:
     owner_user_id: str | None = None
     workspace_id: str | None = None
     visibility: str = "platform"
+    query_schema: dict[str, Any] | None = None
 
 
 @dataclass

@@ -1,0 +1,33 @@
+---
+description: After implementation/update/fix, report which services need restarting
+alwaysApply: true
+---
+
+# Service Restart Check
+
+After implementing, updating, or fixing anything, do a quick check and tell the user which services need to be restarted to pick up the changes.
+
+## Checklist
+
+At the end of your work, briefly report:
+
+- **None** — If only docs, tests, or config that doesn't affect running services
+- **API** — If `app/**` (Python) changed: `make run` (or `make run-local`)
+- **Worker** — If `app/**` (Python) changed: `make run-worker` (or `make run-worker-dry-run`)
+- **Frontend** — If `notion_pipeliner_ui/**` changed: `cd notion_pipeliner_ui && npm run dev`
+- **Supabase** — If `supabase/migrations/**` changed: `make supabase-migrate` (or `make supabase-reset` for full reset)
+
+## Mapping
+
+| Changed area | Restart |
+|--------------|---------|
+| `app/**` (routes, services, domain, repos) | API + Worker |
+| `notion_pipeliner_ui/**` | Frontend dev server |
+| `supabase/migrations/**` | Run migration; no restart if DB-only |
+| `requirements.txt`, `pyproject.toml` | API + Worker (after `make install`) |
+| `notion_pipeliner_ui/package.json` | Frontend (after `npm install`) |
+| Docs, tests, `.cursor/**` | None |
+
+## Example
+
+> **Services to restart:** API and Worker (`make run` and `make run-worker` in separate terminals) — backend code changed.

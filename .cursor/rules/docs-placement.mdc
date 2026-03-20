@@ -1,0 +1,58 @@
+---
+description: When creating or placing docs under docs/, choose the section by content intent (technical-architecture, feature-proposals, marketing, market-research, style)
+alwaysApply: true
+---
+
+# Documentation placement (`docs/`)
+
+When the user asks for a **proposal**, **spec**, **write-up**, **architecture note**, or **new markdown doc**, pick **one** primary folder using the signals below. If several apply, prefer the **highest row** in the decision order. Say briefly why you chose it.
+
+**Hub:** `docs/README.md`  
+**Archive:** put superseded pages in that section’s `archive/` instead of deleting.
+
+## Decision order (first match wins)
+
+1. **Style** — Visual language, palette/typography/spacing *direction*, design options, brand feel.  
+   - **Not** implementation tokens or component specs: those belong in **`notion_pipeliner_ui/styleguide/`** (see `docs/style/README.md`).  
+   - This repo’s `docs/style/` is only pre-token / directional material and pointers.
+   - **Also here:** **theming / branding strategy for this product** — e.g. admin-editable palette, presets, token layers, white-label goals, Figma alignment *as product direction*. Industry examples (MUI, Shopify theme settings, etc.) cited **in support of that direction** still belong under **style**, because **decision order is first match wins** and this is anchored on *our* visual system.
+
+2. **Marketing** — Positioning, messaging, ICP, launch narrative, pricing framing, **go-to-market** copy, campaign angles—not *how* the system works.
+
+3. **Market research** — Comparisons of **vendors, products, libraries, platforms**; build-vs-buy; competitive landscape; evaluation matrices **where the primary question is adoption of an external tool**, not how *our* app should look or be themed.  
+   - Distinguish from **feature-proposals**: research answers *what others offer*; a PRD answers *what we will build*.  
+   - Distinguish from **style**: “React Flow vs X6 for the graph editor” → **market-research**; “admin theme builder + token model for our UI” → **style** (even if it mentions vendors).
+
+4. **Feature proposals** — **Product** intent: problems, users, goals, scope, acceptance criteria, phasing at the *what/why* level. PRDs, “we should build X” specs without deep implementation design.  
+   - If the doc is mostly **APIs, schema, migrations, services, algorithms, runbooks**, it’s not primarily a feature proposal—use technical-architecture (or split: short proposal + linked technical doc).
+
+5. **Technical architecture** — Everything else engineering-facing: system design, data flow, **phase/PR execution specs** (`productization-technical/`), runbooks, incidents, tech debt, SQL utilities, pipeline/runtime deep dives, **schema-aware UI architecture** tied to backend behavior.
+
+### Sub-locations (technical-architecture)
+
+| Kind of doc | Where |
+|-------------|--------|
+| Phased delivery / pN_pr stories, phase indexes | `docs/technical-architecture/productization-technical/phase-*-*/` |
+| Work log / shipped decisions | `docs/technical-architecture/work-log.md` (per `log-completed-tickets.mdc`) |
+| Postmortems, production investigations | `docs/technical-architecture/incident_investigations/` |
+| Known gaps / follow-ups | `docs/technical-architecture/tech-debt/` |
+| One-off SQL | `docs/technical-architecture/sql/manual/` |
+| Legacy structured breakdown | `docs/technical-architecture/architecture-breakdowns/` |
+
+## Hybrid docs
+
+If a note mixes **our visual/branding/theming direction** with **external patterns**, file it by **primary reader intent**: the main question “how should our product look and be configured visually?” → **style**. Split into two docs only when both a **standalone vendor shootout** and a **style strategy** doc would each stand alone.
+
+## Quick examples
+
+| Request | Folder |
+|---------|--------|
+| “PRD for multi-tenant exports” | `feature-proposals/` |
+| “Compare LangChain vs custom RAG” | `market-research/` |
+| “Research: admin-configurable theme, tokens, presets (how others do it)” | `style/` |
+| “Landing page hero + value props” | `marketing/` |
+| “Option B visual theme exploration” | `style/` (and link UI canon in `notion_pipeliner_ui/styleguide/`) |
+| “p5: binding picker API and handler contract” | `technical-architecture/productization-technical/…` |
+| “Why the worker OOM’d 2026-03-13” | `technical-architecture/incident_investigations/` |
+
+If unclear, **ask one question** (product vs engineering vs external research) before filing.

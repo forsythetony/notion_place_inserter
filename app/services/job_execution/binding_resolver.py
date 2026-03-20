@@ -15,10 +15,10 @@ def resolve_binding(
     """
     Resolve a single input binding to a value.
     Binding shapes:
-    - signal_ref: "trigger.payload.raw_input" | "step.step_id.output_name"
-    - cache_key_ref: {"cache_key": "..."}
+    - signal_ref: "trigger.payload.keywords" | "trigger.payload.raw_input" (deprecated) | "step.step_id.output_name"
+    - cache_key_ref: {"cache_key": "...", "path": "optional.dot.path"}  # path: nested field under cached value
     - static_value: literal value
-    - target_schema_ref: {"data_target_id": "...", "schema_property_id": "...", "field": "options"}
+    - target_schema_ref: {"schema_property_id": "...", "field": "options"} (data_target_id optional, defaults to job target)
     """
     if not binding or not isinstance(binding, dict):
         return None
@@ -27,8 +27,15 @@ def resolve_binding(
         return _resolve_signal_ref(binding["signal_ref"], ctx)
     if "cache_key_ref" in binding:
         ref = binding["cache_key_ref"]
-        key = ref.get("cache_key") if isinstance(ref, dict) else None
-        return ctx.run_cache.get(key) if key else None
+        if not isinstance(ref, dict):
+            return None
+        key = ref.get("cache_key")
+        base = ctx.run_cache.get(key) if key else None
+        path_str = ref.get("path")
+        if path_str and isinstance(path_str, str) and path_str.strip():
+            parts = [p for p in path_str.strip().split(".") if p]
+            return _resolve_path(base, parts) if parts else base
+        return base
     if "cache_key" in binding:
         return ctx.run_cache.get(binding["cache_key"])
     if "static_value" in binding:
@@ -61,7 +68,7 @@ def resolve_input_bindings(
 
 
 def _resolve_signal_ref(ref: str, ctx: ExecutionContext) -> Any:
-    """Resolve signal_ref like trigger.payload.raw_input or step.step_id.output_name."""
+    """Resolve signal_ref like trigger.payload.keywords or step.step_id.output_name."""
     if not ref or not isinstance(ref, str):
         return None
     parts = ref.split(".")
@@ -81,7 +88,7 @@ def _resolve_signal_ref(ref: str, ctx: ExecutionContext) -> Any:
 
 
 def _resolve_trigger_ref(parts: list[str], payload: dict[str, Any]) -> Any:
-    """Resolve trigger.payload.raw_input etc."""
+    """Resolve trigger.payload.<key> paths against the run's trigger_payload dict."""
     if parts[0] != "payload":
         return None
     cur: Any = payload
@@ -116,15 +123,16 @@ def _resolve_path(value: Any, parts: list[str]) -> Any:
 
 
 def _resolve_target_schema_ref(ref: dict[str, Any], snapshot: dict[str, Any]) -> Any:
-    """Resolve target_schema_ref to schema property field (e.g. options)."""
+    """Resolve target_schema_ref to schema property field (e.g. options).
+    data_target_id is optional; when absent, uses job target (snapshot.active_schema).
+    """
     if not ref or not isinstance(ref, dict):
         return None
-    target_id = ref.get("data_target_id")
     prop_id = ref.get("schema_property_id")
     field_name = ref.get("field", "options")
-    if not target_id or not prop_id:
+    if not prop_id:
         return None
-
+    # active_schema is always for job target; data_target_id in ref is legacy/optional
     active_schema = snapshot.get("active_schema") or {}
     props = active_schema.get("properties") or []
     for p in props:

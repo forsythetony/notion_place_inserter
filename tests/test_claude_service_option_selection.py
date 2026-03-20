@@ -438,3 +438,55 @@ def test_choose_option_with_suggest_skips_when_no_options():
     assert result.value is None
     assert result.is_new is False
     assert len(fake_client.messages.calls) == 0
+
+
+# --- rewrite_query_for_target ---
+
+
+def test_rewrite_query_for_target_with_schema_injects_description_and_hints():
+    """rewrite_query_for_target with query_schema builds prompt with description and hints."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("Stone Arch Bridge Minneapolis MN")
+    service._client = fake_client
+
+    result = service.rewrite_query_for_target(
+        "stone arch bridge in minneapolis",
+        query_schema={
+            "description": "Text query for Google Places searchText API",
+            "hints": ["Include place name and location", "Prefer format: Place Name City Region"],
+        },
+    )
+
+    assert result == "Stone Arch Bridge Minneapolis MN"
+    assert len(fake_client.messages.calls) == 1
+    call = fake_client.messages.calls[0]
+    assert "Target API: Text query for Google Places searchText API" in call["system"]
+    assert "Include place name and location" in call["system"]
+    assert "Prefer format: Place Name City Region" in call["system"]
+    assert "Rewrite: stone arch bridge in minneapolis" in call["messages"][0]["content"]
+
+
+def test_rewrite_query_for_target_without_schema_delegates_to_rewrite_place_query():
+    """rewrite_query_for_target without query_schema delegates to rewrite_place_query."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("Stone Arch Bridge Minneapolis MN")
+    service._client = fake_client
+
+    result = service.rewrite_query_for_target("stone arch bridge minneapolis", query_schema=None)
+
+    assert result == "Stone Arch Bridge Minneapolis MN"
+    assert len(fake_client.messages.calls) == 1
+    call = fake_client.messages.calls[0]
+    assert "Google Places" in call["system"]
+
+
+def test_rewrite_query_for_target_empty_query_returns_empty():
+    """rewrite_query_for_target returns empty string when input is empty."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("ignored")
+    service._client = fake_client
+
+    result = service.rewrite_query_for_target("", query_schema={"description": "Test"})
+
+    assert result == ""
+    assert len(fake_client.messages.calls) == 0

@@ -261,41 +261,41 @@ invite-issue-csv:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
-		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
+		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" --no-bootstrap-issuer'
 
 invite-create-users:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
-		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)"'
+		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" --no-bootstrap-issuer'
 
 invite-issue-csv-local:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
 		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
-			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}"'
+			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}" --no-bootstrap-issuer'
 
 invite-issue-csv-prod:
 	@bash -c 'set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-issue-csv-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
 		python helper_scripts/invitation_csv_issuer/main.py issue-invitations --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
-			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}"'
+			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}" --no-bootstrap-issuer'
 
 invite-create-users-local:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users-local CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
 		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
-			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}"'
+			--api-base-url "$${BASE_URL:-http://localhost:8000}" --supabase-url "$${SUPABASE_URL:-http://127.0.0.1:54321}" --no-bootstrap-issuer'
 
 invite-create-users-prod:
 	@bash -c 'set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && \
 		if [ -z "$(CSV_PATH)" ]; then echo "Usage: make invite-create-users-prod CSV_PATH=helper_scripts/invitation_csv_issuer/input_actual.csv PASSWORD=<password>"; exit 1; fi; \
 		if [ -z "$(PASSWORD)" ]; then echo "Error: PASSWORD is required"; exit 1; fi; \
 		python helper_scripts/invitation_csv_issuer/main.py create-users --csv-path "$(CSV_PATH)" --password "$(PASSWORD)" \
-			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}"'
+			--api-base-url "$${BASE_URL}" --supabase-url "$${SUPABASE_URL}" --no-bootstrap-issuer'
 
 tag:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make tag VERSION=vX.Y.Z (e.g. VERSION=v1.0.0)"; exit 1; fi; \

@@ -24,7 +24,7 @@ stages:
             sequence: 1
             input_bindings:
               query:
-                signal_ref: trigger.payload.raw_input
+                signal_ref: trigger.payload.keywords
             config:
               prompt: Rewrite this input into an optimized Google Places query.
               linked_step_id: step_google_places_lookup
@@ -69,9 +69,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.displayName
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: displayName
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_name
       - id: pipeline_source
         display_name: Set Source
@@ -84,7 +85,6 @@ stages:
               value:
                 static_value: Notion Place Inserter
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_source
       - id: pipeline_notes
         display_name: Set Notes
@@ -95,7 +95,8 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place
+                cache_key_ref:
+                  cache_key: google_places_selected_place
             config:
               prompt: |
                 Rewrite this place information into a concise, engaging travel note (2-4 sentences).
@@ -110,27 +111,21 @@ stages:
               value:
                 signal_ref: step.step_ai_prompt_notes.value
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_notes
       - id: pipeline_tags
         display_name: Set Tags
         sequence: 4
         steps:
-          - id: step_cache_get_places
-            step_template_id: step_template_cache_get
-            sequence: 1
-            config:
-              cache_key: google_places_response
           - id: step_constrain_tags
             step_template_id: step_template_ai_constrain_values_claude
-            sequence: 2
+            sequence: 1
             input_bindings:
               source_value:
-                signal_ref: step.step_cache_get_places.value
+                cache_key_ref:
+                  cache_key: google_places_response
             config:
               allowable_values_source:
                 target_schema_ref:
-                  data_target_id: target_places_to_visit
                   schema_property_id: prop_tags
                   field: options
               max_suggestible_values: 2
@@ -138,12 +133,11 @@ stages:
               max_output_values: 3
           - id: step_property_set_tags
             step_template_id: step_template_property_set
-            sequence: 3
+            sequence: 2
             input_bindings:
               value:
                 signal_ref: step.step_constrain_tags.selected_values
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_tags
       - id: pipeline_google_maps
         display_name: Set Google Maps URL
@@ -154,9 +148,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.googleMapsUri
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: googleMapsUri
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_google_maps
       - id: pipeline_neighborhood
         display_name: Set Neighborhood
@@ -167,46 +162,34 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.neighborhood
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: neighborhood
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_neighborhood
       - id: pipeline_location
         display_name: Set Location Relation
         sequence: 7
         steps:
-          - id: step_location_cache_get
-            step_template_id: step_template_cache_get
-            sequence: 1
-            config:
-              cache_key: google_places_selected_place
-          - id: step_location_extract_address
-            step_template_id: step_template_data_transform
-            sequence: 2
-            input_bindings:
-              value:
-                signal_ref: step.step_location_cache_get.value
-            config:
-              operation: extract_key
-              source_path: formattedAddress
           - id: step_location_ai_select
             step_template_id: step_template_ai_select_relation
-            sequence: 3
+            sequence: 1
             input_bindings:
               source_value:
-                signal_ref: step.step_location_extract_address.transformed_value
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: formattedAddress
             config:
               related_db: target_locations
               key_lookup: title
               prompt: Match the place to the best Location page (city, neighborhood, or region) based on address. Consider aliases (e.g. Twin Cities for Minneapolis/St. Paul metro).
           - id: step_property_set_location
             step_template_id: step_template_property_set
-            sequence: 4
+            sequence: 2
             input_bindings:
               value:
                 signal_ref: step.step_location_ai_select.selected_relation
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_location
       - id: pipeline_address
         display_name: Set Address
@@ -217,9 +200,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.formattedAddress
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: formattedAddress
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_address
       - id: pipeline_latitude
         display_name: Set Latitude
@@ -230,9 +214,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.latitude
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: latitude
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_latitude
       - id: pipeline_longitude
         display_name: Set Longitude
@@ -243,9 +228,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.longitude
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: longitude
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_longitude
       - id: pipeline_coordinates
         display_name: Set Coordinates
@@ -258,9 +244,13 @@ stages:
               template: "{{latitude}}, {{longitude}}"
               values:
                 latitude:
-                  signal_ref: step.step_google_places_lookup.selected_place.latitude
+                  cache_key_ref:
+                    cache_key: google_places_selected_place
+                    path: latitude
                 longitude:
-                  signal_ref: step.step_google_places_lookup.selected_place.longitude
+                  cache_key_ref:
+                    cache_key: google_places_selected_place
+                    path: longitude
           - id: step_property_set_coordinates
             step_template_id: step_template_property_set
             sequence: 2
@@ -268,7 +258,6 @@ stages:
               value:
                 signal_ref: step.step_coordinates_templater.rendered_value
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_coordinates
       - id: pipeline_main_type
         display_name: Set Main Type
@@ -279,9 +268,10 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.primaryType
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: primaryType
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_main_type
       - id: pipeline_url
         display_name: Set Website URL
@@ -292,43 +282,31 @@ stages:
             sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_google_places_lookup.selected_place.websiteUri
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: websiteUri
             config:
-              data_target_id: target_places_to_visit
               schema_property_id: prop_url
       - id: pipeline_cover_image
         display_name: Set Cover Image
         sequence: 14
         steps:
-          - id: step_cover_cache_get
-            step_template_id: step_template_cache_get
-            sequence: 1
-            config:
-              cache_key: google_places_selected_place
-          - id: step_cover_extract_url
-            step_template_id: step_template_data_transform
-            sequence: 2
-            input_bindings:
-              value:
-                signal_ref: step.step_cover_cache_get.value
-            config:
-              operation: extract_key
-              source_path: photos[0].name
           - id: step_cover_upload_notion
             step_template_id: step_template_upload_image_to_notion
-            sequence: 3
+            sequence: 1
             input_bindings:
               value:
-                signal_ref: step.step_cover_extract_url.transformed_value
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: photos.0.name
             config: {}
           - id: step_cover_property_set
             step_template_id: step_template_property_set
-            sequence: 4
+            sequence: 2
             input_bindings:
               value:
                 signal_ref: step.step_cover_upload_notion.notion_image_url
             config:
-              data_target_id: target_places_to_visit
               target_kind: page_metadata
               target_field: cover_image
       - id: pipeline_icon_image
@@ -340,7 +318,9 @@ stages:
             sequence: 1
             input_bindings:
               query:
-                signal_ref: step.step_google_places_lookup.selected_place.displayName
+                cache_key_ref:
+                  cache_key: google_places_selected_place
+                  path: displayName
             config:
               prompt: Generate a short icon search query (1-3 words) for this place.
               linked_step_id: step_icon_search
@@ -366,6 +346,5 @@ stages:
               value:
                 signal_ref: step.step_icon_upload_notion.notion_image_url
             config:
-              data_target_id: target_places_to_visit
               target_kind: page_metadata
               target_field: icon_image

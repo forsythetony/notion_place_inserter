@@ -9,9 +9,6 @@ input_contract:
       type: any
 output_contract: {}
 config_schema:
-  data_target_id:
-    type: string
-    required: true
   schema_property_id:
     type: string
   target_kind:

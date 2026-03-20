@@ -4,7 +4,7 @@ import asyncio
 import re
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -17,6 +17,12 @@ from app.queue.memory_diagnostics import (
 )
 from app.queue.models import PipelineFailureEvent, PipelineSuccessEvent
 from app.services.supabase_queue_repository import QueueMessage, SupabaseQueueRepository
+from app.services.trigger_request_body import (
+    build_trigger_payload,
+    default_keywords_request_body_schema,
+    preview_string_for_log,
+    validate_request_body_against_schema,
+)
 
 if TYPE_CHECKING:
     from app.repositories.postgres_run_repository import PostgresRunRepository
@@ -65,7 +71,7 @@ def _run_pipeline_sync(
     owner_user_id: str,
     run_id: str,
     job_id: str,
-    keywords: str,
+    trigger_payload: dict[str, Any],
     definition_snapshot_ref: str | None,
     trigger_id: str | None,
 ) -> dict:
@@ -81,7 +87,6 @@ def _run_pipeline_sync(
         raise RuntimeError(
             f"Job definition unavailable: job_id={job_definition_id} owner={owner_user_id}"
         )
-    trigger_payload = {"raw_input": keywords}
     return job_execution_service.execute_snapshot_run(
         snapshot=snapshot_obj.snapshot,
         run_id=run_id,
@@ -113,17 +118,42 @@ def _extract_notion_data_source_id_from_error(error: BaseException) -> str | Non
 
 def _extract_payload(
     msg: QueueMessage,
-) -> tuple[str, str, str, str | None, str | None, str | None, str | None, str | None, str | None] | None:
+) -> tuple[
+    str,
+    str,
+    str,
+    dict[str, Any] | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+] | None:
     """
-    Extract job_id, run_id, keywords, recipient_whatsapp, job_definition_id, job_slug,
-    owner_user_id, definition_snapshot_ref, trigger_id from message payload.
+    Extract job_id, run_id, log_preview, trigger_payload, recipient_whatsapp, job_definition_id,
+    job_slug, owner_user_id, definition_snapshot_ref, trigger_id from message payload.
+
+    ``trigger_payload`` may be missing on older messages (use ``keywords`` only); the worker
+    then reconstructs payload from ``keywords`` using the default locations schema.
     Returns None if payload is malformed.
     """
     p = msg.payload or {}
     job_id = p.get("job_id")
     run_id = p.get("run_id")
-    keywords = p.get("keywords")
-    if not job_id or not run_id or keywords is None:
+    if not job_id or not run_id:
+        return None
+    raw_tp = p.get("trigger_payload")
+    legacy_keywords = p.get("keywords")
+    if isinstance(raw_tp, dict) and raw_tp:
+        trigger_payload: dict[str, Any] | None = cast(dict[str, Any], raw_tp)
+        log_preview = preview_string_for_log(trigger_payload)
+    elif legacy_keywords is not None:
+        trigger_payload = None
+        log_preview = str(legacy_keywords).strip()
+        if not log_preview:
+            return None
+    else:
         return None
     recipient = p.get("recipient_whatsapp")
     job_def_id = p.get("job_definition_id")
@@ -134,7 +164,8 @@ def _extract_payload(
     return (
         str(job_id),
         str(run_id),
-        str(keywords).strip(),
+        log_preview,
+        trigger_payload,
         str(recipient) if recipient else None,
         str(job_def_id) if job_def_id else None,
         str(job_slug) if job_slug else None,
@@ -305,7 +336,18 @@ def _handle_final_failure(
     if extracted is None:
         queue_repo.archive(msg.message_id)
         return
-    job_id, run_id, keywords, recipient_whatsapp, _jd, _js, _owner, _snap, _tid = extracted
+    (
+        job_id,
+        run_id,
+        log_preview,
+        _tp,
+        recipient_whatsapp,
+        _jd,
+        _js,
+        _owner,
+        _snap,
+        _tid,
+    ) = extracted
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
     try:
@@ -325,7 +367,7 @@ def _handle_final_failure(
             PipelineFailureEvent(
                 job_id=job_id,
                 run_id=run_id,
-                keywords=keywords,
+                keywords=log_preview,
                 error=error,
                 recipient_whatsapp=recipient_whatsapp,
             )
@@ -400,7 +442,8 @@ async def _process_message(
     (
         job_id,
         run_id,
-        keywords,
+        log_preview,
+        trigger_payload_optional,
         recipient_whatsapp,
         job_definition_id,
         job_slug,
@@ -408,6 +451,15 @@ async def _process_message(
         definition_snapshot_ref,
         trigger_id,
     ) = extracted
+
+    if trigger_payload_optional is not None:
+        trigger_payload: dict[str, Any] = trigger_payload_optional
+    else:
+        schema = default_keywords_request_body_schema()
+        trigger_payload = build_trigger_payload(
+            validate_request_body_against_schema({"keywords": log_preview}, schema),
+            schema,
+        )
 
     # Idempotency: skip if run already terminal
     try:
@@ -448,7 +500,7 @@ async def _process_message(
             event_bus,
             job_id,
             run_id,
-            keywords,
+            log_preview,
             recipient_whatsapp,
             "read_count exceeded ceiling; forcing terminal",
             datetime.now(timezone.utc),
@@ -464,7 +516,7 @@ async def _process_message(
                 job_id, "running", started_at=now, retry_count=retry_count
             )
             run_repo.update_run(run_id, status="running")
-            event_payload: dict = {"keywords_preview": keywords[:80]}
+            event_payload: dict = {"keywords_preview": log_preview[:80]}
             if job_definition_id:
                 event_payload["job_definition_id"] = job_definition_id
             if job_slug:
@@ -492,7 +544,7 @@ async def _process_message(
                     event_bus,
                     job_id,
                     run_id,
-                    keywords,
+                    log_preview,
                     recipient_whatsapp,
                     err_msg,
                     datetime.now(timezone.utc),
@@ -522,7 +574,7 @@ async def _process_message(
                 event_bus,
                 job_id,
                 run_id,
-                keywords,
+                log_preview,
                 recipient_whatsapp,
                 err_msg,
                 datetime.now(timezone.utc),
@@ -536,6 +588,7 @@ async def _process_message(
                 "owner_user_id, job_definition_id, and trigger_id required for snapshot execution"
             )
         try:
+            tp_for_run = trigger_payload
             result = await loop.run_in_executor(
                 None,
                 lambda: _run_pipeline_sync(
@@ -545,7 +598,7 @@ async def _process_message(
                     owner_user_id,
                     run_id,
                     job_id,
-                    keywords,
+                    tp_for_run,
                     definition_snapshot_ref,
                     trigger_id,
                 ),
@@ -577,7 +630,7 @@ async def _process_message(
                     event_bus,
                     job_id,
                     run_id,
-                    keywords,
+                    log_preview,
                     recipient_whatsapp,
                     err_msg,
                     datetime.now(timezone.utc),
@@ -607,7 +660,7 @@ async def _process_message(
                 event_bus,
                 job_id,
                 run_id,
-                keywords,
+                log_preview,
                 recipient_whatsapp,
                 err_msg,
                 datetime.now(timezone.utc),
@@ -658,7 +711,7 @@ async def _process_message(
                     event_bus,
                     job_id,
                     run_id,
-                    keywords,
+                    log_preview,
                     recipient_whatsapp,
                     err_msg,
                     datetime.now(timezone.utc),
@@ -688,7 +741,7 @@ async def _process_message(
                 event_bus,
                 job_id,
                 run_id,
-                keywords,
+                log_preview,
                 recipient_whatsapp,
                 err_msg,
                 datetime.now(timezone.utc),
@@ -701,7 +754,7 @@ async def _process_message(
             PipelineSuccessEvent(
                 job_id=job_id,
                 run_id=run_id,
-                keywords=keywords,
+                keywords=log_preview,
                 result=result if isinstance(result, dict) else {},
                 recipient_whatsapp=recipient_whatsapp,
             )

@@ -12,6 +12,11 @@ from loguru import logger
 
 from app.domain.runs import JobRun
 from app.repositories.yaml_run_repository import YamlRunRepository, _find_job_run_by_id
+from app.services.trigger_request_body import (
+    build_trigger_payload,
+    default_keywords_request_body_schema,
+    validate_request_body_against_schema,
+)
 
 
 class RunLifecycleAdapter:
@@ -67,7 +72,14 @@ class RunLifecycleAdapter:
         """Create pipeline run record. Persists JobRun with full metadata when owner provided."""
         if not owner_user_id:
             return
-        trigger_payload = {"raw_input": keywords} if keywords else {}
+        if keywords:
+            schema = default_keywords_request_body_schema()
+            trigger_payload = build_trigger_payload(
+                validate_request_body_against_schema({"keywords": keywords}, schema),
+                schema,
+            )
+        else:
+            trigger_payload = {}
         run = JobRun(
             id=run_id,
             owner_user_id=owner_user_id,

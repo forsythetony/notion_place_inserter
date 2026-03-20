@@ -2,7 +2,7 @@
 
 import json
 import re
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import anthropic
 from loguru import logger
@@ -34,6 +34,44 @@ class ClaudeService:
             max_tokens=256,
             system="You are a search query optimizer. Rewrite the user's place search into a concise, effective Google Places text query. Return only the query string, no explanation.",
             messages=[{"role": "user", "content": f"Rewrite for Google Places search: {raw_query}"}],
+        )
+        return self._extract_text(response)
+
+    def rewrite_query_for_target(
+        self,
+        raw_query: str,
+        *,
+        query_schema: dict[str, Any] | None = None,
+        base_prompt: str | None = None,
+    ) -> str:
+        """
+        Rewrite raw input into an optimized query for a specific target API.
+        When query_schema is provided, injects description and hints into the prompt.
+        When absent, delegates to rewrite_place_query (generic Google Places).
+        """
+        if not raw_query.strip():
+            return raw_query
+        if not query_schema:
+            return self.rewrite_place_query(raw_query)
+        description = query_schema.get("description", "")
+        hints = query_schema.get("hints") or []
+        hints_text = "\n".join(f"- {h}" for h in hints) if hints else ""
+        system = (
+            "You are a search query optimizer. Rewrite the user's input into a query "
+            "optimized for the target API.\n\n"
+            f"Target API: {description}\n\n"
+        )
+        if hints_text:
+            system += f"Optimization hints:\n{hints_text}\n\n"
+        system += "Return only the query string, no explanation."
+        user_content = (
+            f"{base_prompt.strip()}\n\nInput: {raw_query}" if base_prompt else f"Rewrite: {raw_query}"
+        )
+        response = self._client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=256,
+            system=system,
+            messages=[{"role": "user", "content": user_content}],
         )
         return self._extract_text(response)
 

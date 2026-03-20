@@ -7,7 +7,7 @@ alwaysApply: true
 
 When completing a ticket (PR, task, or work item), always add an entry to the **Log** section of:
 
-`docs/planning/multi-tenant-productization-prd/work-log.md`
+`docs/technical-architecture/work-log.md`
 
 Add a new row at the top of the Log table with:
 - **Date** — Today's date (YYYY-MM-DD)

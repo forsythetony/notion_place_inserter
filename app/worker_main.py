@@ -32,6 +32,7 @@ from app.repositories import (
     PostgresTargetRepository,
     PostgresTargetSchemaRepository,
     PostgresTargetTemplateRepository,
+    PostgresTriggerJobLinkRepository,
     PostgresTriggerRepository,
 )
 from app.services.claude_service import ClaudeService
@@ -168,8 +169,10 @@ def main() -> None:
     target_schema_repo = PostgresTargetSchemaRepository(supabase_client)
     app_config_repo = PostgresAppConfigRepository(supabase_client)
     connector_instance_repo = PostgresConnectorInstanceRepository(supabase_client)
+    trigger_job_link_repo = PostgresTriggerJobLinkRepository(supabase_client)
     validation_service = ValidationService(
         trigger_repo=trigger_repo,
+        trigger_job_link_repo=trigger_job_link_repo,
         target_repo=target_repo,
         target_schema_repo=target_schema_repo,
         step_template_repo=step_template_repo,
@@ -187,6 +190,7 @@ def main() -> None:
         job_repository=job_repo,
         trigger_service=trigger_service,
         target_service=target_service,
+        step_template_repository=step_template_repo,
     )
     oauth_state_repo = PostgresOAuthConnectionStateRepository(supabase_client)
     credentials_repo = PostgresConnectorCredentialsRepository(supabase_client)

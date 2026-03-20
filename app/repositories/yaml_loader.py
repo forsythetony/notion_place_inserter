@@ -255,6 +255,7 @@ def parse_step_template(data: dict[str, Any]) -> StepTemplate:
         owner_user_id=data.get("owner_user_id"),
         workspace_id=data.get("workspace_id"),
         visibility=data.get("visibility", "platform"),
+        query_schema=data.get("query_schema"),
     )
 
 

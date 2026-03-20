@@ -9,9 +9,6 @@ output_contract:
     options:
       type: array
 config_schema:
-  data_target_id:
-    type: string
-    required: true
   schema_property_id:
     type: string
     required: true

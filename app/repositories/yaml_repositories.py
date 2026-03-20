@@ -304,6 +304,17 @@ class YamlJobRepository:
         data = job_graph_to_yaml_dict(graph)
         dump_yaml_file(path, data)
 
+    def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
+        """Set status on tenant job YAML without rewriting stages (avoids corrupting graph)."""
+        if owner_user_id == "bootstrap":
+            return
+        path = tenant_job_path(owner_user_id, id, self._base)
+        data = load_yaml_file(path)
+        if data is None:
+            return
+        data["status"] = status
+        dump_yaml_file(path, data)
+
     def archive(self, id: str, owner_user_id: str) -> None:
         """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""
         if owner_user_id == "bootstrap":

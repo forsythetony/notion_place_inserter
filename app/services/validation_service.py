@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
+from app.services.trigger_binding_migration import (
+    legacy_raw_input_replacement_signal_ref,
+    migrate_raw_input_signal_refs_for_steps,
+)
+
 if TYPE_CHECKING:
     from app.domain.connectors import ConnectorInstance, ConnectorTemplate
     from app.domain.jobs import (
@@ -23,6 +30,7 @@ if TYPE_CHECKING:
         TargetRepository,
         TargetSchemaRepository,
         TargetTemplateRepository,
+        TriggerJobLinkRepository,
         TriggerRepository,
     )
     from app.domain.targets import (
@@ -67,6 +75,7 @@ class ValidationService:
         self,
         *,
         trigger_repo: "TriggerRepository | None" = None,
+        trigger_job_link_repo: "TriggerJobLinkRepository | None" = None,
         target_repo: "TargetRepository | None" = None,
         target_schema_repo: "TargetSchemaRepository | None" = None,
         target_template_repo: "TargetTemplateRepository | None" = None,
@@ -76,6 +85,7 @@ class ValidationService:
         app_config_repo: "AppConfigRepository | None" = None,
     ) -> None:
         self._trigger_repo = trigger_repo
+        self._trigger_job_link_repo = trigger_job_link_repo
         self._target_repo = target_repo
         self._target_schema_repo = target_schema_repo
         self._target_template_repo = target_template_repo
@@ -83,6 +93,36 @@ class ValidationService:
         self._connector_template_repo = connector_template_repo
         self._connector_instance_repo = connector_instance_repo
         self._app_config_repo = app_config_repo
+
+    def _maybe_migrate_legacy_trigger_bindings(self, graph: JobGraph) -> None:
+        """Rewrite legacy raw_input trigger refs when all linked triggers declare keywords."""
+        if not self._trigger_repo or not self._trigger_job_link_repo:
+            return
+        try:
+            trigger_ids = self._trigger_job_link_repo.list_trigger_ids_for_job(
+                graph.job.id, graph.job.owner_user_id
+            )
+        except Exception:
+            return
+        if not trigger_ids:
+            return
+        owner = graph.job.owner_user_id
+        trigger_defs = []
+        for tid in trigger_ids:
+            trig = self._trigger_repo.get_by_id(tid, owner)
+            if trig is None:
+                return
+            trigger_defs.append(trig)
+        replacement = legacy_raw_input_replacement_signal_ref(trigger_defs)
+        if not replacement:
+            return
+        n = migrate_raw_input_signal_refs_for_steps(graph.steps, replacement)
+        if n:
+            logger.info(
+                "trigger_bindings_migrated_raw_input_to_keywords | job_id={} bindings_updated={}",
+                graph.job.id,
+                n,
+            )
 
     def validate_job_graph(
         self,
@@ -94,6 +134,7 @@ class ValidationService:
         Validate a full job graph. Raises ValidationError on failure.
         Set skip_reference_checks=True when referenced entities may not yet be persisted.
         """
+        self._maybe_migrate_legacy_trigger_bindings(graph)
         errors: list[str] = []
         job = graph.job
         stages = graph.stages
@@ -179,16 +220,12 @@ class ValidationService:
                     )
                 elif template.step_kind == "property_set":
                     target_kind = last_step.config.get("target_kind", "schema_property")
+                    # data_target_id is job-level; steps inherit job.target_id. If present (legacy), must match.
                     data_target_id = last_step.config.get("data_target_id")
-
-                    if not data_target_id:
+                    if data_target_id and data_target_id != job.target_id:
                         errors.append(
-                            f"Property Set step '{last_step.id}' must have config.data_target_id"
-                        )
-                    elif data_target_id != job.target_id:
-                        errors.append(
-                            f"Property Set step '{last_step.id}' references target '{data_target_id}' "
-                            f"but job target is '{job.target_id}'"
+                            f"Property Set step '{last_step.id}' config.data_target_id '{data_target_id}' "
+                            f"does not match job target '{job.target_id}'"
                         )
                     elif target_kind == "page_metadata":
                         target_field = last_step.config.get("target_field")
@@ -212,11 +249,11 @@ class ValidationService:
                             )
                         elif self._target_schema_repo and not skip_reference_checks:
                             schema = self._target_schema_repo.get_active_for_target(
-                                data_target_id, job.owner_user_id
+                                job.target_id, job.owner_user_id
                             )
                             if schema is None:
                                 errors.append(
-                                    f"no active schema for target '{data_target_id}'"
+                                    f"no active schema for job target '{job.target_id}'"
                                 )
                             else:
                                 prop_ids = {p.id for p in schema.properties}
@@ -226,11 +263,10 @@ class ValidationService:
                                         f"'{schema_property_id}' not found in target schema"
                                     )
 
-        # Step input bindings resolution
+        # Step input bindings resolution (signal_ref: same pipeline only; cross-pipeline via cache_key_ref)
         if self._step_template_repo:
-            step_ids_in_order = self._step_ids_in_execution_order(stages, pipelines, steps)
             for step in steps:
-                self._validate_step_bindings(step, step_ids_in_order, job, errors)
+                self._validate_step_bindings(step, steps, job, errors)
 
         # Limits (from AppConfigRepository; will be backend-configurable for frontend display)
         limits = self._app_config_repo.get_by_owner(job.owner_user_id) if self._app_config_repo else None
@@ -291,11 +327,21 @@ class ValidationService:
     def _validate_step_bindings(
         self,
         step: "StepInstance",
-        step_ids_in_order: list[str],
+        all_steps: list["StepInstance"],
         job: "JobDefinition",
         errors: list[str],
     ) -> None:
-        """Validate that step input bindings resolve to known sources."""
+        """Validate that step input bindings resolve to known sources.
+
+        signal_ref to step.* is allowed only within the same pipeline (preceding steps).
+        Cross-pipeline / cross-stage data must use cache_key_ref.
+        """
+        pipe_steps = sorted(
+            [s for s in all_steps if s.pipeline_id == step.pipeline_id],
+            key=lambda s: s.sequence,
+        )
+        pipe_step_ids = [s.id for s in pipe_steps]
+
         for _field, binding in step.input_bindings.items():
             if not isinstance(binding, dict):
                 continue
@@ -313,22 +359,24 @@ class ValidationService:
                         errors.append(f"step '{step.id}' invalid signal_ref format: {ref}")
                         continue
                     ref_step_id = parts[1]
-                    if ref_step_id not in step_ids_in_order:
+                    if ref_step_id not in pipe_step_ids:
                         errors.append(
-                            f"step '{step.id}' signal_ref '{ref}' references unknown step '{ref_step_id}'"
+                            f"step '{step.id}' signal_ref '{ref}' references step '{ref_step_id}' "
+                            "not in the same pipeline (use cache_set + cache_key_ref for cross-pipeline data)"
                         )
-                    else:
-                        # Referenced step must come before this step
-                        idx = step_ids_in_order.index(step.id)
-                        ref_idx = step_ids_in_order.index(ref_step_id)
-                        if ref_idx >= idx:
-                            errors.append(
-                                f"step '{step.id}' signal_ref '{ref}' references step that does not precede it"
-                            )
+                        continue
+                    idx = pipe_step_ids.index(step.id)
+                    ref_idx = pipe_step_ids.index(ref_step_id)
+                    if ref_idx >= idx:
+                        errors.append(
+                            f"step '{step.id}' signal_ref '{ref}' references step that does not precede it"
+                        )
                     continue
                 errors.append(f"step '{step.id}' signal_ref '{ref}' has unknown format")
             if "cache_key" in binding:
                 continue  # cache key is valid
+            if "cache_key_ref" in binding:
+                continue  # resolved at runtime against run cache
         # Check config for target_schema_ref (e.g. in ai_constrain_values)
         for key, val in step.config.items():
             if key == "allowable_values_source" and isinstance(val, dict):
@@ -336,15 +384,17 @@ class ValidationService:
                 if isinstance(tsr, dict):
                     tid = tsr.get("data_target_id")
                     pid = tsr.get("schema_property_id")
-                    if tid and pid:
-                        if tid != job.target_id:
+                    if pid:
+                        # data_target_id is job-level; if present (legacy), must match job target
+                        effective_tid = tid or job.target_id
+                        if tid and tid != job.target_id:
                             errors.append(
                                 f"step '{step.id}' target_schema_ref data_target_id '{tid}' "
                                 f"does not match job target '{job.target_id}'"
                             )
                         elif self._target_schema_repo:
                             schema = self._target_schema_repo.get_active_for_target(
-                                tid, job.owner_user_id
+                                effective_tid, job.owner_user_id
                             )
                             if schema and pid not in {p.id for p in schema.properties}:
                                 errors.append(

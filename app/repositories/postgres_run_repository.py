@@ -18,6 +18,11 @@ from app.domain.runs import (
 )
 from app.repositories.id_mapping import resolve_or_create_mapping
 from app.repositories.postgres_repositories import _ensure_uuid
+from app.services.trigger_request_body import (
+    build_trigger_payload,
+    default_keywords_request_body_schema,
+    validate_request_body_against_schema,
+)
 
 # Valid run statuses (matches run_status_enum in Phase 4 schema)
 _VALID_RUN_STATUSES = frozenset({"pending", "running", "succeeded", "failed", "cancelled"})
@@ -327,9 +332,10 @@ class PostgresRunRepository:
     def create_job(
         self,
         job_id: str,
-        keywords: str,
-        status: str = "queued",
         *,
+        trigger_payload: dict[str, Any] | None = None,
+        keywords: str | None = None,
+        status: str = "queued",
         owner_user_id: str | None = None,
         run_id: str | None = None,
         job_definition_id: str | None = None,
@@ -343,6 +349,7 @@ class PostgresRunRepository:
                 run_id=run_id,
                 status="pending",
                 owner_user_id=owner_user_id,
+                trigger_payload=trigger_payload,
                 keywords=keywords,
                 job_definition_id=job_definition_id,
                 trigger_id=trigger_id,
@@ -357,6 +364,7 @@ class PostgresRunRepository:
         status: str = "pending",
         *,
         owner_user_id: str | None = None,
+        trigger_payload: dict[str, Any] | None = None,
         keywords: str | None = None,
         job_definition_id: str | None = None,
         trigger_id: str | None = None,
@@ -365,7 +373,16 @@ class PostgresRunRepository:
     ) -> None:
         if not owner_user_id:
             return
-        trigger_payload = {"raw_input": keywords} if keywords else {}
+        if trigger_payload is not None:
+            payload_dict: dict[str, Any] = dict(trigger_payload)
+        elif keywords is not None:
+            schema = default_keywords_request_body_schema()
+            payload_dict = build_trigger_payload(
+                validate_request_body_against_schema({"keywords": keywords}, schema),
+                schema,
+            )
+        else:
+            payload_dict = {}
         run = JobRun(
             id=run_id,
             owner_user_id=owner_user_id,
@@ -373,7 +390,7 @@ class PostgresRunRepository:
             trigger_id=trigger_id or "",
             target_id=target_id or "",
             status=status,
-            trigger_payload=trigger_payload,
+            trigger_payload=payload_dict,
             definition_snapshot_ref=definition_snapshot_ref,
             platform_job_id=job_id,
             retry_count=0,

@@ -24,3 +24,11 @@ runtime_binding: google_places_lookup
 category: lookup
 status: active
 visibility: platform
+query_schema:
+  api: google_places
+  type: string
+  description: "Text query for Google Places searchText API (textQuery field)"
+  hints:
+    - "Include place name and location when known (e.g. 'Stone Arch Bridge Minneapolis MN')"
+    - "Avoid conversational or question-style phrasing"
+    - "Prefer format: Place Name City Region"

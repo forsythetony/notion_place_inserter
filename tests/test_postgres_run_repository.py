@@ -46,7 +46,10 @@ def test_create_run_upserts_job_runs(repo, mock_client):
     assert call_arg["platform_job_id"] == "loc_abc"
     assert call_arg["job_id"] == "job_notion_place_inserter"
     assert call_arg["status"] == "pending"
-    assert call_arg["trigger_payload"] == {"raw_input": "coffee shop"}
+    assert call_arg["trigger_payload"] == {
+        "keywords": "coffee shop",
+        "raw_input": "coffee shop",
+    }
 
 
 def test_update_job_status_finds_and_saves(repo, mock_client):

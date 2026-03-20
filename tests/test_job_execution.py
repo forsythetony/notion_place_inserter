@@ -39,6 +39,20 @@ def test_resolve_signal_ref_trigger_payload():
     assert result == "coffee shop"
 
 
+def test_resolve_signal_ref_trigger_payload_keywords():
+    """signal_ref trigger.payload.keywords resolves from trigger_payload."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={"keywords": "coffee shop", "raw_input": "coffee shop"},
+    )
+    assert (
+        resolve_binding({"signal_ref": "trigger.payload.keywords"}, ctx, {})
+        == "coffee shop"
+    )
+
+
 def test_resolve_signal_ref_step_output():
     """signal_ref step.step_id.output_name resolves from step_outputs."""
     ctx = ExecutionContext(
@@ -103,6 +117,31 @@ def test_resolve_cache_key():
     assert result == {"places": []}
 
 
+def test_resolve_cache_key_ref_with_path():
+    """cache_key_ref with optional path traverses nested cached value."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.run_cache["google_places_selected_place"] = {
+        "displayName": "Bridge",
+        "photos": [{"name": "places/123/photos/abc"}],
+    }
+    assert (
+        resolve_binding(
+            {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "displayName"}},
+            ctx,
+            {},
+        )
+        == "Bridge"
+    )
+    assert (
+        resolve_binding(
+            {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "photos.0.name"}},
+            ctx,
+            {},
+        )
+        == "places/123/photos/abc"
+    )
+
+
 def test_resolve_static_value():
     """static_value returns literal."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
@@ -130,7 +169,6 @@ def test_resolve_target_schema_ref_options():
     result = resolve_binding(
         {
             "target_schema_ref": {
-                "data_target_id": "t1",
                 "schema_property_id": "prop_tags",
                 "field": "options",
             },
@@ -212,7 +250,7 @@ def test_property_set_handler_stores_in_page_metadata_cover():
     payload = {"type": "external", "external": {"url": "https://example.com/cover.jpg"}}
     handler.execute(
         step_id="step_cover",
-        config={"data_target_id": "t1", "target_kind": "page_metadata", "target_field": "cover_image"},
+        config={"target_kind": "page_metadata", "target_field": "cover_image"},
         input_bindings={"value": {}},
         resolved_inputs={"value": payload},
         ctx=ctx,
@@ -228,7 +266,7 @@ def test_property_set_handler_stores_in_page_metadata_icon():
     payload = {"type": "file_upload", "file_upload": {"id": "fu-123"}}
     handler.execute(
         step_id="step_icon",
-        config={"data_target_id": "t1", "target_kind": "page_metadata", "target_field": "icon_image"},
+        config={"target_kind": "page_metadata", "target_field": "icon_image"},
         input_bindings={"value": {}},
         resolved_inputs={"value": payload},
         ctx=ctx,
@@ -243,7 +281,7 @@ def test_property_set_handler_page_metadata_converts_url_string():
     handler = PropertySetHandler()
     handler.execute(
         step_id="step_cover",
-        config={"data_target_id": "t1", "target_kind": "page_metadata", "target_field": "cover_image"},
+        config={"target_kind": "page_metadata", "target_field": "cover_image"},
         input_bindings={"value": {}},
         resolved_inputs={"value": "https://example.com/img.png"},
         ctx=ctx,
@@ -620,6 +658,207 @@ def test_optimize_input_claude_handler_returns_optimized_query():
     assert result["optimized_query"] == "coffee shop"  # no Claude, passthrough
 
 
+def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_output():
+    """When optimized_query is wired to a step with query_schema, uses rewrite_query_for_target."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.rewrite_query_for_target.return_value = "Stone Arch Bridge Minneapolis MN"
+    claude.get_last_usage.return_value = {"input_tokens": 10, "output_tokens": 5}
+    ctx._services["claude"] = claude
+
+    snapshot = {
+        "job": {
+            "stages": [
+                {
+                    "pipelines": [
+                        {
+                            "steps": [
+                                {"id": "step_opt", "step_template_id": "step_template_optimize_input_claude"},
+                                {
+                                    "id": "step_google_places_lookup",
+                                    "step_template_id": "step_template_google_places_lookup",
+                                    "input_bindings": {
+                                        "query": {"signal_ref": "step.step_opt.optimized_query"},
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        "step_templates": {
+            "step_template_google_places_lookup": {
+                "query_schema": {
+                    "description": "Google Places text query",
+                    "hints": ["Include place name and location"],
+                },
+            },
+        },
+    }
+
+    handler = OptimizeInputClaudeHandler()
+    result = handler.execute(
+        step_id="step_opt",
+        config={},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "stone arch bridge minneapolis"},
+        ctx=ctx,
+        snapshot=snapshot,
+    )
+    assert result["optimized_query"] == "Stone Arch Bridge Minneapolis MN"
+    claude.rewrite_query_for_target.assert_called_once()
+    call_kw = claude.rewrite_query_for_target.call_args.kwargs
+    assert call_kw["query_schema"]["description"] == "Google Places text query"
+    claude.rewrite_place_query.assert_not_called()
+
+
+def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no_schema():
+    """When no linked step or no query_schema, uses rewrite_place_query."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.rewrite_place_query.return_value = "coffee shop"
+    claude.get_last_usage.return_value = {"input_tokens": 10, "output_tokens": 5}
+    ctx._services["claude"] = claude
+
+    handler = OptimizeInputClaudeHandler()
+    result = handler.execute(
+        step_id="step_opt",
+        config={},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "coffee shop"},
+        ctx=ctx,
+        snapshot={},
+    )
+    assert result["optimized_query"] == "coffee shop"
+    claude.rewrite_place_query.assert_called_once_with("coffee shop")
+    claude.rewrite_query_for_target.assert_not_called()
+
+
+def test_optimize_input_claude_handler_include_target_query_schema_false_skips_schema():
+    """When include_target_query_schema is false, uses rewrite_place_query even if linked step exists."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.rewrite_place_query.return_value = "Stone Arch Bridge"
+    claude.get_last_usage.return_value = {"input_tokens": 10, "output_tokens": 5}
+    ctx._services["claude"] = claude
+
+    snapshot = {
+        "job": {
+            "stages": [
+                {
+                    "pipelines": [
+                        {
+                            "steps": [
+                                {"id": "step_opt", "step_template_id": "step_template_optimize_input_claude"},
+                                {
+                                    "id": "step_google_places_lookup",
+                                    "step_template_id": "step_template_google_places_lookup",
+                                    "input_bindings": {
+                                        "query": {"signal_ref": "step.step_opt.optimized_query"},
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        "step_templates": {
+            "step_template_google_places_lookup": {
+                "query_schema": {"description": "Google Places", "hints": []},
+            },
+        },
+    }
+
+    handler = OptimizeInputClaudeHandler()
+    result = handler.execute(
+        step_id="step_opt",
+        config={"include_target_query_schema": False},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "stone arch bridge"},
+        ctx=ctx,
+        snapshot=snapshot,
+    )
+    assert result["optimized_query"] == "Stone Arch Bridge"
+    claude.rewrite_place_query.assert_called_once()
+    claude.rewrite_query_for_target.assert_not_called()
+
+
+def test_optimize_input_claude_handler_linked_step_id_override():
+    """When linked_step_id is set in config, uses that step for schema lookup."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.rewrite_query_for_target.return_value = "bridge"
+    claude.get_last_usage.return_value = {"input_tokens": 10, "output_tokens": 5}
+    ctx._services["claude"] = claude
+
+    snapshot = {
+        "job": {
+            "stages": [
+                {
+                    "pipelines": [
+                        {
+                            "steps": [
+                                {"id": "step_opt", "step_template_id": "step_template_optimize_input_claude"},
+                                {
+                                    "id": "step_icon_search",
+                                    "step_template_id": "step_template_search_icons",
+                                    "input_bindings": {
+                                        "query": {"signal_ref": "step.step_opt.optimized_query"},
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        "step_templates": {
+            "step_template_search_icons": {
+                "query_schema": {
+                    "description": "Short Freepik icon keyword",
+                    "hints": ["1-3 words only"],
+                },
+            },
+        },
+    }
+
+    handler = OptimizeInputClaudeHandler()
+    result = handler.execute(
+        step_id="step_opt",
+        config={"linked_step_id": "step_icon_search"},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "Stone Arch Bridge"},
+        ctx=ctx,
+        snapshot=snapshot,
+    )
+    assert result["optimized_query"] == "bridge"
+    claude.rewrite_query_for_target.assert_called_once()
+    call_kw = claude.rewrite_query_for_target.call_args.kwargs
+    assert call_kw["query_schema"]["description"] == "Short Freepik icon keyword"
+
+
 def test_ai_prompt_handler_returns_value_when_claude_available():
     """AiPromptHandler returns value from Claude prompt_completion when service available."""
     ctx = ExecutionContext(
@@ -987,7 +1226,6 @@ def test_execute_snapshot_run_synthesizes_schema_when_missing():
                                         "value": {"static_value": ["History", "Landmark"]}
                                     },
                                     "config": {
-                                        "data_target_id": "target_places_to_visit",
                                         "schema_property_id": "prop_tags",
                                     },
                                 }
@@ -1048,7 +1286,6 @@ def test_execute_snapshot_run_dry_run_delegates_to_notion_service():
                                         "value": {"static_value": ["History", "Landmark"]}
                                     },
                                     "config": {
-                                        "data_target_id": "target_places_to_visit",
                                         "schema_property_id": "prop_tags",
                                     },
                                 }
@@ -1125,7 +1362,6 @@ def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
                                         }
                                     },
                                     "config": {
-                                        "data_target_id": "target_places_to_visit",
                                         "target_kind": "page_metadata",
                                         "target_field": "cover_image",
                                     },
@@ -1149,7 +1385,6 @@ def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
                                         }
                                     },
                                     "config": {
-                                        "data_target_id": "target_places_to_visit",
                                         "target_kind": "page_metadata",
                                         "target_field": "icon_image",
                                     },
@@ -1210,7 +1445,6 @@ def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
                                     "sequence": 1,
                                     "input_bindings": {"value": {"static_value": ["History"]}},
                                     "config": {
-                                        "data_target_id": "target_places_to_visit",
                                         "schema_property_id": "prop_tags",
                                     },
                                 },
@@ -1284,7 +1518,6 @@ def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
                                     "sequence": 1,
                                     "input_bindings": {"value": {"static_value": ["History"]}},
                                     "config": {
-                                        "data_target_id": "target_places",
                                         "schema_property_id": "prop_tags",
                                     },
                                 },

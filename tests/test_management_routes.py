@@ -106,7 +106,7 @@ def test_management_step_templates_401_without_auth(client):
 
 
 def test_management_step_templates_200_list_shape(client):
-    """GET /management/step-templates with valid auth returns items list."""
+    """GET /management/step-templates with valid auth returns items list with full metadata."""
     _setup_auth(client)
     mock_step_template_repo = MagicMock()
     mock_step_template_repo.list_all.return_value = [
@@ -116,9 +116,9 @@ def test_management_step_templates_200_list_shape(client):
             display_name="Property Set",
             step_kind="transform",
             description="Set a property on the target",
-            input_contract={},
+            input_contract={"fields": {"value": {"type": "any"}}},
             output_contract={},
-            config_schema={},
+            config_schema={"schema_property_id": {"type": "string"}},
             runtime_binding="property_set",
             category="transform",
             status="active",
@@ -140,7 +140,64 @@ def test_management_step_templates_200_list_shape(client):
     assert item["category"] == "transform"
     assert item["status"] == "active"
     assert "description" in item
+    assert "input_contract" in item
+    assert "output_contract" in item
+    assert "config_schema" in item
+    assert item["config_schema"]["schema_property_id"]["type"] == "string"
     mock_step_template_repo.list_all.assert_called_once()
+
+
+def test_management_step_template_detail_200(client):
+    """GET /management/step-templates/{id} with valid auth returns full template metadata."""
+    _setup_auth(client)
+    mock_step_template_repo = MagicMock()
+    mock_step_template_repo.get_by_id.return_value = StepTemplate(
+        id="step_template_ai_constrain_values_claude",
+        slug="ai_constrain_values_claude",
+        display_name="AI Constrain Values (Claude)",
+        step_kind="ai_constrain_values",
+        description="Select values from allowed list",
+        input_contract={"fields": {"source_value": {"type": "any"}}},
+        output_contract={"fields": {"selected_values": {"type": "array"}}},
+        config_schema={
+            "allowable_values_source": {"type": "object"},
+            "max_output_values": {"type": "integer"},
+        },
+        runtime_binding="claude_constrain_values",
+        category="transform",
+        status="active",
+    )
+    app.state.step_template_repository = mock_step_template_repo
+
+    resp = client.get(
+        "/management/step-templates/step_template_ai_constrain_values_claude",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "step_template_ai_constrain_values_claude"
+    assert data["display_name"] == "AI Constrain Values (Claude)"
+    assert data["step_kind"] == "ai_constrain_values"
+    assert "input_contract" in data
+    assert "output_contract" in data
+    assert "config_schema" in data
+    assert "allowable_values_source" in data["config_schema"]
+    mock_step_template_repo.get_by_id.assert_called_once_with("step_template_ai_constrain_values_claude")
+
+
+def test_management_step_template_detail_404(client):
+    """GET /management/step-templates/{id} returns 404 when template not found."""
+    _setup_auth(client)
+    mock_step_template_repo = MagicMock()
+    mock_step_template_repo.get_by_id.return_value = None
+    app.state.step_template_repository = mock_step_template_repo
+
+    resp = client.get(
+        "/management/step-templates/nonexistent_template",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Step template not found"
 
 
 def test_management_connections_401_without_auth(client):
@@ -234,6 +291,7 @@ def test_management_triggers_200_list_shape(client):
     assert item["secret"] == "abc123def456"
     assert "secret_last_rotated_at" in item
     assert "2026-03-15" in (item["updated_at"] or "")
+    assert item["request_body_schema"] == {"keywords": "string"}
     mock_trigger_repo.list_by_owner.assert_called_once_with(user_id)
 
 
@@ -324,7 +382,68 @@ def test_management_create_trigger_200_returns_created_trigger(client):
     assert call_args[0][1] == user_id
     mock_trigger_repo.save.assert_called_once()
     saved_trigger = mock_trigger_repo.save.call_args[0][0]
-    assert saved_trigger.request_body_schema == {"keywords": "string"}
+    assert saved_trigger.request_body_schema.get("type") == "object"
+    assert "keywords" in (saved_trigger.request_body_schema.get("properties") or {})
+    assert data["request_body_schema"] == saved_trigger.request_body_schema
+
+
+def test_management_create_trigger_with_body_fields(client):
+    """POST /management/triggers accepts body_fields to build request_body_schema."""
+    user_id = _setup_auth(client)
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_path.return_value = None
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.post(
+        "/management/triggers",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "path": "/custom-hook",
+            "body_fields": [
+                {"name": "message", "type": "string", "required": True, "max_length": 500},
+                {"name": "priority", "type": "number", "required": False},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    saved = mock_trigger_repo.save.call_args[0][0]
+    props = saved.request_body_schema.get("properties") or {}
+    assert "message" in props and "priority" in props
+    assert "message" in (saved.request_body_schema.get("required") or [])
+
+
+def test_management_patch_trigger_body_fields(client):
+    user_id = _setup_auth(client)
+    mock_trigger_repo = MagicMock()
+    existing = TriggerDefinition(
+        id="trigger-1",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="T",
+        path="/t",
+        method="POST",
+        request_body_schema={"type": "object", "properties": {}, "required": []},
+        status="active",
+        auth_mode="bearer",
+        secret_value="sec",
+    )
+    mock_trigger_repo.get_by_id.return_value = existing
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.patch(
+        "/management/triggers/trigger-1",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "body_fields": [
+                {"name": "title", "type": "string", "required": True},
+            ]
+        },
+    )
+    assert resp.status_code == 200
+    mock_trigger_repo.save.assert_called_once()
+    assert "title" in mock_trigger_repo.save.call_args[0][0].request_body_schema.get(
+        "properties", {}
+    )
 
 
 def test_management_create_trigger_409_duplicate_path(client):
@@ -454,7 +573,7 @@ def _make_minimal_job_graph(user_id: str, job_id: str = "job_test"):
         display_name="Property Set",
         sequence=1,
         input_bindings={},
-        config={"data_target_id": "tgt1", "schema_property_id": "prop_title"},
+        config={"schema_property_id": "prop_title"},
     )
     return JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
 
@@ -500,6 +619,60 @@ def test_management_pipeline_delete_200_archives(client):
     assert data["id"] == "job_to_archive"
     mock_job_repo.get_graph_by_id.assert_called_once_with("job_to_archive", user_id)
     mock_job_repo.archive.assert_called_once_with("job_to_archive", user_id)
+
+
+def test_management_patch_pipeline_status_401_without_auth(client):
+    """PATCH /management/pipelines/{id}/status without Authorization returns 401."""
+    resp = client.patch(
+        "/management/pipelines/job_1/status",
+        json={"status": "disabled"},
+    )
+    assert resp.status_code == 401
+
+
+def test_management_patch_pipeline_status_404_when_not_found(client):
+    """PATCH /management/pipelines/{id}/status returns 404 when pipeline not found."""
+    user_id = _setup_auth(client)
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = None
+    app.state.job_repository = mock_job_repo
+
+    resp = client.patch(
+        "/management/pipelines/job_missing/status",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"status": "disabled"},
+    )
+    assert resp.status_code == 404
+    mock_job_repo.update_job_status.assert_not_called()
+
+
+def test_management_patch_pipeline_status_200_toggles_active_disabled(client):
+    """PATCH /management/pipelines/{id}/status sets active or disabled via update_job_status only."""
+    user_id = _setup_auth(client)
+    graph = _make_minimal_job_graph(user_id, "job_toggle")
+    mock_job_repo = MagicMock()
+    mock_job_repo.get_graph_by_id.return_value = graph
+    app.state.job_repository = mock_job_repo
+
+    resp = client.patch(
+        "/management/pipelines/job_toggle/status",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"status": "disabled"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"id": "job_toggle", "status": "disabled"}
+    mock_job_repo.update_job_status.assert_called_once_with("job_toggle", user_id, "disabled")
+    mock_job_repo.save_job_graph.assert_not_called()
+
+    mock_job_repo.update_job_status.reset_mock()
+    resp2 = client.patch(
+        "/management/pipelines/job_toggle/status",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"status": "active"},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json() == {"id": "job_toggle", "status": "active"}
+    mock_job_repo.update_job_status.assert_called_once_with("job_toggle", user_id, "active")
 
 
 def test_management_pipeline_get_404_when_not_found(client):
@@ -587,7 +760,7 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
                                 "display_name": "Property Set",
                                 "sequence": 1,
                                 "input_bindings": {},
-                                "config": {"data_target_id": "tgt1", "schema_property_id": "prop_title"},
+                                "config": {"schema_property_id": "prop_title"},
                             }
                         ],
                     }
@@ -595,6 +768,10 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
             }
         ],
     }
+
+    mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_save"]
+    app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.put(
         "/management/pipelines/job_save",
@@ -607,6 +784,8 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
     data = resp.json()
     assert data["id"] == "job_save"
     assert "stages" in data
+    assert data.get("trigger_ids") == ["trigger_save"]
+    assert data.get("trigger_id") == "trigger_save"
 
 
 def test_management_pipeline_put_422_on_validation_error(client):
@@ -712,6 +891,7 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
     app.state.trigger_repository = mock_trigger_repo
 
     mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_1"]
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.post(
@@ -784,6 +964,7 @@ def test_management_pipeline_post_200_with_explicit_target_id(client):
     app.state.trigger_repository = mock_trigger_repo
 
     mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_explicit"]
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.post(
@@ -844,6 +1025,72 @@ def test_management_pipeline_post_422_when_target_invalid(client):
     assert data.get("code") == "INVALID_TARGET"
     mock_target_repo.get_by_id.assert_called_once_with("tgt_nonexistent", user_id)
     mock_job_repo.save_job_graph.assert_not_called()
+
+
+def test_management_pipeline_post_422_when_attach_policy_rejects(client):
+    """POST /management/pipelines returns 422 when trigger-job attach violates one-trigger-per-job policy."""
+    from app.domain.errors import TriggerJobLinkPolicyError
+
+    user_id = _setup_auth(client)
+
+    def mock_get_graph(job_id, owner):
+        g = _make_minimal_job_graph(owner, job_id)
+        g.job.display_name = "Orphan Policy Test"
+        return g
+
+    mock_job_repo = MagicMock()
+    mock_job_repo.save_job_graph.return_value = None
+    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    app.state.job_repository = mock_job_repo
+
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id.return_value = DataTarget(
+        id="tgt1",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="Places",
+        external_target_id="ds-xxx",
+        status="active",
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+        id="trigger_new",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="/new",
+        path="/new",
+        method="POST",
+        request_body_schema={},
+        status="active",
+        auth_mode="bearer",
+        secret_value="mock_secret",
+    )
+    app.state.trigger_repository = mock_trigger_repo
+
+    mock_link_repo = MagicMock()
+    mock_link_repo.attach.side_effect = TriggerJobLinkPolicyError(
+        "This pipeline is already linked to another trigger. Each pipeline may only use one trigger.",
+        code="JOB_ALREADY_HAS_TRIGGER",
+    )
+    app.state.trigger_job_link_repository = mock_link_repo
+
+    resp = client.post(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "display_name": "Policy Test",
+            "trigger_id": "trigger_new",
+            "target_id": "tgt1",
+        },
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body.get("code") == "JOB_ALREADY_HAS_TRIGGER"
+    assert "already linked" in body.get("detail", "").lower()
+    mock_job_repo.save_job_graph.assert_called_once()
 
 
 def test_management_pipeline_post_422_when_trigger_invalid(client):

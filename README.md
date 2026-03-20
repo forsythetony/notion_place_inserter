@@ -182,7 +182,7 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
    ```
    Expected response: `{"message":"Hello there!"}`.
 
-   For full deployment steps, see [p1_pr06 Detailed Deploy Steps](docs/planning/multi-tenant-productization-prd/technical/phase-1-platform-migration/p1_pr06-detailed-deploy-steps.md).
+   For full deployment steps, see [p1_pr06 Detailed Deploy Steps](docs/technical-architecture/productization-technical/phase-1-platform-migration/p1_pr06-detailed-deploy-steps.md).
 
 #### Render Environment Variables
 
@@ -259,8 +259,12 @@ supabase/
   config.toml               # Supabase CLI config (ports, auth, etc.)
   migrations/               # Versioned SQL migrations (schema changes via PR only)
 docs/
-  architecture-design.md
-  pipeline-framework.md      # Framework reference
+  README.md                  # Index of doc sections (each with archive/)
+  technical-architecture/    # Design, phased specs, incidents, tech debt, SQL
+  feature-proposals/         # PRD and feature-level proposals
+  marketing/                 # GTM and messaging
+  market-research/           # Competitive / vendor research
+  style/                     # Visual direction; UI styleguide lives in notion_pipeliner_ui
 http-test/
 tests/
 requirements.txt

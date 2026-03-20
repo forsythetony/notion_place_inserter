@@ -3,14 +3,21 @@
 import secrets
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
+from app.domain.errors import TriggerJobLinkPolicyError
 from app.domain.triggers import TriggerDefinition
 from app.repositories.yaml_loader import job_graph_to_yaml_dict, parse_job_graph
+from app.services.trigger_request_body import (
+    default_keywords_request_body_schema,
+    management_body_fields_to_schema,
+)
 from app.services.validation_service import ValidationError
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -22,11 +29,34 @@ def _normalize_trigger_path(path: str) -> str:
     return f"/{p}" if p and not p.startswith("/") else p or "/"
 
 
+class TriggerBodyField(BaseModel):
+    """One key in the HTTP POST JSON body clients must send when invoking the trigger."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    type: Literal["string", "number", "boolean"] = "string"
+    required: bool = True
+    max_length: int | None = Field(default=None, ge=1, le=10_000)
+
+
 class CreateTriggerRequest(BaseModel):
     """Request body for POST /management/triggers."""
 
     path: str = Field(..., min_length=1, description="HTTP path for the trigger (e.g. /my-trigger)")
     display_name: str | None = Field(default=None, description="Optional display name")
+    body_fields: list[TriggerBodyField] | None = Field(
+        default=None,
+        description="POST JSON body fields. Omit to default to a single required string field `keywords` (locations-compatible).",
+    )
+
+
+class PatchTriggerRequest(BaseModel):
+    """Partial update for a trigger (e.g. body schema)."""
+
+    display_name: str | None = None
+    body_fields: list[TriggerBodyField] | None = Field(
+        default=None,
+        description="When set, replaces request_body_schema derived from these fields.",
+    )
 
 
 class CreatePipelineRequest(BaseModel):
@@ -37,11 +67,43 @@ class CreatePipelineRequest(BaseModel):
     display_name: str | None = Field(default=None, description="Optional display name")
 
 
+class PatchPipelineStatusRequest(BaseModel):
+    """Toggle whether a pipeline runs when its trigger fires (``active`` vs ``disabled``)."""
+
+    status: Literal["active", "disabled"]
+
+
 def _serialize_datetime(dt):
     """Serialize datetime to ISO string or None."""
     if dt is None:
         return None
     return dt.isoformat()
+
+
+def _apply_trigger_links_to_job_payload(
+    payload: dict,
+    job_id: str,
+    owner_user_id: str,
+    link_repo,
+) -> dict:
+    """Merge trigger_job_links into editor payload (``trigger_ids``, ``trigger_id``)."""
+    if link_repo is None:
+        return payload
+    trigger_ids = link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
+    if len(trigger_ids) > 1:
+        logger.warning(
+            "management_pipeline_multiple_trigger_links | job_id={} owner={} trigger_ids={}",
+            job_id,
+            owner_user_id,
+            trigger_ids,
+        )
+    out = dict(payload)
+    out["trigger_ids"] = trigger_ids
+    if trigger_ids:
+        out["trigger_id"] = trigger_ids[0]
+    else:
+        out.pop("trigger_id", None)
+    return out
 
 
 @router.get("/pipelines")
@@ -93,12 +155,33 @@ def get_pipeline(
         raise HTTPException(status_code=404, detail="Pipeline not found")
     payload = job_graph_to_yaml_dict(graph)
     link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
-    if link_repo:
-        trigger_ids = link_repo.list_trigger_ids_for_job(pipeline_id, ctx.user_id)
-        payload["trigger_ids"] = trigger_ids
-        if trigger_ids:
-            payload["trigger_id"] = trigger_ids[0]
-    return payload
+    return _apply_trigger_links_to_job_payload(payload, pipeline_id, ctx.user_id, link_repo)
+
+
+@router.patch("/pipelines/{pipeline_id}/status")
+def patch_pipeline_status(
+    request: Request,
+    pipeline_id: str,
+    body: PatchPipelineStatusRequest,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Set pipeline job status to ``active`` or ``disabled``.
+    Disabled pipelines stay linked to triggers but are omitted from trigger dispatch.
+    Archived pipelines are not accessible (404).
+    """
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: job repository not available"},
+        )
+    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    # Status-only update: do not save_job_graph (that re-runs binding validation and can fail on valid multi-pipeline jobs).
+    job_repo.update_job_status(pipeline_id, ctx.user_id, body.status)
+    return {"id": pipeline_id, "status": body.status}
 
 
 @router.put("/pipelines/{pipeline_id}")
@@ -142,9 +225,10 @@ def save_pipeline(
             status_code=422,
             content={"detail": "Validation failed", "validation_errors": e.errors},
         )
-    # Return canonical saved payload
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
     saved = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
-    return job_graph_to_yaml_dict(saved) if saved else {"id": pipeline_id}
+    payload = job_graph_to_yaml_dict(saved) if saved else {"id": pipeline_id}
+    return _apply_trigger_links_to_job_payload(payload, pipeline_id, ctx.user_id, link_repo)
 
 
 @router.post("/pipelines")
@@ -251,7 +335,6 @@ def create_pipeline(
         sequence=1,
         input_bindings={},
         config={
-            "data_target_id": target_id,
             "target_kind": "page_metadata",
             "target_field": "cover_image",
         },
@@ -266,11 +349,16 @@ def create_pipeline(
             status_code=422,
             content={"detail": "Validation failed", "validation_errors": e.errors},
         )
-    link_repo.attach(trigger_id, job_id, ctx.user_id)
+    try:
+        link_repo.attach(trigger_id, job_id, ctx.user_id)
+    except TriggerJobLinkPolicyError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": e.message, "code": e.code},
+        )
     saved = job_repo.get_graph_by_id(job_id, ctx.user_id)
     payload = job_graph_to_yaml_dict(saved) if saved else {"id": job_id}
-    payload["trigger_id"] = trigger_id
-    return payload
+    return _apply_trigger_links_to_job_payload(payload, job_id, ctx.user_id, link_repo)
 
 
 @router.delete("/pipelines/{pipeline_id}")
@@ -403,7 +491,8 @@ def list_step_templates(
 ):
     """
     List step templates for the pipeline editor picker.
-    Returns id, display_name, category, status, description.
+    Returns id, display_name, category, status, description, input_contract,
+    output_contract, config_schema for schema-driven inspector forms.
     """
     step_template_repo = getattr(request.app.state, "step_template_repository", None)
     if not step_template_repo:
@@ -415,14 +504,54 @@ def list_step_templates(
     items = [
         {
             "id": t.id,
+            "slug": t.slug,
             "display_name": t.display_name,
+            "step_kind": t.step_kind,
             "category": t.category,
             "status": t.status,
             "description": t.description or "",
+            "input_contract": t.input_contract or {},
+            "output_contract": t.output_contract or {},
+            "config_schema": t.config_schema or {},
+            "runtime_binding": t.runtime_binding or "",
         }
         for t in templates
     ]
     return {"items": items}
+
+
+@router.get("/step-templates/{template_id}")
+def get_step_template(
+    request: Request,
+    template_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Fetch full step template metadata for the inspector.
+    Returns input_contract, output_contract, config_schema for schema-driven forms.
+    """
+    step_template_repo = getattr(request.app.state, "step_template_repository", None)
+    if not step_template_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: step template repository not available"},
+        )
+    template = step_template_repo.get_by_id(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Step template not found")
+    return {
+        "id": template.id,
+        "slug": template.slug,
+        "display_name": template.display_name,
+        "step_kind": template.step_kind,
+        "description": template.description or "",
+        "input_contract": template.input_contract or {},
+        "output_contract": template.output_contract or {},
+        "config_schema": template.config_schema or {},
+        "runtime_binding": template.runtime_binding or "",
+        "category": template.category or "general",
+        "status": template.status,
+    }
 
 
 @router.get("/connections")
@@ -488,6 +617,7 @@ def list_triggers(
             "method": t.method,
             "status": t.status,
             "auth_mode": t.auth_mode,
+            "request_body_schema": t.request_body_schema,
             "secret": t.secret_value,
             "secret_last_rotated_at": _serialize_datetime(t.secret_last_rotated_at),
             "updated_at": _serialize_datetime(t.updated_at),
@@ -505,22 +635,82 @@ def create_trigger(
 ):
     """
     Create a new HTTP trigger. Path and optional display_name required.
-    Fixed: method POST, body { keywords: string }. Trigger is unlinked until assigned to a pipeline.
+    Optional ``body_fields`` defines the JSON POST body shape (default: required string ``keywords``).
     Returns created trigger with secret (shown once; copy and store).
     """
+    client_host = request.client.host if request.client else None
+    body_fields_count = len(body.body_fields) if body.body_fields else 0
+    logger.info(
+        "management_create_trigger_start | user_id={} client_host={} path_raw={!r} "
+        "display_name_in={!r} body_fields_count={}",
+        ctx.user_id,
+        client_host,
+        body.path,
+        body.display_name,
+        body_fields_count,
+    )
+    if body.body_fields:
+        logger.info(
+            "management_create_trigger_body_fields | user_id={} fields={}",
+            ctx.user_id,
+            [(f.name, f.type, f.required, f.max_length) for f in body.body_fields],
+        )
+
     trigger_repo = getattr(request.app.state, "trigger_repository", None)
     if not trigger_repo:
+        logger.error("management_create_trigger_no_repo | user_id={}", ctx.user_id)
         raise HTTPException(
             status_code=500,
             detail="Server misconfiguration: trigger repository not available",
         )
     normalized_path = _normalize_trigger_path(body.path)
+    logger.info(
+        "management_create_trigger_path_normalized | user_id={} path_raw={!r} path={!r}",
+        ctx.user_id,
+        body.path,
+        normalized_path,
+    )
     existing = trigger_repo.get_by_path(normalized_path, ctx.user_id)
     if existing is not None:
+        logger.warning(
+            "management_create_trigger_conflict | user_id={} path={!r} existing_trigger_id={}",
+            ctx.user_id,
+            normalized_path,
+            existing.id,
+        )
         raise HTTPException(
             status_code=409,
             detail=f"Trigger path '{normalized_path}' already in use for this account",
         )
+    try:
+        if body.body_fields:
+            schema = management_body_fields_to_schema(
+                [f.model_dump() for f in body.body_fields]
+            )
+            logger.info(
+                "management_create_trigger_schema_mode | user_id={} mode=custom_body_fields",
+                ctx.user_id,
+            )
+        else:
+            schema = default_keywords_request_body_schema()
+            logger.info(
+                "management_create_trigger_schema_mode | user_id={} mode=default_keywords",
+                ctx.user_id,
+            )
+    except ValueError as e:
+        logger.warning(
+            "management_create_trigger_schema_invalid | user_id={} error={!s}",
+            ctx.user_id,
+            e,
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    logger.debug(
+        "management_create_trigger_request_body_schema | user_id={} schema={}",
+        ctx.user_id,
+        schema,
+    )
+
     trigger_id = f"trigger_{uuid.uuid4().hex[:12]}"
     secret_value = secrets.token_hex(15)
     now = datetime.now(timezone.utc)
@@ -532,7 +722,7 @@ def create_trigger(
         display_name=display_name,
         path=normalized_path,
         method="POST",
-        request_body_schema={"keywords": "string"},
+        request_body_schema=schema,
         status="active",
         auth_mode="bearer",
         secret_value=secret_value,
@@ -542,6 +732,21 @@ def create_trigger(
         updated_at=now,
     )
     trigger_repo.save(trigger)
+    schema_summary = (
+        list(schema.keys())
+        if isinstance(schema, dict)
+        else type(schema).__name__
+    )
+    logger.info(
+        "management_create_trigger_ok | trigger_id={} user_id={} path={!r} display_name={!r} "
+        "request_body_schema_top_keys={} secret_len_chars={} (secret value not logged)",
+        trigger_id,
+        ctx.user_id,
+        normalized_path,
+        display_name,
+        schema_summary,
+        len(secret_value),
+    )
     return {
         "id": trigger.id,
         "display_name": trigger.display_name,
@@ -550,7 +755,54 @@ def create_trigger(
         "method": trigger.method,
         "status": trigger.status,
         "auth_mode": trigger.auth_mode,
+        "request_body_schema": trigger.request_body_schema,
         "secret": secret_value,
+        "secret_last_rotated_at": _serialize_datetime(trigger.secret_last_rotated_at),
+        "updated_at": _serialize_datetime(trigger.updated_at),
+    }
+
+
+@router.patch("/triggers/{trigger_id}")
+def patch_trigger(
+    request: Request,
+    trigger_id: str,
+    body: PatchTriggerRequest,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """Update trigger metadata and/or POST body schema (from ``body_fields``)."""
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    if not trigger_repo:
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: trigger repository not available",
+        )
+    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    if trigger is None:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    now = datetime.now(timezone.utc)
+    if body.display_name is not None:
+        d = body.display_name.strip()
+        if d:
+            trigger.display_name = d
+    if body.body_fields is not None:
+        try:
+            trigger.request_body_schema = management_body_fields_to_schema(
+                [f.model_dump() for f in body.body_fields]
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    trigger.updated_at = now
+    trigger_repo.save(trigger)
+    return {
+        "id": trigger.id,
+        "display_name": trigger.display_name,
+        "trigger_type": trigger.trigger_type,
+        "path": trigger.path,
+        "method": trigger.method,
+        "status": trigger.status,
+        "auth_mode": trigger.auth_mode,
+        "request_body_schema": trigger.request_body_schema,
+        "secret": trigger.secret_value,
         "secret_last_rotated_at": _serialize_datetime(trigger.secret_last_rotated_at),
         "updated_at": _serialize_datetime(trigger.updated_at),
     }

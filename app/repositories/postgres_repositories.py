@@ -22,6 +22,7 @@ from app.domain import (
     TargetTemplate,
     TriggerDefinition,
 )
+from app.domain.errors import validate_one_trigger_per_job_attach
 from app.domain.jobs import PipelineDefinition, StageDefinition, StepInstance
 from app.services.validation_service import JobGraph, ValidationService
 
@@ -81,6 +82,7 @@ def _row_to_step_template(row: dict[str, Any]) -> StepTemplate:
         category=row.get("category") or "general",
         status=str(row.get("status", "active")),
         visibility=str(row.get("visibility", "platform")),
+        query_schema=row.get("query_schema"),
     )
 
 
@@ -209,6 +211,8 @@ def _row_to_job(row: dict[str, Any], owner: str) -> JobDefinition:
         stage_ids=stage_ids,
         default_run_settings=row.get("default_run_settings"),
         visibility=str(row.get("visibility", "owner")),
+        created_at=_parse_opt_datetime(row.get("created_at")),
+        updated_at=_parse_opt_datetime(row.get("updated_at")),
     )
 
 
@@ -402,6 +406,7 @@ class PostgresStepTemplateRepository:
             "category": template.category,
             "status": template.status,
             "visibility": template.visibility,
+            "query_schema": template.query_schema,
         }
         try:
             self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
@@ -854,6 +859,36 @@ class PostgresTriggerJobLinkRepository:
             raise
         return [row["job_id"] for row in (r.data or [])]
 
+    def list_dispatchable_job_ids_for_trigger(
+        self, trigger_id: str, owner_user_id: str
+    ) -> list[str]:
+        """Linked job IDs with status ``active``, same order as link rows."""
+        linked = self.list_job_ids_for_trigger(trigger_id, owner_user_id)
+        if not linked:
+            return []
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table("job_definitions")
+                .select("id")
+                .eq("owner_user_id", uid)
+                .in_("id", linked)
+                .eq("status", "active")
+                .execute()
+            )
+        except ValueError:
+            return []
+        except Exception as e:
+            logger.exception(
+                "postgres_job_list_dispatchable_for_trigger_failed | trigger_id={} owner={} error={}",
+                trigger_id,
+                owner_user_id,
+                e,
+            )
+            raise
+        active_ids = {row["id"] for row in (r.data or [])}
+        return [jid for jid in linked if jid in active_ids]
+
     def list_trigger_ids_for_job(
         self, job_id: str, owner_user_id: str
     ) -> list[str]:
@@ -876,9 +911,13 @@ class PostgresTriggerJobLinkRepository:
                 e,
             )
             raise
-        return [row["trigger_id"] for row in (r.data or [])]
+        ids = [row["trigger_id"] for row in (r.data or [])]
+        return sorted(ids)
 
     def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
+        existing = self.list_trigger_ids_for_job(job_id, owner_user_id)
+        validate_one_trigger_per_job_attach(existing, trigger_id)
+
         uid = str(_ensure_uuid(owner_user_id))
         row = {
             "trigger_id": trigger_id,
@@ -1036,10 +1075,26 @@ class PostgresJobRepository:
             "default_run_settings": job.default_run_settings,
             "visibility": job.visibility,
         }
+        if job.updated_at is not None:
+            row["updated_at"] = job.updated_at.isoformat()
         try:
             self._client.table(self.JOB_TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_job_save_failed | id={} error={}", job.id, e)
+            raise
+
+    def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
+        """Update job row status and updated_at only (no graph validation or child rows)."""
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            now = datetime.now(timezone.utc).isoformat()
+            self._client.table(self.JOB_TABLE).update({"status": status, "updated_at": now}).eq(
+                "id", id
+            ).eq("owner_user_id", uid).execute()
+        except ValueError:
+            return
+        except Exception as e:
+            logger.exception("postgres_job_update_status_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
 
     def save_job_graph(

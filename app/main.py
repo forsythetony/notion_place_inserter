@@ -244,6 +244,7 @@ async def lifespan(app: FastAPI):
     connector_instance_repo = PostgresConnectorInstanceRepository(supabase_client)
     validation_service = ValidationService(
         trigger_repo=trigger_repo,
+        trigger_job_link_repo=app.state.trigger_job_link_repository,
         target_repo=target_repo,
         target_schema_repo=target_schema_repo,
         step_template_repo=step_template_repo,
@@ -284,6 +285,7 @@ async def lifespan(app: FastAPI):
         job_repository=job_repo,
         trigger_service=trigger_service,
         target_service=target_service,
+        step_template_repository=step_template_repo,
     )
     schema_sync_service = SchemaSyncService(
         target_repository=target_repo,
@@ -330,7 +332,7 @@ if _cors_origins:
         CORSMiddleware,
         allow_origins=_cors_origins,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
 

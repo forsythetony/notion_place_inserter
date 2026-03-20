@@ -23,3 +23,11 @@ runtime_binding: search_icons
 category: transform
 status: active
 visibility: platform
+query_schema:
+  api: freepik_icons
+  type: string
+  description: "Short keyword for Freepik icon search"
+  hints:
+    - "1-3 words only"
+    - "Visual or conceptual term (e.g. bridge, landmark, travel)"
+    - "Avoid location names; focus on what the place represents"

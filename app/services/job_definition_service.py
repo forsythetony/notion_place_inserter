@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from app.repositories.yaml_loader import domain_to_yaml_dict, job_graph_to_yaml_dict
 
 if TYPE_CHECKING:
-    from app.domain.repositories import JobRepository
+    from app.domain.repositories import JobRepository, StepTemplateRepository
     from app.services.target_service import TargetService
     from app.services.trigger_service import TriggerService
 
@@ -71,10 +71,12 @@ class JobDefinitionService:
         job_repository: JobRepository,
         trigger_service: TriggerService,
         target_service: TargetService,
+        step_template_repository: StepTemplateRepository | None = None,
     ) -> None:
         self._job_repo = job_repository
         self._trigger_service = trigger_service
         self._target_service = target_service
+        self._step_template_repo = step_template_repository
 
     def resolve_for_run(
         self, job_id: str, owner_user_id: str, trigger_id: str
@@ -117,12 +119,21 @@ class JobDefinitionService:
             if t is not None:
                 targets_dict[tid] = domain_to_yaml_dict(t)
 
+        step_templates_dict: dict[str, Any] = {}
+        if self._step_template_repo:
+            template_ids = {s.step_template_id for s in graph.steps if s.step_template_id}
+            for tid in template_ids:
+                template = self._step_template_repo.get_by_id(tid)
+                if template is not None:
+                    step_templates_dict[tid] = {"query_schema": template.query_schema}
+
         snapshot: dict[str, Any] = {
             "job": job_graph_dict,
             "trigger": trigger_dict,
             "target": target_dict,
             "active_schema": active_schema_dict,
             "targets": targets_dict,
+            "step_templates": step_templates_dict,
         }
 
         snapshot_ref = (

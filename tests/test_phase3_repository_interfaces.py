@@ -97,8 +97,8 @@ def test_trigger_repository_has_expected_methods():
 
 
 def test_job_repository_has_expected_methods():
-    """JobRepository defines get_by_id, get_bootstrap_job, list_by_owner, save, delete."""
-    expected = {"get_by_id", "get_bootstrap_job", "list_by_owner", "save", "delete"}
+    """JobRepository defines get_by_id, get_bootstrap_job, list_by_owner, save, update_job_status, delete."""
+    expected = {"get_by_id", "get_bootstrap_job", "list_by_owner", "save", "update_job_status", "delete"}
     methods = {m for m in dir(JobRepository) if not m.startswith("_")}
     assert expected.issubset(methods), f"Missing methods: {expected - methods}"
 

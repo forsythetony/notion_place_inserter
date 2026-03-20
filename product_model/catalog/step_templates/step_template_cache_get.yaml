@@ -14,5 +14,5 @@ config_schema:
     required: true
 runtime_binding: cache_get
 category: utility
-status: active
+status: deprecated
 visibility: platform

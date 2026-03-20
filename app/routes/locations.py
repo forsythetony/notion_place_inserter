@@ -3,16 +3,21 @@
 import hmac
 import os
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Body, Header, HTTPException, Request
 from loguru import logger
-from pydantic import BaseModel
 
 from app.dependencies import _extract_bearer_token
+from app.services.trigger_request_body import (
+    build_trigger_payload,
+    preview_string_for_log,
+    validate_request_body_against_schema,
+)
 
 router = APIRouter()
 
-# Max length guard to prevent abuse
+# Legacy /places path (no trigger row): still validates a single ``keywords`` string.
 KEYWORDS_MAX_LENGTH = 300
 
 
@@ -27,10 +32,29 @@ def _normalize_trigger_path(path: str) -> str:
     return f"/{p}" if p and not p.startswith("/") else p or "/"
 
 
-class TriggerLocationsRequest(BaseModel):
-    """Request body for POST /triggers/{user_id}/locations."""
+def _linked_and_dispatchable_job_ids(link_repo, trigger_id: str, user_id: str) -> tuple[list[str], list[str]]:
+    linked = link_repo.list_job_ids_for_trigger(trigger_id, user_id)
+    dispatchable = link_repo.list_dispatchable_job_ids_for_trigger(trigger_id, user_id)
+    return linked, dispatchable
 
-    keywords: str
+
+def _ensure_trigger_has_dispatchable_jobs(
+    linked_job_ids: list[str],
+    dispatchable_job_ids: list[str],
+) -> None:
+    if not linked_job_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Trigger is not linked to a pipeline. Assign this trigger to a pipeline before invoking.",
+        )
+    if not dispatchable_job_ids:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Trigger is linked only to disabled or archived pipelines. "
+                "Enable at least one pipeline before invoking."
+            ),
+        )
 
 
 def _validate_trigger_secret(authorization: str | None, expected_secret: str) -> None:
@@ -53,30 +77,42 @@ def _validate_legacy_secret(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _validate_and_build_trigger_payload(trigger, body: dict[str, Any]) -> dict[str, Any]:
+    """Validate JSON body against the trigger's ``request_body_schema``; return ``trigger_payload``."""
+    try:
+        validated = validate_request_body_against_schema(body, trigger.request_body_schema)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return build_trigger_payload(validated, trigger.request_body_schema)
+
+
+def _legacy_keywords_from_body(body: dict[str, Any]) -> str:
+    """Single string field used by legacy PlacesService path (no trigger row)."""
+    kw = body.get("keywords")
+    if isinstance(kw, str) and kw.strip():
+        return kw.strip()
+    raise HTTPException(
+        status_code=400,
+        detail="keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries.",
+    )
+
+
 @router.post("/triggers/{user_id}/{path:path}")
 def invoke_trigger(
     request: Request,
     user_id: str,
     path: str,
-    body: TriggerLocationsRequest,
+    body: dict[str, Any] = Body(default_factory=dict),
     authorization: str | None = Header(default=None),
 ):
     """
     Invoke an HTTP trigger by user and path.
     Auth: Authorization: Bearer <trigger_secret> (per-trigger secret from DB).
-    User-scoped so Tony's /locations does not conflict with Patrick's.
+    Request JSON must match that trigger's ``request_body_schema`` (field names and types).
     When async is enabled, returns immediately with job_id; pipeline runs in background.
     """
-    if not (body.keywords or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="keywords is required and cannot be empty. Use POST /test/randomLocation for random test entries.",
-        )
-    if len(body.keywords) > KEYWORDS_MAX_LENGTH:
-        raise HTTPException(
-            status_code=400,
-            detail=f"keywords must be at most {KEYWORDS_MAX_LENGTH} characters",
-        )
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
 
     async_enabled = getattr(request.app.state, "locations_async_enabled", False)
     if not async_enabled:
@@ -101,17 +137,14 @@ def invoke_trigger(
             trigger = trigger_service_sync.resolve_by_path(normalized_path, user_id)
             if trigger:
                 _validate_trigger_secret(authorization, trigger.secret_value)
-                job_ids = link_repo_sync.list_job_ids_for_trigger(trigger.id, user_id)
-                if not job_ids:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="Trigger is not linked to a pipeline. Assign this trigger to a pipeline before invoking.",
-                    )
-                # Sync: run first linked job and return its result (backward compat for single job)
-                snapshot = job_def_svc.resolve_for_run(job_ids[0], user_id, trigger.id)
+                linked_ids, dispatchable_ids = _linked_and_dispatchable_job_ids(
+                    link_repo_sync, trigger.id, user_id
+                )
+                _ensure_trigger_has_dispatchable_jobs(linked_ids, dispatchable_ids)
+                snapshot = job_def_svc.resolve_for_run(dispatchable_ids[0], user_id, trigger.id)
                 if snapshot:
                     run_id = str(uuid.uuid4())
-                    trigger_payload = {"raw_input": body.keywords}
+                    trigger_payload = _validate_and_build_trigger_payload(trigger, body)
                     result = job_execution_service.execute_snapshot_run(
                         snapshot=snapshot.snapshot,
                         run_id=run_id,
@@ -124,7 +157,13 @@ def invoke_trigger(
         places_service = getattr(request.app.state, "places_service", None)
         if places_service:
             _validate_legacy_secret(authorization)
-            return places_service.create_place_from_query(body.keywords)
+            kw = _legacy_keywords_from_body(body)
+            if len(kw) > KEYWORDS_MAX_LENGTH:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"keywords must be at most {KEYWORDS_MAX_LENGTH} characters",
+                )
+            return places_service.create_place_from_query(kw)
         raise HTTPException(
             status_code=503,
             detail="Unable to run pipeline (sync mode)",
@@ -189,18 +228,17 @@ def invoke_trigger(
             detail=f"Trigger not found for path '{normalized_path}' and user",
         )
     _validate_trigger_secret(authorization, trigger.secret_value)
-    job_ids = link_repo.list_job_ids_for_trigger(trigger.id, user_id)
-    if not job_ids:
-        raise HTTPException(
-            status_code=422,
-            detail="Trigger is not linked to a pipeline. Assign this trigger to a pipeline before invoking.",
-        )
+    linked_ids, dispatchable_ids = _linked_and_dispatchable_job_ids(link_repo, trigger.id, user_id)
+    _ensure_trigger_has_dispatchable_jobs(linked_ids, dispatchable_ids)
+
+    trigger_payload = _validate_and_build_trigger_payload(trigger, body)
+    log_preview = preview_string_for_log(trigger_payload)
 
     job_ids_accepted: list[str] = []
     run_ids_accepted: list[str] = []
     recipient_whatsapp = None
 
-    for job_definition_id in job_ids:
+    for job_definition_id in dispatchable_ids:
         snapshot = job_definition_service.resolve_for_run(
             job_definition_id, user_id, trigger.id
         )
@@ -220,7 +258,7 @@ def invoke_trigger(
         try:
             run_repo.create_job(
                 job_id=job_id,
-                keywords=body.keywords,
+                trigger_payload=trigger_payload,
                 status="queued",
                 owner_user_id=user_id,
                 run_id=run_id,
@@ -232,13 +270,15 @@ def invoke_trigger(
             payload = {
                 "job_id": job_id,
                 "run_id": run_id,
-                "keywords": body.keywords,
+                "trigger_payload": trigger_payload,
                 "job_definition_id": job_definition_id,
                 "trigger_id": trigger.id,
                 "job_slug": "notion_place_inserter",
                 "definition_snapshot_ref": snapshot.snapshot_ref,
                 "owner_user_id": user_id,
             }
+            if log_preview:
+                payload["keywords"] = log_preview
             if recipient_whatsapp is not None:
                 payload["recipient_whatsapp"] = recipient_whatsapp
             queue_repo.send(payload, delay_seconds=0)
@@ -250,7 +290,7 @@ def invoke_trigger(
                 run_id,
                 job_definition_id,
                 snapshot.snapshot_ref,
-                body.keywords[:50] + "..." if len(body.keywords) > 50 else body.keywords,
+                log_preview,
             )
         except Exception:
             logger.exception(
