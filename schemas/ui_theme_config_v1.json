@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notion-pipeliner.local/schemas/ui_theme_config_v1.json",
+  "title": "UiThemeConfigV1",
+  "type": "object",
+  "required": ["schemaVersion", "tokens"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tokens": {
+      "type": "object",
+      "description": "Semantic token groups; additional nested keys allowed for forward compatibility."
+    }
+  }
+}

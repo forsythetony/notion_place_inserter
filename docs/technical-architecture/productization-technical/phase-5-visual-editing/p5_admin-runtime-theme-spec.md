@@ -2,9 +2,9 @@
 
 | Field | Value |
 |--------|--------|
-| Status | Draft spec (implementation not started) |
+| Status | v1 implemented (2026-03-21): Postgres presets + APIs + `/admin/theme` + `/pipelines` pilot; global shell theming still future phase |
 | Date | 2026-03-19 |
-| Last revised | 2026-03-21 — §10.5 **frontend codebase audit** (global vs graph-specific styling); prior: 2026-03-19 admin-page plan; **single-page theme consumption pilot** (no global shell) |
+| Last revised | 2026-03-21 — **Implementation shipped** (migration, `UiThemeService`, `/theme/runtime`, `/management/ui-theme/*`, admin page, pilot); prior: §10.5 frontend codebase audit |
 | Product direction | [Admin theming / tokens research](../../../style/admin-theming-design-tokens-research.md) |
 
 ## 1. Purpose

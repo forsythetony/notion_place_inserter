@@ -120,7 +120,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Phase 5 Architecture: Visual Editing](./productization-technical/phase-5-visual-editing/index.md) — **Reference**
 - [Notion OAuth App Setup Guide](./productization-technical/phase-5-visual-editing/notion-oauth-app-setup-guide.md) — **Complete on 2026-03-19**
 - [Notion Onboarding and Database Selection Deep Dive](./productization-technical/phase-5-visual-editing/notion-onboarding-and-database-selection-deep-dive.md) — **Complete on 2026-03-19**
-- [p5 — Admin runtime theme (technical specification)](./productization-technical/phase-5-visual-editing/p5_admin-runtime-theme-spec.md) — **In progress (spec; pilot rollout)**
+- [p5 — Admin runtime theme (technical specification)](./productization-technical/phase-5-visual-editing/p5_admin-runtime-theme-spec.md) — **Complete on 2026-03-21 (v1 backend + admin UI + `/pipelines` pilot)**
 - [Architecture: Input Binding & Signal Picker — Alternatives to Manual JSON](./productization-technical/phase-5-visual-editing/p5_input-binding-signal-picker-architecture.md) — **Complete on 2026-03-19**
 - [Architecture: Schema-Aware Optimize Input — Query Structure from Downstream Steps](./productization-technical/phase-5-visual-editing/p5_optimize-input-schema-aware-architecture.md) — **Complete on 2026-03-19**
 - [Architecture Proposal: Add Step (+) Button Within Pipeline](./productization-technical/phase-5-visual-editing/p5_pipeline-add-step-button-architecture.md) — **Complete on 2026-03-19**
@@ -151,6 +151,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Tech Debt Story: RLS In-Depth Validation](./tech-debt/td-2026-03-15-rls-in-depth-validation.md) — **Open**
 - [Tech Debt Story: Trigger Secret Plaintext in List Response](./tech-debt/td-2026-03-15-trigger-secret-plaintext-in-list-response.md) — **Open**
 - [Tech Debt: Pipeline editor graph spacing after trigger metadata loads](./tech-debt/td-2026-03-19-pipeline-editor-trigger-layout-after-async-resolve.md) — **Open**
+- [Tech Debt: `test_notion_oauth_db` empty `--token` exit code](./tech-debt/td-2026-03-21-test-notion-oauth-db-empty-token-exit-code.md) — **Open**
 
 ### `troubleshooting/`
 
@@ -163,6 +164,10 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-21 | p5_admin_styling_complete | **Milestone:** Admin/runtime styling considered complete for now — DB + API + `/admin/theme`, app-wide `AppShell` theme, `ui-style-guide-first.mdc` (style guide defines intent; code uses global tokens for theme propagation). |
+| 2026-03-21 | p5_runtime_theme_global_shell | Applied runtime theme app-wide: `useRuntimeUiTheme` + `cssVars` on `AppShell` root; semantic token remaps + `--background`/`--bg` on `.app-shell`; removed `/pipelines` pilot-only wrapper and duplicate fetch. |
+| 2026-03-21 | td-2026-03-21-test-notion-oauth-db-empty-token-exit-code | Logged tech debt: `tests/test_test_notion_oauth_db.py::test_script_exits_1_when_token_empty` fails (script exits 0 vs expected 1 for `--token ""`); see `docs/technical-architecture/tech-debt/td-2026-03-21-test-notion-oauth-db-empty-token-exit-code.md`. |
+| 2026-03-21 | p5_admin_runtime_theme | Shipped admin runtime theme: migration `ui_theme_presets` + `app_ui_theme_settings`, `UiThemeService` + `PostgresUiThemeRepository`, `GET /theme/runtime` and `/management/ui-theme/*`, admin `/admin/theme` page + gated nav, pilot `/pipelines` via `useRuntimeUiTheme`; JSON schema `schemas/ui_theme_config_v1.json`; tests `test_ui_theme_routes.py` + router/api client updates. |
 | 2026-03-21 | p5_admin-runtime-theme-spec §10.5 | Documented **frontend codebase audit**: `index.css` vs `App.css` vs XYFlow; global migration candidates (literals, fallbacks, scrims, undefined CSS vars, gradients); **`tokens.graph.*`** for canvas/edges/Background; `graphTransform.ts` layout coupling; tie-in to pilot route (§10.2). |
 | 2026-03-21 | architecture_doc_index_rule | Added `.cursor/rules/architecture-doc-index.mdc` and the **Architecture document index** section (linked inventory + status for every `docs/technical-architecture/**/*.md`). |
 | 2026-03-20 | makefile_reprovision_starter | `make reprovision-starter`: `pbpaste` JWT (optional `Bearer` stripped), `POST /management/bootstrap/reprovision-starter`, `BASE_URL` from env/local.env; runbook updated. |

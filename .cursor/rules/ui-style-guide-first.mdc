@@ -1,0 +1,11 @@
+---
+description: Frontend — style guide defines intent; use global tokens so runtime/admin theme applies (see notion_pipeliner_ui rule)
+globs: notion_pipeliner_ui/**/*.{ts,tsx,js,jsx,css,html}
+alwaysApply: false
+---
+
+# UI style guide + themeable styling (notion_pipeliner_ui)
+
+Canonical rule: **`notion_pipeliner_ui/.cursor/rules/ui-style-guide-first.mdc`**.
+
+**Summary:** `styleguide/` defines how the app should look for developers. In code, reference **global CSS variables and shared classes** (`index.css`, `App.css`, runtime theme on `.app-shell`) so **admin and runtime theme changes propagate**—avoid hardcoding theme-sensitive colors or surfaces in components.
