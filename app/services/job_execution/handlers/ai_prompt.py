@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.services.job_execution.runtime_types import ExecutionContext
 from app.services.job_execution.step_runtime_base import StepRuntime
+from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
 
 class AiPromptHandler(StepRuntime):
@@ -29,12 +30,20 @@ class AiPromptHandler(StepRuntime):
             logger.warning("ai_prompt_missing_prompt | step_id={}", step_id)
             return {"value": ""}
 
+        manual = consume_manual_api_response(ctx, "claude.ai_prompt")
+        if manual is not None:
+            ctx.log_step_processing("Using live-test manual API override (claude.ai_prompt).")
+            if isinstance(manual, dict) and "value" in manual:
+                return {"value": manual.get("value", "")}
+            return {"value": str(manual) if manual is not None else ""}
+
         claude = ctx.get_service("claude")
         if not claude:
             logger.warning("ai_prompt_no_claude | step_id={}", step_id)
             return {"value": ""}
 
         max_tokens = config.get("max_tokens", 1024)
+        ctx.log_step_processing(f"Calling Claude ai_prompt (max_tokens={max_tokens}).")
         result = claude.prompt_completion(
             prompt=prompt,
             value=value,

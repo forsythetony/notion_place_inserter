@@ -24,6 +24,7 @@ class JobRun:
     error_summary: str | None = None
     platform_job_id: str | None = None
     retry_count: int = 0
+    result_json: dict[str, Any] | None = None
 
 
 @dataclass
@@ -65,8 +66,11 @@ class StepRun:
     owner_user_id: str = ""
     job_run_id: str = ""
     stage_run_id: str = ""
+    # Set when listing from DB (not written by save_step_run)
+    pipeline_id: str | None = None
     input_summary: dict[str, Any] | None = None
     output_summary: dict[str, Any] | None = None
+    processing_log: list[str] | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_summary: str | None = None

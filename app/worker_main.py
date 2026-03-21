@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from loguru import logger
 
@@ -258,14 +259,17 @@ def main() -> None:
     )
     start_tracemalloc_if_enabled(memory_tracemalloc_enabled)
 
+    supabase_host = urlparse(supabase_config.url).netloc or supabase_config.url
     logger.info(
         "worker_starting | poll_interval={} vt_seconds={} retry_delays={} "
-        "memory_diagnostics={} memory_tracemalloc={}",
+        "memory_diagnostics={} memory_tracemalloc={} queue_name={} supabase_host={}",
         _WORKER_POLL_INTERVAL,
         _WORKER_VT_SECONDS,
         retry_delays,
         memory_diagnostics_enabled,
         memory_tracemalloc_enabled,
+        supabase_config.queue_name,
+        supabase_host,
     )
 
     loop = asyncio.new_event_loop()

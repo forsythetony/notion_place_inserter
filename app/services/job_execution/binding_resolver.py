@@ -96,7 +96,19 @@ def _resolve_trigger_ref(parts: list[str], payload: dict[str, Any]) -> Any:
         if isinstance(cur, dict) and p in cur:
             cur = cur[p]
         else:
-            return None
+            # Pipelines saved with trigger.payload.keywords still resolve that ref when the
+            # linked trigger's schema uses a different primary string field (e.g. imageData).
+            # build_trigger_payload duplicates the primary string into raw_input for legacy
+            # bindings; use it when "keywords" was never present in the validated body.
+            if (
+                p == "keywords"
+                and isinstance(payload, dict)
+                and "keywords" not in payload
+                and "raw_input" in payload
+            ):
+                cur = payload["raw_input"]
+            else:
+                return None
     return cur
 
 

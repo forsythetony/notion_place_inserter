@@ -16,9 +16,11 @@ from app.queue.memory_diagnostics import (
     maybe_log_high_watermark,
 )
 from app.queue.models import PipelineFailureEvent, PipelineSuccessEvent
+from app.services.pipeline_live_test.scoped_snapshot import apply_scope_to_snapshot
 from app.services.supabase_queue_repository import QueueMessage, SupabaseQueueRepository
 from app.services.trigger_request_body import (
     build_trigger_payload,
+    debug_payload_json_for_logging,
     default_keywords_request_body_schema,
     preview_string_for_log,
     validate_request_body_against_schema,
@@ -74,6 +76,7 @@ def _run_pipeline_sync(
     trigger_payload: dict[str, Any],
     definition_snapshot_ref: str | None,
     trigger_id: str | None,
+    live_test: dict[str, Any] | None = None,
 ) -> dict:
     """Run snapshot-driven pipeline (call from worker thread)."""
     if not trigger_id:
@@ -87,13 +90,42 @@ def _run_pipeline_sync(
         raise RuntimeError(
             f"Job definition unavailable: job_id={job_definition_id} owner={owner_user_id}"
         )
+    snapshot = snapshot_obj.snapshot
+    scope_boundary = None
+    allow_destination_writes = True
+    invocation_source: str | None = None
+    cache_fixtures = None
+    api_overrides: dict[str, Any] | None = None
+    if live_test:
+        invocation_source = str(live_test.get("invocation_source") or "editor_live_test")
+        allow_destination_writes = bool(live_test.get("allow_destination_writes"))
+        sk = str(live_test.get("scope_kind") or "job")
+        if sk != "job":
+            snapshot, scope_boundary = apply_scope_to_snapshot(
+                snapshot,
+                sk,
+                stage_id=live_test.get("stage_id"),
+                pipeline_id=live_test.get("pipeline_id"),
+                step_id=live_test.get("step_id"),
+            )
+        fixtures = live_test.get("fixtures") or {}
+        if isinstance(fixtures, dict):
+            cache_fixtures = fixtures.get("cache_entries")
+        raw_api = live_test.get("api_overrides")
+        api_overrides = raw_api if isinstance(raw_api, dict) else None
+
     return job_execution_service.execute_snapshot_run(
-        snapshot=snapshot_obj.snapshot,
+        snapshot=snapshot,
         run_id=run_id,
         job_id=job_id,
         trigger_payload=trigger_payload,
         definition_snapshot_ref=definition_snapshot_ref or snapshot_obj.snapshot_ref,
         owner_user_id=owner_user_id,
+        allow_destination_writes=allow_destination_writes,
+        invocation_source=invocation_source,
+        scope_boundary=scope_boundary,
+        cache_fixtures=cache_fixtures,
+        api_overrides=api_overrides,
     )
 
 
@@ -129,6 +161,7 @@ def _extract_payload(
     str | None,
     str | None,
     str | None,
+    dict[str, Any] | None,
 ] | None:
     """
     Extract job_id, run_id, log_preview, trigger_payload, recipient_whatsapp, job_definition_id,
@@ -161,6 +194,8 @@ def _extract_payload(
     owner_user_id = p.get("owner_user_id")
     snapshot_ref = p.get("definition_snapshot_ref")
     trigger_id = p.get("trigger_id")
+    lt_raw = p.get("live_test")
+    live_test_block: dict[str, Any] | None = lt_raw if isinstance(lt_raw, dict) else None
     return (
         str(job_id),
         str(run_id),
@@ -172,6 +207,7 @@ def _extract_payload(
         str(owner_user_id) if owner_user_id else None,
         str(snapshot_ref) if snapshot_ref else None,
         str(trigger_id) if trigger_id else None,
+        live_test_block,
     )
 
 
@@ -215,6 +251,7 @@ async def run_worker_loop(
     """
     loop = asyncio.get_event_loop()
     last_heartbeat = time.monotonic()
+    last_idle_debug_at = 0.0
     crossed_thresholds: set[float] = set()
 
     while True:
@@ -259,10 +296,26 @@ async def run_worker_loop(
                         fd_anon=snap.get("fd_anon", 0),
                         fd_file=snap.get("fd_file", 0),
                     )
+            now_idle = time.monotonic()
+            if now_idle - last_idle_debug_at >= 30.0:
+                last_idle_debug_at = now_idle
+                logger.debug(
+                    "worker_queue_poll_idle | queue_name={} | "
+                    "no messages (confirm API uses same SUPABASE_URL and queue; unset env defaults to locations_jobs)",
+                    queue_repo._config.queue_name,
+                )
             await asyncio.sleep(poll_interval_seconds)
             continue
 
         for msg in messages:
+            pl = msg.payload or {}
+            logger.info(
+                "worker_dequeued | queue_name={} msg_id={} run_id={} job_id={}",
+                queue_repo._config.queue_name,
+                msg.message_id,
+                pl.get("run_id"),
+                pl.get("job_id"),
+            )
             # Heartbeat before processing
             if memory_diagnostics_enabled:
                 now_mono = time.monotonic()
@@ -347,6 +400,7 @@ def _handle_final_failure(
         _owner,
         _snap,
         _tid,
+        _live_test,
     ) = extracted
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
@@ -450,6 +504,7 @@ async def _process_message(
         owner_user_id,
         definition_snapshot_ref,
         trigger_id,
+        live_test_block,
     ) = extracted
 
     if trigger_payload_optional is not None:
@@ -460,6 +515,15 @@ async def _process_message(
             validate_request_body_against_schema({"keywords": log_preview}, schema),
             schema,
         )
+
+    logger.debug(
+        "worker_debug_full_payloads | run_id={} job_id={} msg_id={} queue_payload_json={} trigger_payload_json={}",
+        run_id,
+        job_id,
+        msg.message_id,
+        debug_payload_json_for_logging(msg.payload or {}),
+        debug_payload_json_for_logging(trigger_payload),
+    )
 
     # Idempotency: skip if run already terminal
     try:
@@ -591,7 +655,7 @@ async def _process_message(
             tp_for_run = trigger_payload
             result = await loop.run_in_executor(
                 None,
-                lambda: _run_pipeline_sync(
+                lambda lt=live_test_block: _run_pipeline_sync(
                     job_execution_service,
                     job_definition_service,
                     job_definition_id,
@@ -601,6 +665,7 @@ async def _process_message(
                     tp_for_run,
                     definition_snapshot_ref,
                     trigger_id,
+                    live_test=lt,
                 ),
             )
         except Exception as e:
@@ -676,6 +741,8 @@ async def _process_message(
                 for k, v in result.items()
                 if k in ("id", "page_id", "mode", "database")
             }
+            if live_test_block and result.get("run_cache"):
+                result_meta["run_cache"] = result["run_cache"]
         try:
             run_repo.update_job_status(job_id, "succeeded", completed_at=now)
             run_repo.update_run(

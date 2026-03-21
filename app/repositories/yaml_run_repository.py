@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from loguru import logger
@@ -129,6 +130,63 @@ class YamlRunRepository:
             reverse=True,
         )
         return result[:limit]
+
+    def list_step_runs_for_job_run(
+        self, job_run_id: str, owner_user_id: str
+    ) -> list[StepRun]:
+        """Load all step run YAML files under the job run tree (local dev / YAML repo)."""
+        root = _project_root()
+        base_dir = root / tenant_runs_dir(owner_user_id, self._base) / job_run_id / "stages"
+        if not base_dir.exists() or not base_dir.is_dir():
+            return []
+        result: list[StepRun] = []
+        for stage_dir in sorted(base_dir.iterdir()):
+            if not stage_dir.is_dir():
+                continue
+            stage_run_id = stage_dir.name
+            pipelines_dir = stage_dir / "pipelines"
+            if not pipelines_dir.exists():
+                continue
+            for pipe_dir in sorted(pipelines_dir.iterdir()):
+                if not pipe_dir.is_dir():
+                    continue
+                pipeline_run_id = pipe_dir.name
+                pipeline_rel = tenant_pipeline_run_path(
+                    owner_user_id,
+                    job_run_id,
+                    stage_run_id,
+                    pipeline_run_id,
+                    self._base,
+                )
+                pdata = load_yaml_file(pipeline_rel)
+                pipeline_id = ""
+                if pdata:
+                    try:
+                        pipeline_id = parse_pipeline_run(pdata).pipeline_id
+                    except (KeyError, TypeError):
+                        pipeline_id = ""
+                steps_dir = pipe_dir / "steps"
+                if not steps_dir.exists():
+                    continue
+                for step_file in sorted(steps_dir.glob("*.yaml")):
+                    try:
+                        rel = step_file.relative_to(root).as_posix()
+                    except ValueError:
+                        rel = str(step_file)
+                    sdata = load_yaml_file(rel)
+                    if sdata is None:
+                        continue
+                    try:
+                        sr = parse_step_run(sdata)
+                        result.append(
+                            replace(sr, pipeline_id=pipeline_id or None)
+                        )
+                    except (KeyError, TypeError):
+                        continue
+        result.sort(
+            key=lambda s: (s.started_at or s.completed_at or ""),
+        )
+        return result
 
     def save_job_run(self, run: JobRun) -> None:
         path = tenant_job_run_path(run.owner_user_id, run.id, self._base)

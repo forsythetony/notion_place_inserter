@@ -455,6 +455,17 @@ Use cases:
 - proving whether a run was **eligible** to mutate the destination (`allow_destination_writes`)
 - future analytics on editor usage vs production trigger usage
 
+**As implemented (v1):** editor runs also set `trigger_payload._live_test_meta` (analyzer hash, scope, `allow_destination_writes`, optional `test_run_configuration_id`) and attach a top-level **`live_test`** object on the **queue message** (scope, fixtures, `api_overrides`). No `job_runs.metadata` JSON column was required.
+
+### External API call sites vs `allow_destination_writes`
+
+| Control | Governs | Examples |
+|--------|---------|----------|
+| **`allow_destination_writes`** | **Destination persistence** to the configured Notion data target | Final `create_page`, `property_set` schema writes, Notion image upload when not external-only |
+| **`api_overrides`** (`call_site_id` → `{ enabled, manual_response }`) | **Optional outbound integrations** (network/SDK), including reads | Claude (optimize / prompt / constrain / relation), Google Places, Freepik, Notion upload slot |
+
+If a call site is **disabled**, runtime returns **`manual_response`** without I/O and logs `external_api_skipped`. Analysis **`422`**s if disabled without `manual_response`. Handlers wired include optimize input, Google Places, AI prompt/constrain/relation, search icons, upload image (Notion slot).
+
 ---
 
 ## UI feedback loop: how run status and errors reach the graph
@@ -570,6 +581,21 @@ Suggested pieces:
 | Queue or run persistence unavailable | Return normal API error; do not silently fall back to sync execution |
 | Run accepted but worker fails later | Poll surfaces terminal `failed` + `error_summary`; map `step_id` to graph node when present |
 | Poll never reaches terminal (worker stuck / lost message) | After N minutes or max polls, show "Run status unknown" with link to run history / support |
+
+### Local dev: API logs `management_live_test_enqueued` but the worker stays quiet
+
+Editor runs **enqueue** only (`pgmq_send`); **pipeline execution logs appear in the worker process**, not uvicorn. If the worker prints `worker_starting` and then only `worker_queue_poll_idle`, **pgmq has no visible messages** for this worker — either nothing was enqueued into **this** database, or a message was already consumed.
+
+Checklist:
+
+1. **Confirm the UI talks to the API you think** — In `notion_pipeliner_ui/.env`, `VITE_BASE_URL` must be **`http://localhost:8000`** (or whatever host runs `make run`). If it points at **Render/production**, enqueue goes to **that** deployment’s Supabase; your **local** worker (polling `127.0.0.1:54321`) will stay idle forever. Restart `npm run dev` after changing `.env`.
+2. **API line on Run** — After a successful Run, uvicorn should log  
+   `management_live_test_enqueued | ... pgmq_message_id=<n> queue_name=locations_jobs`.  
+   **No such line** ⇒ the POST did not hit this API or returned 4xx before enqueue (check browser Network tab: request URL host).
+3. **Worker** — Run `make run-worker` in a **separate terminal** before clicking Run; startup includes `queue_name=<name>` and `supabase_host=<host>` — must match API (`SUPABASE_URL` / `SUPABASE_SECRET_KEY`).
+4. **`SUPABASE_QUEUE_NAME`** — Unset ⇒ both default to `locations_jobs`. Set it on **both** API and worker if you override.
+5. **Idle** — With `LOG_LEVEL=DEBUG`, the worker emits `worker_queue_poll_idle` every ~30s when empty.
+6. **Dequeue** — When a message is read, look for `worker_dequeued | queue_name=... run_id=...`.
 
 ---
 

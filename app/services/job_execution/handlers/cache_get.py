@@ -21,5 +21,6 @@ class CacheGetHandler(StepRuntime):
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         cache_key = config.get("cache_key")
+        ctx.log_step_processing(f"Reading run cache (key={cache_key!r}).")
         value = ctx.run_cache.get(cache_key) if cache_key else None
         return {"value": value}

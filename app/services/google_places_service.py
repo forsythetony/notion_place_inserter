@@ -1,6 +1,18 @@
 """Google Places API service wrapper for place search and details."""
 
+from __future__ import annotations
+
+import json
+from typing import Any
+
 import httpx
+from loguru import logger
+
+from app.env_bootstrap import is_pipeline_trace_verbose
+
+_TRACE_JSON_MAX_CHARS = 200_000
+# Max JSON chars stored per HTTP call in step_traces.processing (handler may split lines).
+_HTTP_TRACE_RESPONSE_PREVIEW_MAX = 24_000
 
 
 def _extract_localized_text(obj: dict | None) -> str:
@@ -121,6 +133,43 @@ def _extract_neighborhood_debug_signals(components: list[dict] | None) -> list[d
     return signals
 
 
+def _trace_json(obj: Any) -> str:
+    text = json.dumps(obj, ensure_ascii=False, default=str)
+    if len(text) > _TRACE_JSON_MAX_CHARS:
+        return text[:_TRACE_JSON_MAX_CHARS] + f"... [truncated, total_len={len(text)}]"
+    return text
+
+
+def _trace_bind(trace_extra: dict[str, Any] | None):
+    lg = logger.bind(event="pipeline_trace")
+    if trace_extra:
+        for k, v in trace_extra.items():
+            if v is not None and v != "":
+                lg = lg.bind(**{k: v})
+    return lg
+
+
+def _log_places_http_error(
+    operation: str,
+    e: httpx.HTTPStatusError,
+    trace_extra: dict[str, Any] | None,
+) -> None:
+    """Always log Google error JSON body — 400s often explain API enablement / key / field mask issues."""
+    body = (e.response.text or "")[:4000]
+    lg = logger.bind(event="google_places_http_error", op=operation)
+    if trace_extra:
+        for k, v in trace_extra.items():
+            if v is not None and v != "":
+                lg = lg.bind(**{str(k): v})
+    lg.warning(
+        "google_places_http_error | op={} | status={} | url={} | response_body={}",
+        operation,
+        e.response.status_code,
+        str(e.request.url),
+        body,
+    )
+
+
 class GooglePlacesService:
     """Wraps the Google Places API (New) for text search and place details."""
 
@@ -141,9 +190,58 @@ class GooglePlacesService:
     def __init__(self, api_key: str):
         self._api_key = api_key
         self._client = httpx.Client(timeout=10.0)
+        self._http_traces: list[dict[str, Any]] = []
+
+    def clear_http_traces(self) -> None:
+        """Clear recorded HTTP traces (call at start of a pipeline step)."""
+        self._http_traces = []
+
+    def get_http_traces(self) -> list[dict[str, Any]]:
+        """Last batch of Places API calls: url, redacted headers, body, response preview."""
+        return list(self._http_traces)
+
+    def _redact_headers_for_trace(self, headers: dict[str, str]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for k, v in headers.items():
+            if k.lower() == "x-goog-api-key" and v:
+                out[k] = f"{v[:4]}…(redacted,len={len(v)})" if len(v) > 4 else "***"
+            else:
+                out[k] = v
+        return out
+
+    def _append_http_trace(
+        self,
+        *,
+        operation: str,
+        method: str,
+        url: str,
+        request_headers: dict[str, str],
+        request_body: Any | None,
+        http_status: int,
+        response_for_preview: Any,
+    ) -> None:
+        preview = _trace_json(response_for_preview)
+        if len(preview) > _HTTP_TRACE_RESPONSE_PREVIEW_MAX:
+            preview = (
+                preview[:_HTTP_TRACE_RESPONSE_PREVIEW_MAX]
+                + f"... [truncated, total_len={len(preview)}]"
+            )
+        self._http_traces.append({
+            "operation": operation,
+            "method": method,
+            "url": url,
+            "request_headers": self._redact_headers_for_trace(request_headers),
+            "request_body": request_body,
+            "http_status": http_status,
+            "response_body_preview": preview,
+        })
 
     def search_places(
-        self, query: str, *, return_raw_response: bool = False
+        self,
+        query: str,
+        *,
+        return_raw_response: bool = False,
+        trace_extra: dict[str, Any] | None = None,
     ) -> list[dict] | tuple[list[dict], dict]:
         """
         Search for places using the given text query.
@@ -157,9 +255,49 @@ class GooglePlacesService:
             "X-Goog-FieldMask": self.DEFAULT_FIELD_MASK,
         }
         payload = {"textQuery": query}
+        if is_pipeline_trace_verbose():
+            _trace_bind(trace_extra).info(
+                "pipeline_trace | google_places | searchText | url={} | field_mask={} | request_body={}",
+                self.SEARCH_URL,
+                self.DEFAULT_FIELD_MASK,
+                json.dumps(payload, ensure_ascii=False),
+            )
         response = self._client.post(self.SEARCH_URL, headers=headers, json=payload)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            err_preview = (e.response.text or "")[: _HTTP_TRACE_RESPONSE_PREVIEW_MAX]
+            try:
+                err_obj: Any = e.response.json()
+            except Exception:
+                err_obj = err_preview
+            self._append_http_trace(
+                operation="searchText",
+                method="POST",
+                url=self.SEARCH_URL,
+                request_headers=headers,
+                request_body=payload,
+                http_status=e.response.status_code,
+                response_for_preview=err_obj,
+            )
+            _log_places_http_error("searchText", e, trace_extra)
+            raise
         data = response.json()
+        self._append_http_trace(
+            operation="searchText",
+            method="POST",
+            url=self.SEARCH_URL,
+            request_headers=headers,
+            request_body=payload,
+            http_status=response.status_code,
+            response_for_preview=data,
+        )
+        if is_pipeline_trace_verbose():
+            _trace_bind(trace_extra).info(
+                "pipeline_trace | google_places | searchText | http_status={} | response_json={}",
+                response.status_code,
+                _trace_json(data),
+            )
         places_raw = data.get("places", [])
         normalized = [self._normalize_place(p) for p in places_raw]
         if return_raw_response:
@@ -172,6 +310,7 @@ class GooglePlacesService:
         field_mask: str | None = None,
         *,
         return_raw_response: bool = False,
+        trace_extra: dict[str, Any] | None = None,
     ) -> dict | None | tuple[dict | None, dict | None]:
         """
         Fetch place details by ID. Used to enrich search results with editorialSummary,
@@ -187,9 +326,47 @@ class GooglePlacesService:
             "X-Goog-FieldMask": mask,
         }
         url = self.DETAILS_URL_TEMPLATE.format(place_id=place_id)
+        if is_pipeline_trace_verbose():
+            _trace_bind(trace_extra).info(
+                "pipeline_trace | google_places | place_details | method=GET | url={} | field_mask={}",
+                url,
+                mask,
+            )
         response = self._client.get(url, headers=headers)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            try:
+                err_obj: Any = e.response.json()
+            except Exception:
+                err_obj = (e.response.text or "")[: _HTTP_TRACE_RESPONSE_PREVIEW_MAX]
+            self._append_http_trace(
+                operation="placeDetails",
+                method="GET",
+                url=url,
+                request_headers=headers,
+                request_body=None,
+                http_status=e.response.status_code,
+                response_for_preview=err_obj,
+            )
+            _log_places_http_error("place_details", e, trace_extra)
+            raise
         data = response.json()
+        self._append_http_trace(
+            operation="placeDetails",
+            method="GET",
+            url=url,
+            request_headers=headers,
+            request_body=None,
+            http_status=response.status_code,
+            response_for_preview=data,
+        )
+        if is_pipeline_trace_verbose():
+            _trace_bind(trace_extra).info(
+                "pipeline_trace | google_places | place_details | http_status={} | response_json={}",
+                response.status_code,
+                _trace_json(data),
+            )
         normalized = self._normalize_place(data)
         if return_raw_response:
             return (normalized, data)

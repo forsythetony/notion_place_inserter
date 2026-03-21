@@ -64,10 +64,12 @@ class DataTransformHandler(StepRuntime):
         fallback_value = config.get("fallback_value")
 
         if operation == "extract_key" and source_path:
+            ctx.log_step_processing(f"Data transform extract_key (path={source_path!r}).")
             segments = _parse_path(source_path)
             extracted = _extract_at_path(value, segments) if segments else None
             transformed = extracted if extracted is not None else fallback_value
         else:
+            ctx.log_step_processing(f"Data transform (operation={operation!r}); using fallback.")
             transformed = fallback_value
 
         return {"transformed_value": transformed}

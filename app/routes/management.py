@@ -3,7 +3,7 @@
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -12,11 +12,17 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
 from app.domain.errors import TriggerJobLinkPolicyError
+from app.domain.runs import StepRun
 from app.domain.triggers import TriggerDefinition
 from app.repositories.yaml_loader import job_graph_to_yaml_dict, parse_job_graph
+from app.services.pipeline_live_test.analyze import analyzer_payload_hash, analyze_live_test
 from app.services.trigger_request_body import (
+    build_trigger_payload,
+    debug_payload_json_for_logging,
     default_keywords_request_body_schema,
     management_body_fields_to_schema,
+    preview_string_for_log,
+    validate_request_body_against_schema,
 )
 from app.services.validation_service import ValidationError
 
@@ -73,11 +79,100 @@ class PatchPipelineStatusRequest(BaseModel):
     status: Literal["active", "disabled"]
 
 
+class LiveTestConfigBody(BaseModel):
+    """Scope, fixtures, and API overrides for editor-initiated pipeline live tests."""
+
+    scope_kind: Literal["job", "stage", "pipeline", "step"] = "job"
+    stage_id: str | None = None
+    pipeline_id: str | None = None
+    step_id: str | None = None
+    fixtures: dict[str, Any] | None = None
+    api_overrides: dict[str, Any] | None = None
+    allow_destination_writes: bool = False
+
+
+class LiveTestAnalyzeRequest(BaseModel):
+    """POST /management/pipelines/{id}/live-test/analyze body."""
+
+    live_test: LiveTestConfigBody = Field(default_factory=LiveTestConfigBody)
+    test_run_configuration_id: str | None = None
+
+
+class LiveTestRunRequest(BaseModel):
+    """POST /management/pipelines/{id}/run body."""
+
+    trigger_body: dict[str, Any] = Field(
+        ...,
+        description="JSON fields matching the linked trigger's request_body_schema",
+    )
+    live_test: LiveTestConfigBody = Field(default_factory=LiveTestConfigBody)
+    test_run_configuration_id: str | None = None
+
+
+def _first_linked_trigger_id(link_repo, job_id: str, owner_user_id: str) -> str | None:
+    ids = link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
+    return ids[0] if ids else None
+
+
+def _merge_live_test_from_saved(
+    job_repo,
+    pipeline_id: str,
+    owner_user_id: str,
+    body: LiveTestConfigBody,
+    test_run_configuration_id: str | None,
+) -> dict[str, Any]:
+    """Overlay request ``live_test`` on saved run configuration when id is provided."""
+    overlay = body.model_dump(exclude_unset=True, exclude_none=True)
+    if not test_run_configuration_id:
+        return overlay
+    graph = job_repo.get_graph_by_id(pipeline_id, owner_user_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    drs = graph.job.default_run_settings or {}
+    live = drs.get("live_test") if isinstance(drs, dict) else {}
+    if not isinstance(live, dict):
+        live = {}
+    configs = live.get("run_configurations") or []
+    found = next(
+        (
+            c
+            for c in configs
+            if isinstance(c, dict) and c.get("id") == test_run_configuration_id
+        ),
+        None,
+    )
+    if not found:
+        raise HTTPException(
+            status_code=422,
+            detail=f"test_run_configuration_id not found: {test_run_configuration_id!r}",
+        )
+    base = {k: v for k, v in found.items() if k not in ("id", "display_name")}
+    merged = {**base, **overlay}
+    return merged
+
+
 def _serialize_datetime(dt):
     """Serialize datetime to ISO string or None."""
     if dt is None:
         return None
     return dt.isoformat()
+
+
+def _step_trace_to_api(sr: StepRun) -> dict[str, Any]:
+    """Map StepRun persistence to API shape (input / processing / output)."""
+    return {
+        "id": sr.id,
+        "step_id": sr.step_id,
+        "step_template_id": sr.step_template_id,
+        "pipeline_id": sr.pipeline_id,
+        "status": sr.status,
+        "started_at": _serialize_datetime(sr.started_at),
+        "completed_at": _serialize_datetime(sr.completed_at),
+        "error_summary": sr.error_summary,
+        "input": sr.input_summary,
+        "processing": sr.processing_log or [],
+        "output": sr.output_summary,
+    }
 
 
 def _apply_trigger_links_to_job_payload(
@@ -134,6 +229,43 @@ def list_pipelines(
     return {"items": items}
 
 
+@router.post("/bootstrap/reprovision-starter")
+def reprovision_starter_job(
+    request: Request,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    **Destructive:** remove the starter HTTP trigger at ``/locations`` and the job
+    ``job_notion_place_inserter``, then re-import both from bundled YAML
+    (``product_model/bootstrap/jobs/notion_place_inserter.yaml`` and the locations trigger).
+
+    Use after editing bootstrap YAML so your account matches the repo. Generates a new trigger
+    secret. Requires ``ENABLE_BOOTSTRAP_PROVISIONING`` (default on).
+    """
+    svc = getattr(request.app.state, "bootstrap_provisioning_service", None)
+    if svc is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Bootstrap provisioning is disabled (ENABLE_BOOTSTRAP_PROVISIONING).",
+        )
+    if not hasattr(svc, "reprovision_owner_starter_definitions"):
+        raise HTTPException(status_code=501, detail="Reprovision is not supported by this runtime.")
+    try:
+        svc.reprovision_owner_starter_definitions(ctx.user_id)
+    except Exception as e:
+        logger.exception("reprovision_starter_failed | owner={} error={}", ctx.user_id, e)
+        raise HTTPException(status_code=500, detail="Reprovision failed") from e
+    return {
+        "status": "ok",
+        "job_id": "job_notion_place_inserter",
+        "trigger_path": "/locations",
+        "message": (
+            "Starter job and /locations trigger re-imported from bundled YAML. "
+            "GET /management/triggers to see the new HTTP trigger secret."
+        ),
+    }
+
+
 @router.get("/pipelines/{pipeline_id}")
 def get_pipeline(
     request: Request,
@@ -182,6 +314,286 @@ def patch_pipeline_status(
     # Status-only update: do not save_job_graph (that re-runs binding validation and can fail on valid multi-pipeline jobs).
     job_repo.update_job_status(pipeline_id, ctx.user_id, body.status)
     return {"id": pipeline_id, "status": body.status}
+
+
+@router.post("/pipelines/{pipeline_id}/live-test/analyze")
+def analyze_pipeline_live_test(
+    request: Request,
+    pipeline_id: str,
+    body: LiveTestAnalyzeRequest,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Analyze a draft live-test configuration: fixture requirements, scoped destination-write
+    policy, and planned external API call sites (with per-site override validation).
+    """
+    job_def_svc = getattr(request.app.state, "job_definition_service", None)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    job_repo = getattr(request.app.state, "job_repository", None)
+    if not job_def_svc or not link_repo or not job_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration"},
+        )
+    trigger_id = _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
+    if not trigger_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Pipeline has no linked trigger; link a trigger before live testing",
+        )
+    snapshot_obj = job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
+    if snapshot_obj is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Pipeline cannot be resolved (missing target, trigger, or archived)",
+        )
+    try:
+        merged = _merge_live_test_from_saved(
+            job_repo,
+            pipeline_id,
+            ctx.user_id,
+            body.live_test,
+            body.test_run_configuration_id,
+        )
+        scope_kind = str(merged.get("scope_kind", "job"))
+        analysis = analyze_live_test(
+            snapshot_obj.snapshot,
+            scope_kind=scope_kind,
+            stage_id=merged.get("stage_id"),
+            pipeline_id=merged.get("pipeline_id"),
+            step_id=merged.get("step_id"),
+            fixtures=merged.get("fixtures"),
+            api_overrides=merged.get("api_overrides"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return {
+        **analysis,
+        "analyzer_payload_hash": analyzer_payload_hash(analysis),
+    }
+
+
+@router.post("/pipelines/{pipeline_id}/run")
+def enqueue_pipeline_live_test_run(
+    request: Request,
+    pipeline_id: str,
+    body: LiveTestRunRequest,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Enqueue an editor-initiated pipeline run with live-test scope/fixtures/API overrides.
+    Validates trigger body, runs the same analyzer as ``live-test/analyze``, then enqueues the worker.
+    """
+    job_def_svc = getattr(request.app.state, "job_definition_service", None)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    job_repo = getattr(request.app.state, "job_repository", None)
+    run_repo = getattr(request.app.state, "supabase_run_repository", None)
+    queue_repo = getattr(request.app.state, "supabase_queue_repository", None)
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    if not all([job_def_svc, link_repo, job_repo, run_repo, queue_repo, trigger_repo]):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration"},
+        )
+
+    trigger_id = _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
+    if not trigger_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Pipeline has no linked trigger",
+        )
+    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    if not trigger:
+        raise HTTPException(status_code=422, detail="Linked trigger not found")
+
+    try:
+        merged = _merge_live_test_from_saved(
+            job_repo,
+            pipeline_id,
+            ctx.user_id,
+            body.live_test,
+            body.test_run_configuration_id,
+        )
+    except HTTPException:
+        raise
+    schema = trigger.request_body_schema or default_keywords_request_body_schema()
+    try:
+        validated = validate_request_body_against_schema(body.trigger_body, schema)
+        trigger_payload = build_trigger_payload(validated, schema)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    snapshot_obj = job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
+    if snapshot_obj is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Pipeline cannot be resolved for run",
+        )
+    scope_kind = str(merged.get("scope_kind", "job"))
+    analysis = analyze_live_test(
+        snapshot_obj.snapshot,
+        scope_kind=scope_kind,
+        stage_id=merged.get("stage_id"),
+        pipeline_id=merged.get("pipeline_id"),
+        step_id=merged.get("step_id"),
+        fixtures=merged.get("fixtures"),
+        api_overrides=merged.get("api_overrides"),
+    )
+    if analysis.get("destination_write_blocked"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Scoped run cannot include destination-writing steps",
+                "destination_write_blocked": True,
+                "unsatisfied_requirements": analysis.get("unsatisfied_requirements", []),
+                "planned_external_calls": analysis.get("planned_external_calls", []),
+            },
+        )
+    if not analysis.get("ok"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Live test configuration is incomplete",
+                "unsatisfied_requirements": analysis.get("unsatisfied_requirements", []),
+                "planned_external_calls": analysis.get("planned_external_calls", []),
+            },
+        )
+
+    ah = analyzer_payload_hash(analysis)
+    meta = {
+        "invocation_source": "editor_live_test",
+        "scope_kind": scope_kind,
+        "stage_id": merged.get("stage_id"),
+        "pipeline_id": merged.get("pipeline_id"),
+        "step_id": merged.get("step_id"),
+        "allow_destination_writes": bool(merged.get("allow_destination_writes", False)),
+        "analyzer_payload_hash": ah,
+        "test_run_configuration_id": body.test_run_configuration_id,
+    }
+    trigger_payload = {
+        **trigger_payload,
+        "_live_test_meta": meta,
+    }
+
+    target_data = snapshot_obj.snapshot.get("target") or {}
+    target_id = str(target_data.get("id", ""))
+
+    job_id = f"loc_{uuid.uuid4().hex}"
+    run_id = str(uuid.uuid4())
+
+    log_preview = preview_string_for_log(
+        {k: v for k, v in trigger_payload.items() if k != "_live_test_meta"}
+    )
+
+    live_test_queue = {
+        "invocation_source": "editor_live_test",
+        "scope_kind": scope_kind,
+        "stage_id": merged.get("stage_id"),
+        "pipeline_id": merged.get("pipeline_id"),
+        "step_id": merged.get("step_id"),
+        "fixtures": merged.get("fixtures") or {},
+        "api_overrides": merged.get("api_overrides") or {},
+        "allow_destination_writes": bool(merged.get("allow_destination_writes", False)),
+    }
+
+    try:
+        run_repo.create_job(
+            job_id=job_id,
+            trigger_payload=trigger_payload,
+            status="queued",
+            owner_user_id=ctx.user_id,
+            run_id=run_id,
+            job_definition_id=pipeline_id,
+            trigger_id=trigger_id,
+            target_id=target_id,
+            definition_snapshot_ref=snapshot_obj.snapshot_ref,
+        )
+        live_test_queue_payload = {
+            "job_id": job_id,
+            "run_id": run_id,
+            "trigger_payload": trigger_payload,
+            "live_test": live_test_queue,
+            "job_definition_id": pipeline_id,
+            "trigger_id": trigger_id,
+            "job_slug": "notion_place_inserter",
+            "definition_snapshot_ref": snapshot_obj.snapshot_ref,
+            "owner_user_id": ctx.user_id,
+            "keywords": log_preview,
+        }
+        send_result = queue_repo.send(live_test_queue_payload, delay_seconds=0)
+        logger.debug(
+            "management_live_test_enqueue_payload_json | run_id={} pipeline_id={} payload_json={}",
+            run_id,
+            pipeline_id,
+            debug_payload_json_for_logging(live_test_queue_payload),
+        )
+    except Exception:
+        logger.exception(
+            "management_live_test_enqueue_failed | pipeline_id={} run_id={}",
+            pipeline_id,
+            run_id,
+        )
+        raise HTTPException(status_code=503, detail="Unable to enqueue run")
+
+    logger.info(
+        "management_live_test_enqueued | pipeline_id={} run_id={} job_id={} scope_kind={} "
+        "pgmq_message_id={} queue_name={}",
+        pipeline_id,
+        run_id,
+        job_id,
+        scope_kind,
+        send_result.message_id,
+        queue_repo._config.queue_name,
+    )
+    return {"status": "accepted", "run_id": run_id, "job_id": job_id}
+
+
+@router.get("/runs/{run_id}")
+def get_management_run(
+    request: Request,
+    run_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """Poll job run status for management UI (e.g. pipeline editor live test)."""
+    run_repo = getattr(request.app.state, "supabase_run_repository", None)
+    if not run_repo:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: run repository not available"},
+        )
+    row = run_repo.get_job_run(run_id, ctx.user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    step_traces: list[dict[str, Any]] = []
+    list_fn = getattr(run_repo, "list_step_runs_for_job_run", None)
+    if list_fn is not None:
+        try:
+            raw = list_fn(row.id, ctx.user_id)
+            if isinstance(raw, list):
+                step_traces = [
+                    _step_trace_to_api(sr) for sr in raw if isinstance(sr, StepRun)
+                ]
+        except Exception:
+            logger.exception(
+                "management_get_run_step_traces_failed | run_id={}",
+                run_id,
+            )
+    return {
+        "id": row.id,
+        "status": row.status,
+        "error_summary": row.error_summary,
+        "job_id": row.job_id,
+        "trigger_id": row.trigger_id,
+        "target_id": row.target_id,
+        "platform_job_id": row.platform_job_id,
+        "definition_snapshot_ref": row.definition_snapshot_ref,
+        "retry_count": row.retry_count,
+        "started_at": _serialize_datetime(row.started_at),
+        "completed_at": _serialize_datetime(row.completed_at),
+        "trigger_payload": row.trigger_payload,
+        "result_json": row.result_json,
+        "step_traces": step_traces,
+    }
 
 
 @router.put("/pipelines/{pipeline_id}")

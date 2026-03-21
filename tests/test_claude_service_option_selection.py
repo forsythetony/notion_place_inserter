@@ -490,3 +490,52 @@ def test_rewrite_query_for_target_empty_query_returns_empty():
 
     assert result == ""
     assert len(fake_client.messages.calls) == 0
+
+
+def test_optimize_input_llm_trace_recorded_for_rewrite_place_query():
+    """After rewrite_place_query, get_last_optimize_input_llm_trace has system, user, assistant."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("Bridge Minneapolis MN")
+    service._client = fake_client
+
+    service.clear_last_optimize_input_trace()
+    assert service.get_last_optimize_input_llm_trace() is None
+
+    out = service.rewrite_place_query("stone arch bridge")
+    assert out == "Bridge Minneapolis MN"
+    trace = service.get_last_optimize_input_llm_trace()
+    assert trace is not None
+    assert trace["model"]
+    assert "Google Places" in trace["system_prompt"]
+    assert "stone arch bridge" in trace["user_message"]
+    assert trace["assistant_text"] == "Bridge Minneapolis MN"
+
+
+def test_optimize_input_llm_trace_recorded_for_rewrite_query_for_target_with_schema():
+    """rewrite_query_for_target with schema records full trace."""
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("Optimized result")
+    service._client = fake_client
+
+    out = service.rewrite_query_for_target(
+        "query here",
+        query_schema={"description": "Some API", "hints": ["hint a"]},
+        base_prompt=None,
+    )
+    assert out == "Optimized result"
+    trace = service.get_last_optimize_input_llm_trace()
+    assert trace is not None
+    assert "Some API" in trace["system_prompt"]
+    assert "hint a" in trace["system_prompt"]
+    assert "query here" in trace["user_message"]
+    assert trace["assistant_text"] == "Optimized result"
+
+
+def test_clear_last_optimize_input_trace():
+    service = ClaudeService(api_key="test-key")
+    fake_client = _FakeClient("x")
+    service._client = fake_client
+    service.rewrite_place_query("a")
+    assert service.get_last_optimize_input_llm_trace() is not None
+    service.clear_last_optimize_input_trace()
+    assert service.get_last_optimize_input_llm_trace() is None

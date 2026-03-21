@@ -4,7 +4,7 @@
 |--------|--------|
 | Status | Draft spec (implementation not started) |
 | Date | 2026-03-19 |
-| Last revised | 2026-03-19 — explicit admin-page build plan; **single-page theme consumption pilot** (no global shell) |
+| Last revised | 2026-03-21 — §10.5 **frontend codebase audit** (global vs graph-specific styling); prior: 2026-03-19 admin-page plan; **single-page theme consumption pilot** (no global shell) |
 | Product direction | [Admin theming / tokens research](../../../style/admin-theming-design-tokens-research.md) |
 
 ## 1. Purpose
@@ -328,6 +328,53 @@ return (
 ### 10.4 Style guide
 
 New `--pipeliner-*` names must be documented in `notion_pipeliner_ui/styleguide/` as they are introduced; **pilot page** only references the first batch.
+
+### 10.5 Frontend codebase audit — global theming vs graph-specific styling
+
+This section records a **2026-03-21** pass over `notion_pipeliner_ui` so implementers know **where** runtime tokens will land first, **what** should stay in a **`tokens.graph.*`** namespace (see §6.2), and **what** is layout coupling rather than color.
+
+#### 10.5.1 Current layering
+
+| Layer | Role | Notes |
+|--------|------|--------|
+| `src/index.css` | `:root` **Calm Graphite** palette | Defines `--background`, `--surface-1`, `--surface-2`, `--border`, `--text-primary`, `--text-secondary`, `--accent`, `--success`, `--warning`, `--danger`, aliases (`--text`, `--bg`, `--code-bg`, `--accent-bg`, `--accent-border`, `--shadow`), typography (`--sans`, `--heading`, `--mono`). |
+| `src/App.css` | Most product UI | Mix of `var(--…)` usage and **literal** colors; largest file; management pages, pipeline editor, triggers, live-test modals, trigger body editor, etc. |
+| `@xyflow/react/dist/style.css` | React Flow defaults | Imported from `PipelineEditorPlaceholder.tsx`; controls default **edges**, **handles**, internal chrome unless overridden. |
+
+**Already aligned with general tokens (examples):** App shell / sidebar / top bar; most `.pipeline-editor-node*` surfaces and borders; `ProviderLogo` uses `currentColor` when monochrome (inherits parent text color).
+
+#### 10.5.2 Candidates to migrate toward global / runtime tokens
+
+These are **not** graph-canvas-specific; they should eventually map to **`tokens.color.*`**, **`tokens.radius.*`**, **`tokens.typography.*`**, and their **`--pipeliner-*` CSS outputs**, or to **consolidated `:root` aliases** before runtime ships.
+
+1. **Literal RGB / “Tailwind-style” colors in `App.css`** — e.g. fixed reds/greens/yellows (`rgb(239, 68, 68)`, `rgb(34, 197, 94)`, `rgb(234, 179, 8)`) for validation, field errors, and schema row emphasis. Prefer **semantic tokens** (`--danger`, `--success`, `--warning`) plus optional **muted variants** (e.g. `color-mix` or dedicated `--*-muted` in the preset).
+2. **Duplicate fallbacks** — patterns like `var(--danger, #dc3545)` where `index.css` already defines `--danger`. Collapse to a single source to avoid drift from admin presets.
+3. **Light-theme literals inside a dark app** — e.g. `#0F1520`, `#fff` in some management/form paths. Either fold into **`--text-*` / `--surface-*`** or introduce explicit **inverted / “card on chrome”** roles in the v1 token catalog.
+4. **Repeated scrims and elevation** — `rgba(0, 0, 0, 0.4–0.6)` overlays and similar `box-shadow` stacks. Candidates for **`--overlay-scrim`**, **`--shadow-sm`**, **`--shadow-lg`** (or equivalent in `tokens.color` / structural groups).
+5. **CSS variables referenced in `App.css` but not defined in `index.css :root`** — examples observed: `--primary` (focus outline; **no** `--primary` in `index.css` — app uses `--accent` elsewhere), `--surface-0`, `--surface-alt`, `--surface-hover`, `--surface`, `--muted`, `--font-mono` vs `--mono`. **Resolution:** add them to the **code default** tree (`DEFAULT_THEME_TOKENS`) and/or `index.css` so presets and fallbacks stay consistent.
+6. **Gradients with literal brand hues** — e.g. trigger/target node backgrounds mixing `rgba(59, 130, 246, 0.1)` or `rgba(34, 197, 94, 0.08)` with `var(--surface-1)`. Prefer **`color-mix(in srgb, var(--accent) …)`** (and success analog) so they track the active preset.
+7. **Inline `style={{}}` in TSX** — minimal today (`ConnectionsPage`, `DataTargetsPage` layout only); low priority; optional utility classes later.
+
+#### 10.5.3 Graph / pipeline canvas — prefer explicit `tokens.graph.*`
+
+Keep **diagram semantics** separate from generic form chrome so admins can tune “edges read on dark gray” without breaking buttons site-wide. The v1 schema already reserves **`tokens.graph.*`** (§6.2, e.g. `edgeStroke`).
+
+| Concern | Why it’s specific | Direction |
+|---------|-------------------|-----------|
+| **XYFlow default stylesheet** | Library colors for edges, handles, connection line | Scoped CSS overrides under **`.pipeline-editor-canvas`** (or `.react-flow__*`) driven by **`--pipeliner-graph-*`** vars mapped from `tokens.graph.*`. |
+| **`<Background />`** | Default dot/grid color | Pass **`color` / `gap` / `size`** from theme (or CSS vars if the component supports them) so the grid matches **`--background`** / canvas token. |
+| **Edges** | No `defaultEdgeOptions` in current `ReactFlow` usage | Stroke, animation, and hover should use **graph tokens**, not accidental library light-theme defaults. |
+| **Node-type semantics** | Stage (accent rail), pipeline (`--text-secondary` rail), step (success rail), trigger (accent + gradient), target (success + gradient) | Either map to **`tokens.graph.nodeStageRail`**, **`tokens.graph.nodeStepRail`**, etc., **or** document as fixed “diagram language” that does not follow global accent — product choice. |
+| **Selection** | `.react-flow__node.selected .pipeline-editor-node` | Already partly themed; ensure **selection ring** colors read against canvas when presets change. |
+
+#### 10.5.4 Non-color coupling (layout contract)
+
+`src/lib/graphTransform.ts` encodes **pixel geometry** (gaps, header heights, trigger row heights) with comments pointing at **`App.css`** selectors. Runtime theme that changes **padding, borders, or font metrics** must **update both** CSS and these constants, or extract shared **spacing tokens** used by both. This is **not** a separate “theme layer” in the admin editor unless we explicitly add **density** tokens later.
+
+#### 10.5.5 Relation to pilot rollout (§10.2)
+
+- If the pilot route is the **pipeline editor** (`/pipelines` or `/pipelines/:id`), **§10.5.3** is in scope for the first **`--pipeliner-graph-*`** batch; **§10.5.2** items on the same page can migrate in the same PR if the diff stays small.
+- If the pilot is another route, **§10.5.2** still applies to that route’s components; graph tokens wait until the pipeline editor is opted in.
 
 ## 11. Security
 

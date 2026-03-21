@@ -211,6 +211,8 @@ At first trigger invocation for a user, `ensure_owner_starter_definitions(owner_
 
 This means we do not pre-create starter definitions for every possible user up front.
 
+To **re-import** the starter job and `/locations` trigger from bundled YAML after you change files on disk, use **`POST /management/bootstrap/reprovision-starter`** (authenticated) or follow the manual teardown steps — see [starter-job-reprovision-runbook.md](./starter-job-reprovision-runbook.md).
+
 ### Why this boundary matters
 
 The route and worker do not parse YAML directly. They only call the bootstrap provisioning service. That keeps the bootstrap source replaceable later.

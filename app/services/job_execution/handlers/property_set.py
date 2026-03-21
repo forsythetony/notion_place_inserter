@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from loguru import logger
+
 from app.services.job_execution.runtime_types import ExecutionContext
 from app.services.job_execution.step_runtime_base import StepRuntime
 
@@ -25,7 +27,25 @@ class PropertySetHandler(StepRuntime):
         value = resolved_inputs.get("value")
         target_kind = config.get("target_kind", "schema_property")
 
+        if not getattr(ctx, "allow_destination_writes", True):
+            if target_kind == "page_metadata":
+                ctx.log_step_processing(
+                    "Skipping page_metadata property_set (live test: destination writes disabled)."
+                )
+                logger.info(
+                    "property_set_skipped | step_id={} target_kind=page_metadata reason=no_destination_writes",
+                    step_id,
+                )
+                return {}
+            raise ValueError(
+                "Property Set to schema is disabled for this live test run "
+                "(allow_destination_writes=False). Use a full job configuration to write to Notion."
+            )
+
         if target_kind == "page_metadata":
+            ctx.log_step_processing(
+                f"Setting page metadata (target_field={config.get('target_field')!r})."
+            )
             target_field = config.get("target_field")
             if target_field in _ALLOWED_PAGE_METADATA_FIELDS and value is not None:
                 payload = self._to_notion_metadata_payload(value)
@@ -38,6 +58,7 @@ class PropertySetHandler(StepRuntime):
 
         schema_property_id = config.get("schema_property_id")
         if schema_property_id is not None:
+            ctx.log_step_processing(f"Recording property for page payload (schema_property_id={schema_property_id!r}).")
             ctx.set_property(schema_property_id, value)
         return {}
 

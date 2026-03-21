@@ -1,0 +1,26 @@
+---
+description: Maintain the Architecture document index in work-log.md when adding or finishing technical-architecture docs
+globs: docs/technical-architecture/**/*.md
+alwaysApply: false
+---
+
+# Architecture document index (`work-log.md`)
+
+When you **add**, **rename**, **archive**, or **finish an architecture push** that corresponds to a document under `docs/technical-architecture/` (including `productization-technical/`, `incident_investigations/`, `tech-debt/`, `troubleshooting/`, `architecture-breakdowns/`), update the **Architecture document index** section in `docs/technical-architecture/work-log.md`.
+
+## What to update
+
+1. **New doc** — Add one bullet (or table row) with a short human title, link to the file (path relative to `work-log.md`), and status **Not started** or **In progress** as appropriate.
+2. **Shipped / investigation closed** — Set status to **Complete on YYYY-MM-DD** (use the date the work landed or the finding was accepted). Match the tone: *“Pipeline live testing from the editor … Complete on 2026-03-20”*.
+3. **Superseded** — Keep the row; set status to **Superseded** (optionally point to the replacement doc in the same line).
+4. **Tech-debt / open investigations** — Use **Open** until resolved; then **Complete on** or **Won’t fix** with a short reason.
+
+Do **not** remove index entries for deleted files without confirming with the user; prefer **Superseded** or **Moved to archive** with a link.
+
+## Coordination with the decision log
+
+Completing a ticket that ships architecture still gets a row in the **Log** table (per `log-completed-tickets.mdc`). The index is the **inventory** of docs and their delivery state; the Log stays the **chronological** record.
+
+## Scope
+
+Applies to engineering docs under `docs/technical-architecture/`. Do not list purely marketing or feature-proposal-only docs here unless they were filed under this tree.

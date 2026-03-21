@@ -38,6 +38,9 @@ ENV_TEMPLATE_KEYS: tuple[str, ...] = (
     "LOG_FILE_PATH",
     "LOG_FILE_ROTATION",
     "LOG_FILE_RETENTION",
+    "PIPELINE_TRACE_VERBOSE",
+    "PIPELINE_STEP_LOG_VERBOSE",
+    "WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS",
     "WORKER_RETRY_DELAYS_SECONDS",
     "WORKER_MEMORY_DIAGNOSTICS_ENABLED",
     "WORKER_MEMORY_TRACEMALLOC_ENABLED",
@@ -91,6 +94,18 @@ def load_env_file(paths: tuple[Path, ...] | None = None) -> Path | None:
 def bootstrap_env(paths: tuple[Path, ...] | None = None) -> None:
     """Load env file at startup; process env vars override file values."""
     load_env_file(paths)
+
+
+def is_pipeline_trace_verbose() -> bool:
+    """When true, emit extra INFO logs for pipeline I/O (queries, Google request shape, large JSON)."""
+    v = os.environ.get("PIPELINE_TRACE_VERBOSE", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def is_pipeline_step_log_verbose() -> bool:
+    """When true, INPUT/FINAL use longer string previews; DEBUG may include binding JSON."""
+    v = os.environ.get("PIPELINE_STEP_LOG_VERBOSE", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 def log_env_masked() -> None:

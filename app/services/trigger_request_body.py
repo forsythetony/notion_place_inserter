@@ -8,6 +8,8 @@ Supports JSON Schema-style objects, a flat map of ``field_name -> "string"``, an
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Any
 
 from loguru import logger
@@ -22,7 +24,8 @@ def _log_raw_input_deprecation_once() -> None:
     _DEPRECATION_LOGGED = True
     logger.warning(
         "trigger_payload_deprecation | raw_input is deprecated; bind using "
-        "trigger.payload.<field> from the trigger request_body_schema. "
+        "trigger.payload field paths from the trigger request_body_schema "
+        "(e.g. trigger.payload.keywords). "
         "raw_input is still duplicated for compatibility during the migration window."
     )
 
@@ -269,3 +272,42 @@ def preview_string_for_log(payload: dict[str, Any], max_len: int = 50) -> str:
             s = v.strip()
             return s[: max_len - 3] + "..." if len(s) > max_len else s
     return ""
+
+
+_DEBUG_LOG_STRING_MAX = 50
+
+
+def _sanitize_for_debug_log(obj: Any, *, max_str: int = _DEBUG_LOG_STRING_MAX) -> Any:
+    """Recursively copy structures; truncate strings longer than ``max_str`` (e.g. base64 images)."""
+    if isinstance(obj, str):
+        if len(obj) <= max_str:
+            return obj
+        return obj[: max_str - 3] + "..."
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_debug_log(v, max_str=max_str) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_debug_log(v, max_str=max_str) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_sanitize_for_debug_log(v, max_str=max_str) for v in obj)
+    return obj
+
+
+def debug_payload_json_for_logging(obj: Any) -> str:
+    """
+    Serialize a payload for DEBUG-level logs (queue message, trigger body, event payload).
+
+    String values longer than 50 characters are truncated with ``...`` (nested dicts/lists
+    included). Optional ``WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS`` caps the final JSON string.
+    """
+    sanitized = _sanitize_for_debug_log(obj)
+    raw = json.dumps(sanitized, ensure_ascii=False, default=str)
+    lim_raw = os.environ.get("WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS", "").strip()
+    if not lim_raw:
+        return raw
+    try:
+        n = int(lim_raw)
+    except ValueError:
+        return raw
+    if n <= 0 or len(raw) <= n:
+        return raw
+    return raw[:n] + f"... [truncated, total_len={len(raw)}]"

@@ -5,6 +5,7 @@ import pytest
 from app.services.trigger_binding_migration import request_body_schema_declares_field
 from app.services.trigger_request_body import (
     build_trigger_payload,
+    debug_payload_json_for_logging,
     default_keywords_request_body_schema,
     management_body_fields_to_schema,
     validate_request_body_against_schema,
@@ -72,3 +73,26 @@ def test_request_body_schema_declares_keywords_fields_envelope():
 def test_management_body_fields_rejects_empty():
     with pytest.raises(ValueError, match="At least one"):
         management_body_fields_to_schema([])
+
+
+def test_debug_payload_json_for_logging_full_roundtrip():
+    s = debug_payload_json_for_logging({"a": 1, "b": "x"})
+    assert '"a": 1' in s and '"b": "x"' in s
+
+
+def test_debug_payload_json_for_logging_respects_max_chars(monkeypatch):
+    monkeypatch.setenv("WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS", "10")
+    s = debug_payload_json_for_logging({"long": "abcdefghijklmnop"})
+    assert "truncated" in s
+    assert "total_len=" in s
+
+
+def test_debug_payload_json_for_logging_truncates_strings_over_50_chars():
+    import json
+
+    long = "x" * 80
+    s = debug_payload_json_for_logging({"image_b64": long, "nested": {"blob": long}})
+    data = json.loads(s)
+    assert data["image_b64"] == "x" * 47 + "..."
+    assert len(data["image_b64"]) == 50
+    assert data["nested"]["blob"] == data["image_b64"]

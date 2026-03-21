@@ -1,9 +1,12 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-migrate supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-locations-clipboard test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token reprovision-starter invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-migrate supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
 BASE_URL ?= http://localhost:8000
 KEYWORDS ?= stone arch bridge minneapolis
+# Path segment POST /triggers/{user_id}/locations — must be a UUID (Supabase auth user id). The string
+# "bootstrap" is not a valid UUID; Postgres bootstrap provisioning skips it and the trigger will 503.
+TRIGGER_USER_ID ?= 811eb854-89cd-4919-bb1e-a97dcdda5c34
 REMOTE_BASE_URL ?=
 REMOTE_SECRET ?=
 LOG_LEVEL ?= DEBUG
@@ -36,10 +39,11 @@ help:
 	@echo "  make test-icon         - Run icon/Freepik pipeline and service tests"
 	@echo "  make test-google-places - Test Google Places search (server must be running)"
 	@echo "  make test-random-location - Test random location endpoint"
-	@echo "  make test-locations    - Test locations API with KEYWORDS (default: stone arch bridge minneapolis)"
+	@echo "  make test-locations    - Test locations API; TRIGGER_USER_ID= must be your Supabase user UUID (not \"bootstrap\") for Postgres"
+	@echo "  make test-locations-clipboard - Same; trigger secret from clipboard (pbpaste); TRIGGER_USER_ID=<uuid>"
 	@echo "  make show-runs [USER_ID=bootstrap] [RUN_ID=<id>] - (Deprecated) Show YAML run files; Phase 4 uses Postgres"
 	@echo "  make show-runs-db [LIMIT=20] - Show recent job runs from Postgres (Phase 4; requires supabase start)"
-	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and /triggers/bootstrap/locations enqueue"
+	@echo "  make test-remote REMOTE_BASE_URL=<https://...> REMOTE_SECRET=<secret> - Smoke test remote app and locations trigger enqueue"
 	@echo "  make test-cors [REMOTE_BASE_URL=<https://...>] - Test CORS preflight OPTIONS /locations"
 	@echo "  make test-whatsapp     - Send a test WhatsApp message to WHATSAPP_STATUS_RECIPIENT_DEFAULT"
 	@echo "  make notion-pull       - Run Notion puller script"
@@ -52,6 +56,7 @@ help:
 	@echo "  make env-source-prod  - Start a shell with envs/prod.env sourced (production vars, no rc files)"
 	@echo "  make env-echo         - Echo relevant env vars from current environment (sensitive values masked)"
 	@echo "  make auth-token       - Get Supabase access token (password from clipboard, for forsythetony@gmail.com)"
+	@echo "  make reprovision-starter - POST /management/bootstrap/reprovision-starter (JWT from clipboard, optional BASE_URL=)"
 	@echo "  make invite-issue     - Issue BETA_TESTER invitation code (token from clipboard)"
 	@echo "  make invite-validate CODE=<20-char> - Validate invitation code (token from clipboard)"
 	@echo "  make invite-issue-csv-help        - Show CSV invitation issuer usage"
@@ -132,7 +137,26 @@ test-random-location:
 
 test-locations:
 	@curl -s -X POST -H "Authorization: Bearer $(SECRET)" -H "Content-Type: application/json" \
-		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/bootstrap/locations"
+		-d '{"keywords":"$(KEYWORDS)"}' "$(BASE_URL)/triggers/$(TRIGGER_USER_ID)/locations"
+
+# POST /triggers/{user_id}/locations with trigger HTTP secret from clipboard (macOS pbpaste). Strips CR/LF and optional \"Bearer \" prefix.
+# Usage: make test-locations-clipboard TRIGGER_USER_ID=<supabase-auth-uuid> KEYWORDS=\"coffee shop\" [BASE_URL=...]
+test-locations-clipboard:
+	@bash -c '\
+		set -a && [ -f envs/local.env ] && source envs/local.env; set +a; \
+		base="$${BASE_URL:-$(BASE_URL)}"; \
+		base="$${base%/}"; \
+		secret=$$(pbpaste 2>/dev/null || { echo "Error: pbpaste failed (macOS only). Copy your trigger HTTP secret to the clipboard."; exit 1; }); \
+		secret=$$(printf %s "$$secret" | tr -d "\r\n"); \
+		[ -z "$$secret" ] && { echo "Error: Clipboard is empty. Copy the trigger secret (value only, or Bearer <value>)."; exit 1; }; \
+		secret=$${secret#Bearer }; secret=$${secret#bearer }; \
+		secret=$$(printf %s "$$secret" | sed "s/^[[:space:]]*//;s/[[:space:]]*$$//"); \
+		[ -z "$$secret" ] && { echo "Error: Secret is empty after trimming."; exit 1; }; \
+		echo "POST $$base/triggers/$(TRIGGER_USER_ID)/locations  (keywords from make KEYWORDS=...)"; \
+		curl -sS -X POST "$$base/triggers/$(TRIGGER_USER_ID)/locations" \
+			-H "Authorization: Bearer $$secret" \
+			-H "Content-Type: application/json" \
+			-d "{\"keywords\":\"$(KEYWORDS)\"}"'
 
 # (Deprecated) Show persisted run/usage YAML files (p3_pr08). Phase 4 uses Postgres; use show-runs-db instead.
 # Usage: make show-runs RUN_ID=<run_id>  or  make show-runs  (shows all runs for user)
@@ -173,16 +197,16 @@ test-remote:
 	curl -s -o /dev/null -w "HTTP %{http_code}\n" "$(REMOTE_BASE_URL)/"; \
 	echo "Testing remote root with auth (expect 200)..."; \
 	curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: $(REMOTE_SECRET)" "$(REMOTE_BASE_URL)/"; \
-	echo "Testing remote /triggers/bootstrap/locations enqueue (expect 200 accepted in async mode)..."; \
+	echo "Testing remote /triggers/$(TRIGGER_USER_ID)/locations enqueue (expect 200 accepted in async mode)..."; \
 	curl -s -X POST -H "Authorization: Bearer $(REMOTE_SECRET)" -H "Content-Type: application/json" \
-		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/triggers/bootstrap/locations"'
+		-d "{\"keywords\":\"$(KEYWORDS)\"}" "$(REMOTE_BASE_URL)/triggers/$(TRIGGER_USER_ID)/locations"'
 
 # CORS preflight test (server must be running). Use BASE_URL for local or REMOTE_BASE_URL for deployed.
 # Example: make test-cors  # local; or make test-cors REMOTE_BASE_URL=https://hello-world-api-r7h7.onrender.com
 test-cors:
 	@bash -c 'URL="$${REMOTE_BASE_URL:-$(BASE_URL)}"; \
-	echo "CORS preflight OPTIONS to $$URL/triggers/bootstrap/locations (Origin: https://notion-pipeliner-ui.onrender.com)..."; \
-	curl -s -i -X OPTIONS "$$URL/triggers/bootstrap/locations" \
+	echo "CORS preflight OPTIONS to $$URL/triggers/$(TRIGGER_USER_ID)/locations (Origin: https://notion-pipeliner-ui.onrender.com)..."; \
+	curl -s -i -X OPTIONS "$$URL/triggers/$(TRIGGER_USER_ID)/locations" \
 		-H "Origin: https://notion-pipeliner-ui.onrender.com" \
 		-H "Access-Control-Request-Method: POST" \
 		-H "Access-Control-Request-Headers: authorization,content-type" | head -20'
@@ -227,6 +251,24 @@ env-echo:
 auth-token:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && \
 		./helper_scripts/get_auth_token.sh forsythetony@gmail.com "$$(pbpaste)"'
+
+# Re-import starter job + /locations trigger from bundled YAML. Paste Supabase JWT only (no \"Bearer\" prefix).
+# Optional: BASE_URL=https://api.example.com make reprovision-starter
+reprovision-starter:
+	@bash -c '\
+		set -a && [ -f envs/local.env ] && source envs/local.env; set +a; \
+		base="$${BASE_URL:-$(BASE_URL)}"; \
+		base="$${base%/}"; \
+		token=$$(pbpaste 2>/dev/null || { echo "Error: pbpaste failed (macOS only). Copy your Supabase access_token to the clipboard."; exit 1; }); \
+		token=$$(printf %s "$$token" | tr -d "\r\n"); \
+		[ -z "$$token" ] && { echo "Error: Clipboard is empty. Copy your access token (JWT string only, not Bearer)."; exit 1; }; \
+		token=$${token#Bearer }; token=$${token#bearer }; \
+		token=$$(printf %s "$$token" | sed "s/^[[:space:]]*//;s/[[:space:]]*$$//"); \
+		[ -z "$$token" ] && { echo "Error: Token is empty after trimming."; exit 1; }; \
+		echo "POST $$base/management/bootstrap/reprovision-starter"; \
+		curl -sS -X POST "$$base/management/bootstrap/reprovision-starter" \
+			-H "Authorization: Bearer $$token" \
+			-H "Content-Type: application/json" | python -m json.tool'
 
 # Issue invitation code (BETA_TESTER). Token from clipboard (pbpaste). Override: make invite-issue ISSUED_TO=foo@example.com PLATFORM_ISSUED_ON=beta
 ISSUED_TO ?= user@example.com

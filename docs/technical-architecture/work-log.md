@@ -36,12 +36,154 @@ Significant decisions with rationale, alternatives considered, and context.
 
 ---
 
+## Architecture document index
+
+Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *Complete on YYYY-MM-DD* when the doc’s intent is delivered or the investigation is closed; *Open* / *In progress* for backlog or partial work; *Reference* for hubs and historical snapshots. Update when adding or shipping docs (see `.cursor/rules/architecture-doc-index.mdc`).
+
+### Top-level
+
+- [Technical architecture](./README.md) — **Reference**
+- [Architecture Design: Dynamic Schema & Parallel Page/Property Pipelines](./architecture-design.md) — **Reference (foundational)**
+- [Local Testing Plan](./local-testing-plan.md) — **Reference**
+- [Locations Relation Resolution Architecture](./locations-relation-architecture.md) — **Reference (evolving)**
+- [Pipeline Framework Reference](./pipeline-framework.md) — **Reference (evolving)**
+- [Pipeline Step Options — Detailed Analysis](./pipeline-step-options-analysis.md) — **Reference (evolving)**
+- [Run 7bb37066: Neighborhood and Sublocality Investigation](./run-7bb37066-neighborhood-sublocality-investigation.md) — **Reference (run investigation)**
+- [WhatsApp Run Status Communication Architecture](./whatsapp-run-status-architecture.md) — **Open**
+
+### `architecture-breakdowns/` (v1.0.0)
+
+- [Data and Context Contracts](./architecture-breakdowns/v1.0.0/data-and-context-contracts.md) — **Reference (v1.0.0 snapshot)**
+- [Architecture Breakdown v1.0.0](./architecture-breakdowns/v1.0.0/index.md) — **Reference (v1.0.0 snapshot)**
+- [Operations and Observability](./architecture-breakdowns/v1.0.0/operations-and-observability.md) — **Reference (v1.0.0 snapshot)**
+- [Overview](./architecture-breakdowns/v1.0.0/overview.md) — **Reference (v1.0.0 snapshot)**
+- [Pipeline Architecture](./architecture-breakdowns/v1.0.0/pipeline-architecture.md) — **Reference (v1.0.0 snapshot)**
+- [Runtime and Request Flow](./architecture-breakdowns/v1.0.0/runtime-and-request-flow.md) — **Reference (v1.0.0 snapshot)**
+- [Services and Integrations](./architecture-breakdowns/v1.0.0/services-and-integrations.md) — **Reference (v1.0.0 snapshot)**
+
+### `archive/`
+
+- [Archive](./archive/README.md) — **Reference**
+
+### `incident_investigations/`
+
+- [Neighborhood Debug Logging Verification](./incident_investigations/neighborhood_debug_verification.md) — **Reference (incident record)**
+- [Notion Data Source Error Findings (Log-Only)](./incident_investigations/notion-data-source-error-findings-2026-03-15.md) — **Complete on 2026-03-15**
+- [Notion Database ID vs Data Source ID — Fix Plan](./incident_investigations/notion-id-fix-plan-2026-03-16.md) — **Complete on 2026-03-16**
+- [Odin Apartments Incident Investigation](./incident_investigations/odin_apartments_issue/investigation_findings.md) — **Reference (incident record)**
+- [Worker Memory Starvation Investigation (2026-03-13)](./incident_investigations/worker_memory_starvation_2026-03-13/findings_and_recommendations.md) — **Complete on 2026-03-13**
+- [Network FD Leak Remediation Findings](./incident_investigations/worker_memory_starvation_2026-03-13/network_fd_leak_remediation.md) — **Complete on 2026-03-13**
+
+### `productization-technical/`
+
+- [Technical Documentation](./productization-technical/README.md) — **Reference**
+- [Phase 1 PR Task Index](./productization-technical/phase-1-platform-migration/index.md) — **Complete on 2026-03-13**
+- [p1_pr01 - Supabase Bootstrap and Migrations](./productization-technical/phase-1-platform-migration/p1_pr01-supabase-bootstrap-and-migrations.md) — **Complete on 2026-03-13**
+- [p1_pr02 - Schema and Queue Foundation](./productization-technical/phase-1-platform-migration/p1_pr02-schema-and-queue-foundation.md) — **Complete on 2026-03-13**
+- [p1_pr03 - Backend Supabase Config and Client Layer](./productization-technical/phase-1-platform-migration/p1_pr03-backend-supabase-config-and-client-layer.md) — **Complete on 2026-03-13**
+- [p1_pr04 - `/locations` Enqueue Path Migration](./productization-technical/phase-1-platform-migration/p1_pr04-locations-enqueue-path-migration.md) — **Complete on 2026-03-13**
+- [p1_pr05 Manual Test Walkthrough](./productization-technical/phase-1-platform-migration/p1_pr05-manual-test-walkthrough.md) — **Complete on 2026-03-13**
+- [p1_pr05 - Worker Consumer and Run Lifecycle Persistence](./productization-technical/phase-1-platform-migration/p1_pr05-worker-consumer-and-run-lifecycle-persistence.md) — **Complete on 2026-03-13**
+- [p1_pr06 Detailed Deploy Steps (Render + Supabase)](./productization-technical/phase-1-platform-migration/p1_pr06-detailed-deploy-steps.md) — **Complete on 2026-03-13**
+- [p1_pr06 - Minimal Frontend Trigger UI](./productization-technical/phase-1-platform-migration/p1_pr06-minimal-frontend-trigger-ui.md) — **Complete on 2026-03-13**
+- [p1_pr06 Worker Service Findings](./productization-technical/phase-1-platform-migration/p1_pr06-worker-service-findings.md) — **Complete on 2026-03-13**
+- [p1_pr07 - Tests, Observability, and API Doc Updates](./productization-technical/phase-1-platform-migration/p1_pr07-tests-observability-and-api-doc-updates.md) — **Complete on 2026-03-13**
+- [p1_pr08 - Deployment Runbook and Render Exit](./productization-technical/phase-1-platform-migration/p1_pr08-deployment-runbook-and-render-exit.md) — **Complete on 2026-03-13**
+- [Phase 1 Technical Plan: Supabase Platform Migration](./productization-technical/phase-1-platform-migration/technical-plan-supabase-phase-1.md) — **Complete on 2026-03-13**
+- [Phase 2 PR Task Index](./productization-technical/phase-2-authentication-segmentation/index.md) — **Complete on 2026-03-14**
+- [p2_pr01 - Auth Schema, User Profile, and Invite Codes](./productization-technical/phase-2-authentication-segmentation/p2_pr01-auth-schema-user-profile-and-invite-codes.md) — **Complete on 2026-03-14**
+- [p2_pr02 - Backend Auth Context and Protected Dashboard Contract](./productization-technical/phase-2-authentication-segmentation/p2_pr02-backend-auth-context-and-protected-dashboard-contract.md) — **Complete on 2026-03-14**
+- [p2_pr03 - Invitation Code Issuance and Claim Service](./productization-technical/phase-2-authentication-segmentation/p2_pr03-invitation-code-issuance-and-claim-service.md) — **Complete on 2026-03-14**
+- [p2_pr04 - Manual Invitation Code Generation Script](./productization-technical/phase-2-authentication-segmentation/p2_pr04-manual-invitation-code-generation-script.md) — **Complete on 2026-03-14**
+- [p2_pr05 - Frontend Landing, Auth, and Dashboard Routing](./productization-technical/phase-2-authentication-segmentation/p2_pr05-frontend-landing-auth-and-dashboard-routing.md) — **Complete on 2026-03-14**
+- [p2_pr06 - Sign Up with Invite Code and User Type Assignment](./productization-technical/phase-2-authentication-segmentation/p2_pr06-sign-up-with-invite-code-and-user-type-assignment.md) — **Complete on 2026-03-14**
+- [p2_pr07 - Tests, Observability, and Phase 2 Docs](./productization-technical/phase-2-authentication-segmentation/p2_pr07-tests-observability-and-phase2-docs.md) — **Complete on 2026-03-14**
+- [Technical Plan: Phase 2 Authentication and Segmentation](./productization-technical/phase-2-authentication-segmentation/technical-plan-phase-2-authentication-segmentation.md) — **Complete on 2026-03-14**
+- [Architecture: Icon and Cover Image Pipelines](./productization-technical/phase-3-yaml-backed-product-model/icon-cover-image-pipeline-architecture.md) — **Complete on 2026-03-15**
+- [Phase 3 Architecture: YAML-Backed Product Model](./productization-technical/phase-3-yaml-backed-product-model/index.md) — **Complete on 2026-03-15**
+- [p3_pr01 - Domain Entities and Ownership Model](./productization-technical/phase-3-yaml-backed-product-model/p3_pr01-domain-entities-and-ownership-model.md) — **Complete on 2026-03-15**
+- [p3_pr02 - Repository Interfaces and YAML Layout](./productization-technical/phase-3-yaml-backed-product-model/p3_pr02-repository-interfaces-and-yaml-layout.md) — **Complete on 2026-03-15**
+- [p3_pr03 - YAML Catalog and Bootstrap Seed](./productization-technical/phase-3-yaml-backed-product-model/p3_pr03-yaml-catalog-and-bootstrap-seed.md) — **Complete on 2026-03-15**
+- [p3_pr04 - Definition Validation Service](./productization-technical/phase-3-yaml-backed-product-model/p3_pr04-definition-validation-service.md) — **Complete on 2026-03-15**
+- [p3_pr05 - Job Definition Resolution and Snapshotting](./productization-technical/phase-3-yaml-backed-product-model/p3_pr05-job-definition-resolution-and-snapshotting.md) — **Complete on 2026-03-15**
+- [p3_pr06 - Runtime Wiring to YAML-Backed Definitions](./productization-technical/phase-3-yaml-backed-product-model/p3_pr06-runtime-wiring-to-yaml-backed-definitions.md) — **Complete on 2026-03-15**
+- [p3_pr07 - Trigger, Target, and Schema Services](./productization-technical/phase-3-yaml-backed-product-model/p3_pr07-trigger-target-and-schema-services.md) — **Complete on 2026-03-15**
+- [p3_pr08 - Runs, Usage Observability, and Docs](./productization-technical/phase-3-yaml-backed-product-model/p3_pr08-runs-usage-observability-and-docs.md) — **Complete on 2026-03-15**
+- [Phase 4 Architecture: Datastore-Backed Definitions](./productization-technical/phase-4-datastore-backed-definitions/index.md) — **Complete on 2026-03-15**
+- [p4_pr01 - Datastore Schema and Migrations](./productization-technical/phase-4-datastore-backed-definitions/p4_pr01-datastore-schema-and-migrations.md) — **Complete on 2026-03-15**
+- [p4_pr02 - Postgres Repositories and Runtime Cutover](./productization-technical/phase-4-datastore-backed-definitions/p4_pr02-postgres-repositories-and-runtime-cutover.md) — **Complete on 2026-03-15**
+- [p4_pr03 - Validation, Observability, Tests, and Docs](./productization-technical/phase-4-datastore-backed-definitions/p4_pr03-validation-observability-tests-and-docs.md) — **Complete on 2026-03-15**
+- [Phase 4 Deployment Guide](./productization-technical/phase-4-datastore-backed-definitions/phase4-deployment-guide.md) — **Complete on 2026-03-15**
+- [Phase 4 Runtime Architecture Onboarding](./productization-technical/phase-4-datastore-backed-definitions/runtime-architecture-onboarding.md) — **Complete on 2026-03-15**
+- [Starter job reprovision (Notion Place Inserter)](./productization-technical/phase-4-datastore-backed-definitions/starter-job-reprovision-runbook.md) — **Complete on 2026-03-20**
+- [Graph View Iconography Deep Dive](./productization-technical/phase-5-visual-editing/graph-view-iconography-deep-dive.md) — **Complete on 2026-03-19**
+- [Phase 5 Architecture: Visual Editing](./productization-technical/phase-5-visual-editing/index.md) — **Reference**
+- [Notion OAuth App Setup Guide](./productization-technical/phase-5-visual-editing/notion-oauth-app-setup-guide.md) — **Complete on 2026-03-19**
+- [Notion Onboarding and Database Selection Deep Dive](./productization-technical/phase-5-visual-editing/notion-onboarding-and-database-selection-deep-dive.md) — **Complete on 2026-03-19**
+- [p5 — Admin runtime theme (technical specification)](./productization-technical/phase-5-visual-editing/p5_admin-runtime-theme-spec.md) — **In progress (spec; pilot rollout)**
+- [Architecture: Input Binding & Signal Picker — Alternatives to Manual JSON](./productization-technical/phase-5-visual-editing/p5_input-binding-signal-picker-architecture.md) — **Complete on 2026-03-19**
+- [Architecture: Schema-Aware Optimize Input — Query Structure from Downstream Steps](./productization-technical/phase-5-visual-editing/p5_optimize-input-schema-aware-architecture.md) — **Complete on 2026-03-19**
+- [Architecture Proposal: Add Step (+) Button Within Pipeline](./productization-technical/phase-5-visual-editing/p5_pipeline-add-step-button-architecture.md) — **Complete on 2026-03-19**
+- [Audit: `keywords` vs dynamic trigger / step input refs](./productization-technical/phase-5-visual-editing/p5_pipeline-keywords-to-dynamic-refs-audit.md) — **Complete on 2026-03-20 (audit doc)**
+- [Architecture: Pipeline live testing from the editor](./productization-technical/phase-5-visual-editing/p5_pipeline-live-testing-architecture.md) — **Complete on 2026-03-20**
+- [Pipeline editor: visual indicators for step-to-step flow](./productization-technical/phase-5-visual-editing/p5_pipeline-step-dependency-visual-indicators.md) — **Open (spec; UI TBD)**
+- [Pipeline step logging (INPUT / PROCESSING / FINAL)](./productization-technical/phase-5-visual-editing/p5_pipeline-step-logging.md) — **Complete on 2026-03-20**
+- [p5_pr01 - Style Guide Foundation and Stage-Ready UI Specs](./productization-technical/phase-5-visual-editing/p5_pr01-style-guide-foundation.md) — **Complete on 2026-03-15**
+- [p5_pr02 - App Navigation Shell and Authenticated Landing Flow](./productization-technical/phase-5-visual-editing/p5_pr02-navigation-shell-and-auth-landing.md) — **Complete on 2026-03-15**
+- [p5_pr03 - Dashboard Management Surfaces (Pipelines, Connections, Account)](./productization-technical/phase-5-visual-editing/p5_pr03-dashboard-management-surfaces.md) — **Complete on 2026-03-15**
+- [p5_pr04 - Visual Pipeline Editor with Graph Persistence via API](./productization-technical/phase-5-visual-editing/p5_pr04-visual-pipeline-editor-persistence.md) — **Complete on 2026-03-16**
+- [Architecture: Property Set Step Detail View — Selectable Property](./productization-technical/phase-5-visual-editing/p5_property-set-detail-view-architecture.md) — **Complete on 2026-03-19**
+- [Proposal: Pipeline Step Inspector Cleanup and Schema-Driven Details Pane](./productization-technical/phase-5-visual-editing/p5_proposal-details-view-cleanup.md) — **Open (proposal; partial delivery)**
+- [Proposal: Trigger + Target Aware Pipeline Creation and Target Schema Inspector](./productization-technical/phase-5-visual-editing/p5_proposal-trigger-target-aware-pipeline-creation.md) — **Complete on 2026-03-16**
+- [Architecture: Step Detail View — Section Visual Hierarchy and Content Priority](./productization-technical/phase-5-visual-editing/p5_step-detail-section-visual-hierarchy.md) — **Complete on 2026-03-19**
+- [Architecture Proposal: Step Template Picker — Command-Palette-Style with Card Detail](./productization-technical/phase-5-visual-editing/p5_step-template-picker-architecture.md) — **Complete on 2026-03-19**
+- [Triggers UI: HTTP POST body schema (management API)](./productization-technical/phase-5-visual-editing/p5_trigger-management-ui-body-schema.md) — **Complete on 2026-03-19**
+- [Architecture: Trigger request body schema (flat, typed, UI-guarded)](./productization-technical/phase-5-visual-editing/p5_trigger-request-body-schema-architecture.md) — **Complete on 2026-03-19**
+- [Implementation guide: Triggers page — POST body schema (frontend)](./productization-technical/phase-5-visual-editing/p5_trigger-ui-implementation-guide.md) — **Complete on 2026-03-19**
+
+### `tech-debt/`
+
+- [Tech Debt Story: Validate Retry Error Propagation Flow](./tech-debt/td-2026-03-13-retry-error-propagation-validation.md) — **Open**
+- [Tech Debt Story: Account-Level Secret Management](./tech-debt/td-2026-03-14-account-level-secret-management.md) — **Open**
+- [Tech Debt Story: Hardcoded Tenant Trigger for Bootstrap Locations](./tech-debt/td-2026-03-14-hardcoded-tenant-trigger-for-bootstrap-locations.md) — **Open**
+- [Tech Debt Story: Repository Structure and Atomic Locking Review](./tech-debt/td-2026-03-14-repository-structure-and-atomic-locking-review.md) — **Open**
+- [Tech Debt Story: Resource Constraints Analysis (DB Connections and Threads)](./tech-debt/td-2026-03-15-resource-constraints-db-connections-threads.md) — **Open**
+- [Tech Debt Story: RLS In-Depth Validation](./tech-debt/td-2026-03-15-rls-in-depth-validation.md) — **Open**
+- [Tech Debt Story: Trigger Secret Plaintext in List Response](./tech-debt/td-2026-03-15-trigger-secret-plaintext-in-list-response.md) — **Open**
+- [Tech Debt: Pipeline editor graph spacing after trigger metadata loads](./tech-debt/td-2026-03-19-pipeline-editor-trigger-layout-after-async-resolve.md) — **Open**
+
+### `troubleshooting/`
+
+- [Supabase Local User Creation Errors - Findings and Suggestions](./troubleshooting/supabase-local-user-creation-findings-2026-03-13.md) — **Complete on 2026-03-13 (findings)**
+
+
 ## Log
 
 Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-21 | p5_admin-runtime-theme-spec §10.5 | Documented **frontend codebase audit**: `index.css` vs `App.css` vs XYFlow; global migration candidates (literals, fallbacks, scrims, undefined CSS vars, gradients); **`tokens.graph.*`** for canvas/edges/Background; `graphTransform.ts` layout coupling; tie-in to pilot route (§10.2). |
+| 2026-03-21 | architecture_doc_index_rule | Added `.cursor/rules/architecture-doc-index.mdc` and the **Architecture document index** section (linked inventory + status for every `docs/technical-architecture/**/*.md`). |
+| 2026-03-20 | makefile_reprovision_starter | `make reprovision-starter`: `pbpaste` JWT (optional `Bearer` stripped), `POST /management/bootstrap/reprovision-starter`, `BASE_URL` from env/local.env; runbook updated. |
+| 2026-03-20 | starter_job_reprovision_endpoint | `PostgresBootstrapProvisioningService.reprovision_owner_starter_definitions` + `POST /management/bootstrap/reprovision-starter`; fixed bootstrap `graph.job.target_id` overwrite bug; doc `starter-job-reprovision-runbook.md`; UI `reprovisionStarterJob` in `api.ts`. |
+| 2026-03-20 | p5_input_binding_doc_same_pipeline | Corrected `p5_input-binding-signal-picker-architecture.md`: `signal_ref` step outputs are **same-pipeline only**; cross-pipeline uses cache — aligns with `ValidationService._validate_step_bindings`. |
+| 2026-03-20 | google_places_http_traces | `GooglePlacesService` records HTTP traces (`clear_http_traces` / `get_http_traces`): URL, redacted headers, POST body, response preview per `searchText`/`placeDetails`; `google_places_lookup` logs traces + manual override preview. |
+| 2026-03-20 | optimize_input_claude_llm_trace | `ClaudeService` records last optimize-input request/response (`get_last_optimize_input_llm_trace` / `clear_last_optimize_input_trace`); `optimize_input` handler logs model, system, user, assistant previews to `log_step_processing` + manual override preview. |
+| 2026-03-20 | step_trace_jsonb_serialization | `json_safe_for_db` after `build_step_*` so jsonb accepts nested datetime/UUID/tuple/set (PostgREST); `_coerce_jsonb_value` when reading `step_runs`; fixes null `input`/`output` on `GET /management/runs` when bindings carried non-JSON types. |
+| 2026-03-20 | p5_step_trace_persistence | Persist v1 `input_summary` / `processing_log` / `output_summary` on `step_runs` from `build_step_*` + `StepPipelineLog.processing_lines`; migration `20260320120000_step_runs_processing_log`; `list_step_runs_for_job_run` + `GET /management/runs/{id}` `step_traces`; UI `ManagementStepTrace` + `useRunPoll` fingerprint; doc `p5_pipeline-step-logging.md`. |
+| 2026-03-20 | p5_pipeline_step_logging | Standardized `pipeline_step` INPUT / PROCESSING / FINAL logs in `step_pipeline_log.py`, `ExecutionContext.log_step_processing`, `_run_step` timing + `started_at` preservation; handlers emit PROCESSING lines; `PIPELINE_STEP_LOG_VERBOSE` + doc `p5_pipeline-step-logging.md`; optimize-input `pipeline_trace` downgraded to DEBUG when verbose. |
+| 2026-03-20 | p5_keywords_to_dynamic_refs_audit | Added `p5_pipeline-keywords-to-dynamic-refs-audit.md`: inventory of `keywords` usage (trigger default, queue legacy, bindings, UI), confirms step handlers use generic `resolved_inputs` only; phased migration toward schema-driven `trigger.payload.<field>` + optional save-time ref migration. |
+| 2026-03-20 | trigger_payload_keywords_raw_input_fallback | `trigger.payload.keywords` resolves to `raw_input` when `keywords` is absent (e.g. image `imageData` schema) so legacy optimize/Places bindings still receive the primary string; fixes empty Google Places `text_query` on live test. |
+| 2026-03-20 | debug_payload_truncate_long_strings | `debug_payload_json_for_logging` recursively truncates string values longer than 50 chars (`...`); optional `WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS` still caps total JSON length. |
+| 2026-03-20 | enqueue_log_pgmq_message_id | `management_live_test_enqueued` / `locations_enqueued` INFO lines include `pgmq_message_id` + `queue_name` for correlation with worker; live-test doc: emphasize `VITE_BASE_URL` must match local API or local worker stays idle. |
+| 2026-03-20 | google_places_http_error_log | On Places API non-success, always log WARNING `google_places_http_error` with `response_body` (truncated) so 400s show Google’s JSON without `PIPELINE_TRACE_VERBOSE`. |
+| 2026-03-20 | worker_queue_observability | Worker startup logs `queue_name` + `supabase_host`; INFO `worker_dequeued` on consume; DEBUG `worker_queue_poll_idle` every 30s when queue empty (diagnose API vs worker mismatch). Live-testing doc: troubleshooting when API enqueues but worker silent. |
+| 2026-03-20 | notion_pipeliner_ui useRunPoll stale stop | `useRunPoll` stops backoff polling after 30s with no change in run snapshot (status/error/times/result_json); returns `pollStaleStopped`; pipeline editor banner shows muted “Polling stopped (no updates for 30s)”. |
+| 2026-03-20 | debug_full_queue_payload_json | `debug_payload_json_for_logging()` + DEBUG lines: full queue + trigger JSON on worker (`worker_debug_full_payloads`), enqueue paths (`locations_enqueue_payload_json`, `management_live_test_enqueue_payload_json`), and `postgres_run_event_full_json` for run events; optional `WORKER_DEBUG_PAYLOAD_JSON_MAX_CHARS` cap. |
+| 2026-03-20 | pipeline_trace_verbose | Added `PIPELINE_TRACE_VERBOSE` env (documented in `envs/env.template`): INFO-level `pipeline_trace \|` logs for optimize-input (raw vs optimized, schema mode) and Google Places `searchText` / place-details (URL, field mask, JSON body, capped JSON response); API keys never logged. |
+| 2026-03-20 | p5_step_dependency_visual_indicators_doc | Added `p5_pipeline-step-dependency-visual-indicators.md`: spec for sequential step connectors (execution flow vs binding-level dependency), anchors to existing `graphToFlow` edges, recommended stroke/theming/z-order and acceptance checklist. |
+| 2026-03-20 | p5_pipeline_live_testing_implementation | Shipped editor **live testing**: `POST /management/pipelines/{id}/live-test/analyze`, `POST .../run` (enqueue + `_live_test_meta` + queue `live_test`), `GET /management/runs/{id}`; worker applies scoped snapshot + fixtures + `api_overrides`; handlers honor manual API responses; UI modal + poll hook + `default_run_settings.live_test` on save; tests + architecture doc subsection. |
 | 2026-03-20 | p5_pipeline_live_testing_scope_firewall_writes | Doc update: **scope firewall** (orchestrator runs only filtered subgraph; defense-in-depth boundary assert; stage 2 never runs stage 3) and **destination write policy** for editor live tests (`allow_destination_writes` true only for `scope_kind=job`; analyzer blocks write steps on scoped configs; handlers fail closed). |
 | 2026-03-20 | p5_pipeline_live_testing_configurations | Reworked `p5_pipeline-live-testing-architecture.md` around VS Code–style **Test run configurations**: scopes `job`/`stage`/`pipeline`/`step`, configuration modal, `analyze_test_run_config` + fixture-gated save/run, `cache_entries` + optional `step_output_fixtures`, API shapes (`test_run_configuration_id`, analyze endpoint), worker pre-seed + metadata; phased rollout + updated UI state/components. |
 | 2026-03-20 | p5_pipeline_live_testing_polling_decision | Locked live-testing doc to **polling-only** v1: goal + non-goals, async run observation via `GET /management/runs/{run_id}` only, required editor poll behavior (single in-flight, backoff), events endpoint still polled; push/SSE/WebSocket explicitly deferred. |

@@ -53,6 +53,24 @@ def test_resolve_signal_ref_trigger_payload_keywords():
     )
 
 
+def test_resolve_signal_ref_trigger_payload_keywords_falls_back_to_raw_input():
+    """When schema has no keywords, legacy bindings still work via raw_input duplicate."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={
+            "imageData": "base64img",
+            "coordinates": "0, 0",
+            "raw_input": "base64img",
+        },
+    )
+    assert (
+        resolve_binding({"signal_ref": "trigger.payload.keywords"}, ctx, {})
+        == "base64img"
+    )
+
+
 def test_resolve_signal_ref_step_output():
     """signal_ref step.step_id.output_name resolves from step_outputs."""
     ctx = ExecutionContext(

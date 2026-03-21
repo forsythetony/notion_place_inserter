@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -20,6 +21,7 @@ from app.repositories.id_mapping import resolve_or_create_mapping
 from app.repositories.postgres_repositories import _ensure_uuid
 from app.services.trigger_request_body import (
     build_trigger_payload,
+    debug_payload_json_for_logging,
     default_keywords_request_body_schema,
     validate_request_body_against_schema,
 )
@@ -49,6 +51,47 @@ def _parse_dt(val: Any) -> datetime | None:
     return None
 
 
+def _coerce_jsonb_value(val: Any) -> Any:
+    """Normalize jsonb from API (sometimes dict, sometimes JSON string)."""
+    if val is None:
+        return None
+    if isinstance(val, (dict, list)):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return val
+    return val
+
+
+def _row_to_step_run(row: dict[str, Any], *, pipeline_id: str | None = None) -> StepRun:
+    pl = row.get("processing_log")
+    if pl is None:
+        pl_list: list[str] = []
+    elif isinstance(pl, list):
+        pl_list = [str(x) for x in pl]
+    else:
+        pl_list = []
+    return StepRun(
+        id=str(row["id"]),
+        pipeline_run_id=str(row["pipeline_run_id"]),
+        step_id=row["step_id"],
+        step_template_id=row["step_template_id"],
+        status=str(row["status"]),
+        owner_user_id=str(row["owner_user_id"]),
+        job_run_id=str(row["job_run_id"]),
+        stage_run_id=str(row["stage_run_id"]),
+        pipeline_id=pipeline_id,
+        input_summary=_coerce_jsonb_value(row.get("input_summary")),
+        output_summary=_coerce_jsonb_value(row.get("output_summary")),
+        processing_log=pl_list,
+        started_at=_parse_dt(row.get("started_at")),
+        completed_at=_parse_dt(row.get("completed_at")),
+        error_summary=row.get("error_summary"),
+    )
+
+
 def _row_to_job_run(row: dict[str, Any]) -> JobRun:
     return JobRun(
         id=str(row["id"]),
@@ -64,6 +107,7 @@ def _row_to_job_run(row: dict[str, Any]) -> JobRun:
         started_at=_parse_dt(row.get("started_at")),
         completed_at=_parse_dt(row.get("completed_at")),
         error_summary=row.get("error_summary"),
+        result_json=row.get("result_json"),
     )
 
 
@@ -210,6 +254,7 @@ class PostgresRunRepository:
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
             "error_summary": run.error_summary,
+            "result_json": run.result_json,
         }
         try:
             self._client.table(self.JOB_RUNS).upsert(row, on_conflict="id").execute()
@@ -289,6 +334,7 @@ class PostgresRunRepository:
             "status": run.status,
             "input_summary": run.input_summary,
             "output_summary": run.output_summary,
+            "processing_log": run.processing_log if run.processing_log is not None else [],
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
             "error_summary": run.error_summary,
@@ -298,6 +344,60 @@ class PostgresRunRepository:
         except Exception as e:
             logger.exception("postgres_save_step_run_failed | step_run_id={} error={}", run.id, e)
             raise
+
+    def list_step_runs_for_job_run(
+        self, job_run_id: str, owner_user_id: str
+    ) -> list[StepRun]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            job_run_uuid = UUID(job_run_id)
+        except ValueError:
+            return []
+        try:
+            r = (
+                self._client.table(self.STEP_RUNS)
+                .select(
+                    "id, pipeline_run_id, step_id, step_template_id, job_run_id, stage_run_id, "
+                    "owner_user_id, status, input_summary, output_summary, processing_log, "
+                    "started_at, completed_at, error_summary, created_at"
+                )
+                .eq("job_run_id", str(job_run_uuid))
+                .eq("owner_user_id", uid)
+                .order("created_at", desc=False)
+                .execute()
+            )
+        except Exception as e:
+            logger.exception(
+                "postgres_list_step_runs_for_job_run_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        rows = r.data or []
+        if not rows:
+            return []
+        pr_ids = list({str(row["pipeline_run_id"]) for row in rows})
+        pipeline_ids: dict[str, str] = {}
+        try:
+            pr = (
+                self._client.table(self.PIPELINE_RUNS)
+                .select("id, pipeline_id")
+                .in_("id", pr_ids)
+                .execute()
+            )
+            for prow in pr.data or []:
+                pipeline_ids[str(prow["id"])] = prow["pipeline_id"]
+        except Exception as e:
+            logger.exception(
+                "postgres_list_step_runs_pipeline_lookup_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+        out: list[StepRun] = []
+        for row in rows:
+            pid = pipeline_ids.get(str(row["pipeline_run_id"]))
+            out.append(_row_to_step_run(row, pipeline_id=pid))
+        return out
 
     def save_usage_record(self, record: UsageRecord) -> None:
         uid = str(_ensure_uuid(record.owner_user_id))
@@ -493,6 +593,8 @@ class PostgresRunRepository:
             run.status = status
         if completed_at is not None:
             run.completed_at = completed_at
+        if result_json is not None:
+            run.result_json = result_json
         try:
             self.save_job_run(run)
         except Exception as e:
@@ -526,6 +628,12 @@ class PostgresRunRepository:
             run_id,
             event_type,
             payload_preview,
+        )
+        logger.debug(
+            "postgres_run_event_full_json | run_id={} event_type={} payload_json={}",
+            run_id,
+            event_type,
+            debug_payload_json_for_logging(payload_preview),
         )
 
 

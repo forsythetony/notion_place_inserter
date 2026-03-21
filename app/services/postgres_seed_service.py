@@ -46,6 +46,7 @@ from app.repositories.yaml_loader import (
 # Starter definitions derived from bootstrap YAML
 STARTER_TRIGGER_PATH = "/locations"
 STARTER_JOB_SLUG = "notion_place_inserter"
+STARTER_JOB_ID = "job_notion_place_inserter"
 # Dev/local only: real Places to Visit data source ID for bootstrap target.
 # TODO: Before production, replace with per-tenant resolution (e.g. OAuth binding,
 #       user-selected DB, or env override) — this value must not be hardcoded.
@@ -120,22 +121,11 @@ class PostgresBootstrapProvisioningService:
 
         logger.info("bootstrap_seed_catalog_complete")
 
-    def ensure_owner_starter_definitions(self, owner_user_id: str) -> None:
+    def _provision_owner_starter_definitions(self, owner_user_id: str, uid: str) -> None:
         """
-        Ensure owner has starter definitions. Idempotent.
-        Provisions connector instances, target, trigger, job graph from bootstrap YAML if missing.
+        Load starter YAML and upsert connector instances, targets, job graph, trigger, and link.
+        Caller must ensure starter trigger/job rows are absent or intended to be replaced.
         """
-        try:
-            uid = str(_ensure_uuid(owner_user_id))
-        except ValueError:
-            logger.warning("bootstrap_ensure_owner_skipped | invalid_owner={}", owner_user_id)
-            return
-
-        trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
-        if trigger:
-            logger.debug("bootstrap_ensure_owner_already_provisioned | owner={}", owner_user_id)
-            return
-
         # Load bootstrap YAML
         trigger_data = load_yaml_file(bootstrap_trigger_path("trigger_http_locations", PRODUCT_MODEL_ROOT))
         job_data = load_yaml_file(bootstrap_job_path(STARTER_JOB_SLUG, PRODUCT_MODEL_ROOT))
@@ -190,7 +180,7 @@ class PostgresBootstrapProvisioningService:
         # 4. Job graph first (job must exist before trigger; linkage via trigger_job_links)
         graph = parse_job_graph(job_data, owner_user_id_override=uid)
         graph.job.owner_user_id = uid
-        graph.job.target_id = target_id
+        # target_id comes from YAML (e.g. target_places_to_visit); do not overwrite with unrelated ids
 
         # Ensure all step templates referenced by the bootstrap graph exist.
         # This protects owner provisioning when catalog seeding is partial.
@@ -219,3 +209,51 @@ class PostgresBootstrapProvisioningService:
         # 6. Link trigger to job (many-to-many)
         self._link_repo.attach(trigger.id, graph.job.id, uid)
         logger.info("bootstrap_provision_link | trigger_id={} job_id={} owner={}", trigger.id, graph.job.id, owner_user_id)
+
+    def ensure_owner_starter_definitions(self, owner_user_id: str) -> None:
+        """
+        Ensure owner has starter definitions. Idempotent.
+        Provisions connector instances, target, trigger, job graph from bootstrap YAML if missing.
+        """
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+        except ValueError:
+            logger.warning("bootstrap_ensure_owner_skipped | invalid_owner={}", owner_user_id)
+            return
+
+        trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
+        if trigger:
+            logger.debug("bootstrap_ensure_owner_already_provisioned | owner={}", owner_user_id)
+            return
+
+        self._provision_owner_starter_definitions(owner_user_id, uid)
+
+    def reprovision_owner_starter_definitions(self, owner_user_id: str) -> None:
+        """
+        Tear down the starter HTTP trigger (path ``/locations``) and starter job graph, then
+        re-import from bundled YAML. **Destructive** for the Notion Place Inserter starter job
+        and its trigger; connector instances and targets are left in place.
+
+        Use after updating ``product_model/bootstrap/jobs/notion_place_inserter.yaml`` (and trigger
+        YAML) so the next provision matches repo state.
+        """
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+        except ValueError:
+            logger.warning("bootstrap_reprovision_skipped | invalid_owner={}", owner_user_id)
+            return
+
+        existing_trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
+        if existing_trigger:
+            self._triggers.delete(existing_trigger.id, uid)
+            logger.info(
+                "bootstrap_reprovision_deleted_trigger | id={} owner={}",
+                existing_trigger.id,
+                owner_user_id,
+            )
+
+        if self._jobs.get_graph_by_id(STARTER_JOB_ID, uid):
+            self._jobs.delete(STARTER_JOB_ID, uid)
+            logger.info("bootstrap_reprovision_deleted_job | id={} owner={}", STARTER_JOB_ID, owner_user_id)
+
+        self._provision_owner_starter_definitions(owner_user_id, uid)

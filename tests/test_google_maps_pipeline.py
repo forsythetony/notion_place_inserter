@@ -83,6 +83,7 @@ def test_google_places_service_search_places_returns_list_by_default():
     """search_places returns list of normalized places when return_raw_response=False."""
     svc = GooglePlacesService(api_key="test-key")
     mock_response = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = {
         "places": [
             {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}, "formattedAddress": "1 Main St"},
@@ -108,6 +109,7 @@ def test_google_places_service_search_places_returns_tuple_when_raw_requested():
         ],
     }
     mock_response = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = raw_api_response
     mock_response.raise_for_status = MagicMock()
     svc._client.post = MagicMock(return_value=mock_response)
@@ -126,6 +128,7 @@ def test_google_places_service_get_place_details_returns_dict_by_default():
     svc = GooglePlacesService(api_key="test-key")
     raw_place = {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}}
     mock_response = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = raw_place
     mock_response.raise_for_status = MagicMock()
     svc._client.get = MagicMock(return_value=mock_response)
@@ -142,6 +145,7 @@ def test_google_places_service_get_place_details_returns_tuple_when_raw_requeste
     svc = GooglePlacesService(api_key="test-key")
     raw_place = {"id": "ChIJ123", "displayName": {"text": "Stone Arch Bridge"}}
     mock_response = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = raw_place
     mock_response.raise_for_status = MagicMock()
     svc._client.get = MagicMock(return_value=mock_response)
@@ -152,6 +156,46 @@ def test_google_places_service_get_place_details_returns_tuple_when_raw_requeste
     normalized, raw = result
     assert normalized["displayName"] == "Stone Arch Bridge"
     assert raw == raw_place
+
+
+def test_google_places_service_http_traces_after_search_and_details():
+    """HTTP traces capture URL, redacted headers, body, and response preview."""
+    svc = GooglePlacesService(api_key="secret-api-key-xyz")
+    svc.clear_http_traces()
+    raw_search = {"places": [{"id": "ChIJ123", "displayName": {"text": "Bridge"}}]}
+    mock_post = MagicMock()
+    mock_post.status_code = 200
+    mock_post.json.return_value = raw_search
+    mock_post.raise_for_status = MagicMock()
+    svc._client.post = MagicMock(return_value=mock_post)
+
+    svc.search_places("q1", return_raw_response=True)
+
+    traces = svc.get_http_traces()
+    assert len(traces) == 1
+    assert traces[0]["operation"] == "searchText"
+    assert traces[0]["method"] == "POST"
+    assert "places.googleapis.com" in traces[0]["url"]
+    assert traces[0]["request_body"] == {"textQuery": "q1"}
+    assert "redacted" in traces[0]["request_headers"]["X-Goog-Api-Key"].lower()
+    assert "ChIJ123" in traces[0]["response_body_preview"]
+
+    svc.clear_http_traces()
+    raw_detail = {"id": "ChIJ123", "displayName": {"text": "Bridge"}}
+    mock_get = MagicMock()
+    mock_get.status_code = 200
+    mock_get.json.return_value = raw_detail
+    mock_get.raise_for_status = MagicMock()
+    svc._client.get = MagicMock(return_value=mock_get)
+
+    svc.get_place_details("ChIJ123", return_raw_response=True)
+
+    traces2 = svc.get_http_traces()
+    assert len(traces2) == 1
+    assert traces2[0]["operation"] == "placeDetails"
+    assert traces2[0]["method"] == "GET"
+    assert traces2[0]["request_body"] is None
+    assert "ChIJ123" in traces2[0]["url"]
 
 
 def test_google_places_to_cache_step_sets_google_place_and_logs_raw_response():

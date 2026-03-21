@@ -119,6 +119,7 @@ def test_run_repository_has_expected_methods():
         "save_stage_run",
         "save_pipeline_run",
         "save_step_run",
+        "list_step_runs_for_job_run",
         "save_usage_record",
     }
     methods = {m for m in dir(RunRepository) if not m.startswith("_")}

@@ -55,5 +55,8 @@ class TemplaterHandler(StepRuntime):
             else:
                 resolved[key] = str(val)
 
+        ctx.log_step_processing(
+            f"Rendering template (placeholder_keys={sorted(resolved.keys())!s})."
+        )
         rendered = _render_template(template, resolved)
         return {"rendered_value": rendered}

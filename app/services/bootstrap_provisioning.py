@@ -19,3 +19,9 @@ class BootstrapProvisioningService(Protocol):
         Ensure owner has starter definitions (connector instances, target, trigger, job graph).
         Called on first trigger invocation for a user. Idempotent.
         """
+
+    def reprovision_owner_starter_definitions(self, owner_user_id: str) -> None:
+        """
+        Replace starter job + ``/locations`` trigger from bundled YAML (destructive).
+        Optional: only implemented by Postgres bootstrap provisioning.
+        """

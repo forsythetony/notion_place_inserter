@@ -15,12 +15,39 @@ class OptionSelectionResult(NamedTuple):
     is_new: bool
 
 
+_MODEL_SONNET = "claude-sonnet-4-20250514"
+
+
 class ClaudeService:
     """Wraps the Anthropic API client for poem generation and place/property inference."""
 
     def __init__(self, api_key: str):
         self._client = anthropic.Anthropic(api_key=api_key)
         self._last_usage: dict | None = None
+        self._last_optimize_llm_trace: dict[str, Any] | None = None
+
+    def clear_last_optimize_input_trace(self) -> None:
+        """Reset snapshot from last rewrite_place_query / rewrite_query_for_target (e.g. new step)."""
+        self._last_optimize_llm_trace = None
+
+    def get_last_optimize_input_llm_trace(self) -> dict[str, Any] | None:
+        """Last optimize-input call: model, system_prompt, user_message, assistant_text (truncated)."""
+        return self._last_optimize_llm_trace
+
+    def _record_optimize_input_trace(
+        self,
+        *,
+        system: str,
+        user_message: str,
+        response_text: str,
+        model: str = _MODEL_SONNET,
+    ) -> None:
+        self._last_optimize_llm_trace = {
+            "model": model,
+            "system_prompt": self._truncate_text(system, max_chars=12000),
+            "user_message": self._truncate_text(user_message, max_chars=12000),
+            "assistant_text": self._truncate_text(response_text, max_chars=8000),
+        }
 
     def rewrite_place_query(self, raw_query: str) -> str:
         """
@@ -28,14 +55,24 @@ class ClaudeService:
         E.g. "stone arch bridge in minneapolis" -> "Stone Arch Bridge Minneapolis MN"
         """
         if not raw_query.strip():
+            self._last_optimize_llm_trace = None
             return raw_query
-        response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=256,
-            system="You are a search query optimizer. Rewrite the user's place search into a concise, effective Google Places text query. Return only the query string, no explanation.",
-            messages=[{"role": "user", "content": f"Rewrite for Google Places search: {raw_query}"}],
+        system = (
+            "You are a search query optimizer. Rewrite the user's place search into a concise, "
+            "effective Google Places text query. Return only the query string, no explanation."
         )
-        return self._extract_text(response)
+        user_message = f"Rewrite for Google Places search: {raw_query}"
+        response = self._client.messages.create(
+            model=_MODEL_SONNET,
+            max_tokens=256,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        text = self._extract_text(response)
+        self._record_optimize_input_trace(
+            system=system, user_message=user_message, response_text=text
+        )
+        return text
 
     def rewrite_query_for_target(
         self,
@@ -50,6 +87,7 @@ class ClaudeService:
         When absent, delegates to rewrite_place_query (generic Google Places).
         """
         if not raw_query.strip():
+            self._last_optimize_llm_trace = None
             return raw_query
         if not query_schema:
             return self.rewrite_place_query(raw_query)
@@ -68,12 +106,16 @@ class ClaudeService:
             f"{base_prompt.strip()}\n\nInput: {raw_query}" if base_prompt else f"Rewrite: {raw_query}"
         )
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=256,
             system=system,
             messages=[{"role": "user", "content": user_content}],
         )
-        return self._extract_text(response)
+        text = self._extract_text(response)
+        self._record_optimize_input_trace(
+            system=system, user_message=user_content, response_text=text
+        )
+        return text
 
     def infer_property_value(
         self,

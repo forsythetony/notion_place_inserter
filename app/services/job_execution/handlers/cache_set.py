@@ -22,6 +22,7 @@ class CacheSetHandler(StepRuntime):
     ) -> dict[str, Any]:
         cache_key = config.get("cache_key")
         value = resolved_inputs.get("value")
+        ctx.log_step_processing(f"Writing run cache (key={cache_key!r}).")
         if cache_key is not None:
             ctx.run_cache[cache_key] = value
         return {}

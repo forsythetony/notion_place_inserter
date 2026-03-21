@@ -266,6 +266,71 @@ def test_save_step_run_emits_string_uuids(mock_resolve, repo, mock_client):
     call_arg = mock_client.table.return_value.upsert.call_args[0][0]
     _assert_all_uuid_fields_are_strings(call_arg)
     assert call_arg["job_run_id"] == "07cfee18-272f-4969-a817-0c37f8e4f0e0"
+    assert call_arg["processing_log"] == []
+
+
+@patch("app.repositories.postgres_run_repository.resolve_or_create_mapping")
+def test_save_step_run_includes_processing_log(mock_resolve, repo, mock_client):
+    mock_resolve.side_effect = [
+        uuid.UUID("d4e5f6a7-b8c9-4012-d345-6789abcdef01"),
+        uuid.UUID("e5f6a7b8-c9d0-4123-e456-789abcdef012"),
+        uuid.UUID("f6a7b8c9-d0e1-4234-f567-89abcdef0123"),
+    ]
+    mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock()
+    run = StepRun(
+        id="run_07cfee18_step_step_optimize_query",
+        pipeline_run_id="run_07cfee18_pipeline_pipeline_research",
+        step_id="step_optimize_query",
+        step_template_id="step_template_optimize_input_claude",
+        status="succeeded",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        job_run_id="07cfee18-272f-4969-a817-0c37f8e4f0e0",
+        stage_run_id="run_07cfee18_stage_stage_research",
+        processing_log=["line1", "line2"],
+    )
+    repo.save_step_run(run)
+    call_arg = mock_client.table.return_value.upsert.call_args[0][0]
+    assert call_arg["processing_log"] == ["line1", "line2"]
+
+
+def test_list_step_runs_for_job_run_orders_and_joins_pipeline(repo, mock_client):
+    """list_step_runs_for_job_run queries step_runs and enriches pipeline_id."""
+    job_uuid = "07cfee18-272f-4969-a817-0c37f8e4f0e0"
+    pr_uuid = "11111111-2222-4333-8444-555555555555"
+    step_table = MagicMock()
+    pipe_table = MagicMock()
+    mock_client.table.side_effect = lambda name: step_table if name == "step_runs" else pipe_table
+
+    step_table.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "aaaa1111-1111-4111-8111-111111111111",
+                "pipeline_run_id": pr_uuid,
+                "step_id": "s1",
+                "step_template_id": "t1",
+                "job_run_id": job_uuid,
+                "stage_run_id": "bbbb2222-2222-4222-8222-222222222222",
+                "owner_user_id": "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+                "status": "succeeded",
+                "input_summary": {"schema_version": 1},
+                "output_summary": {"schema_version": 1},
+                "processing_log": ["p1"],
+                "started_at": None,
+                "completed_at": None,
+                "error_summary": None,
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        ]
+    )
+    pipe_table.select.return_value.in_.return_value.execute.return_value = MagicMock(
+        data=[{"id": pr_uuid, "pipeline_id": "pipe_a"}]
+    )
+
+    out = repo.list_step_runs_for_job_run(job_uuid, "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde")
+    assert len(out) == 1
+    assert out[0].step_id == "s1"
+    assert out[0].pipeline_id == "pipe_a"
+    assert out[0].processing_log == ["p1"]
 
 
 @patch("app.repositories.postgres_run_repository.resolve_or_create_mapping")

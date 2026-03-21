@@ -9,6 +9,7 @@ from loguru import logger
 
 from app.services.job_execution.runtime_types import ExecutionContext
 from app.services.job_execution.step_runtime_base import StepRuntime
+from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
 # Max size for external image fetch (5MB)
 _MAX_FETCH_BYTES = 5 * 1024 * 1024
@@ -83,12 +84,43 @@ class UploadImageToNotionHandler(StepRuntime):
         if not url_or_name:
             return {"notion_image_url": None}
 
+        manual = consume_manual_api_response(ctx, "notion.upload_image")
+        if manual is not None:
+            ctx.log_step_processing("Using live-test manual API override (notion.upload_image).")
+            if isinstance(manual, dict):
+                return {"notion_image_url": manual.get("notion_image_url")}
+            return {"notion_image_url": None}
+
         notion = ctx.get_service("notion")
         google = ctx.get_service("google_places")
         token_getter = ctx.get_service("get_notion_token")
         dry_run = getattr(ctx, "dry_run", False)
+        allow_writes = getattr(ctx, "allow_destination_writes", True)
+
+        if not allow_writes:
+            ctx.log_step_processing(
+                "Live test: destination writes disabled; using external image URL only if possible."
+            )
+            logger.info(
+                "upload_image_to_notion_skipped | step_id={} reason=no_destination_writes use_external_only",
+                step_id,
+            )
+            if _is_google_photo_name(url_or_name):
+                if google:
+                    ext_url = google.get_photo_url(url_or_name)
+                    if ext_url:
+                        return {
+                            "notion_image_url": {"type": "external", "external": {"url": ext_url}}
+                        }
+                return {"notion_image_url": None}
+            if url_or_name.startswith(("http://", "https://")):
+                return {
+                    "notion_image_url": {"type": "external", "external": {"url": url_or_name}}
+                }
+            return {"notion_image_url": None}
 
         if dry_run:
+            ctx.log_step_processing("Dry run: skipping Notion file upload; returning external URL payload if possible.")
             # Never upload during dry-run mode. Prefer external URL payloads.
             if _is_google_photo_name(url_or_name):
                 if google:
@@ -106,16 +138,20 @@ class UploadImageToNotionHandler(StepRuntime):
 
         image_bytes: bytes | None = None
         if _is_google_photo_name(url_or_name):
+            ctx.log_step_processing("Fetching image bytes from Google Places photo resource.")
             if google:
                 image_bytes = google.get_photo_bytes(url_or_name)
         else:
+            ctx.log_step_processing("Fetching image bytes from HTTP URL.")
             timeout_ms = config.get("timeout_ms") or _DEFAULT_TIMEOUT_MS
             timeout_seconds = max(1.0, min(60.0, timeout_ms / 1000.0))
             image_bytes = _fetch_image_bytes(url_or_name, timeout_seconds)
 
         if not image_bytes or not notion:
+            ctx.log_step_processing("No image bytes or Notion client; cannot upload.")
             return {"notion_image_url": None}
 
+        ctx.log_step_processing("Uploading image bytes to Notion (file upload).")
         upload_kwargs: dict[str, Any] = {
             "filename": "image.jpg",
             "content_type": "image/jpeg",

@@ -120,7 +120,7 @@ The picker needs job/pipeline context to know what's available:
 | Source | How to derive | Example options |
 |--------|---------------|-----------------|
 | **Trigger** | From job's `trigger_id` and known payload shape | `trigger.payload.raw_input` |
-| **Step outputs** | From all steps that precede the current step (in pipeline order, including prior stages) | `step.step_google_places_lookup.selected_place`, `step.step_optimize_query.optimized_query` |
+| **Step outputs** | From steps that precede the current step **in the same pipeline** only (runtime validation enforces this). Cross-stage / cross-pipeline data must use **cache** (`cache_set` + `cache_key_ref`), not `signal_ref`. | Same pipeline: `step.step_optimize_query.optimized_query`. Cross-pipeline: e.g. `cache_key_ref` to `google_places_selected_place` (after `cache_set` in the research pipeline). |
 | **Cache keys** | From all `cache_set` steps in the job (their `config.cache_key`) | `google_places_response`, `google_places_selected_place` |
 | **Static** | Always available | User enters literal value |
 

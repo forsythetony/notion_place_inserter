@@ -11,6 +11,7 @@ from loguru import logger
 from app.dependencies import _extract_bearer_token
 from app.services.trigger_request_body import (
     build_trigger_payload,
+    debug_payload_json_for_logging,
     preview_string_for_log,
     validate_request_body_against_schema,
 )
@@ -281,16 +282,25 @@ def invoke_trigger(
                 payload["keywords"] = log_preview
             if recipient_whatsapp is not None:
                 payload["recipient_whatsapp"] = recipient_whatsapp
-            queue_repo.send(payload, delay_seconds=0)
+            send_result = queue_repo.send(payload, delay_seconds=0)
             job_ids_accepted.append(job_id)
             run_ids_accepted.append(run_id)
+            logger.debug(
+                "locations_enqueue_payload_json | job_id={} run_id={} payload_json={}",
+                job_id,
+                run_id,
+                debug_payload_json_for_logging(payload),
+            )
             logger.info(
-                "locations_enqueued | job_id={} run_id={} job_definition_id={} definition_snapshot_ref={} keywords_preview={}",
+                "locations_enqueued | job_id={} run_id={} job_definition_id={} definition_snapshot_ref={} "
+                "keywords_preview={} pgmq_message_id={} queue_name={}",
                 job_id,
                 run_id,
                 job_definition_id,
                 snapshot.snapshot_ref,
                 log_preview,
+                send_result.message_id,
+                queue_repo._config.queue_name,
             )
         except Exception:
             logger.exception(

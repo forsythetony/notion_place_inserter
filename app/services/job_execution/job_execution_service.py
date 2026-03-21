@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -11,10 +12,18 @@ from loguru import logger
 
 from app.domain.runs import PipelineRun, StageRun, StepRun
 from app.services.job_execution.binding_resolver import resolve_input_bindings
+from app.services.pipeline_live_test.scoped_snapshot import apply_cache_fixtures_to_ctx
 
 if TYPE_CHECKING:
     from app.domain.repositories import RunRepository
 from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.step_pipeline_log import (
+    StepPipelineLog,
+    build_step_input_summary,
+    build_step_output_summary,
+    emit_step_final,
+    emit_step_input,
+)
 from app.services.job_execution.step_runtime_registry import StepRuntimeRegistry
 from app.services.job_execution.target_write_adapter import build_notion_properties_payload
 
@@ -28,6 +37,30 @@ def _normalize_property_slug(name: str) -> str:
         .replace(" ", "_")
         .replace("-", "_")
     )
+
+
+def _assert_step_in_scope(
+    ctx: ExecutionContext, stage_id: str, pipeline_id: str, step_id: str
+) -> None:
+    """Fail fast when a step is outside the live-test scope boundary (defense in depth)."""
+    b = ctx.scope_boundary
+    if not b:
+        return
+    stages = b.get("stage_ids") or []
+    pipes = b.get("pipeline_ids") or []
+    steps = b.get("step_ids") or []
+    if stages and stage_id not in stages:
+        raise RuntimeError(
+            f"Scope violation: stage {stage_id!r} not in allowed {stages!r} (run_id={ctx.run_id})"
+        )
+    if pipes and pipeline_id not in pipes:
+        raise RuntimeError(
+            f"Scope violation: pipeline {pipeline_id!r} not in allowed {pipes!r} (run_id={ctx.run_id})"
+        )
+    if steps and step_id not in steps:
+        raise RuntimeError(
+            f"Scope violation: step {step_id!r} not in allowed {steps!r} (run_id={ctx.run_id})"
+        )
 
 
 def _default_registry() -> StepRuntimeRegistry:
@@ -105,9 +138,18 @@ class JobExecutionService:
         trigger_payload: dict[str, Any],
         definition_snapshot_ref: str | None = None,
         owner_user_id: str | None = None,
+        *,
+        allow_destination_writes: bool = True,
+        invocation_source: str | None = None,
+        scope_boundary: dict[str, Any] | None = None,
+        cache_fixtures: list[dict[str, Any]] | None = None,
+        api_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Execute a job from a resolved snapshot. Returns result dict with id, page_id, etc.
+
+        Live-test flags (editor): when ``allow_destination_writes`` is False, the final
+        Notion create_page is skipped and destination-writing steps should fail fast or no-op.
         """
         job_data = snapshot.get("job") or {}
         target_data = snapshot.get("target") or {}
@@ -131,7 +173,12 @@ class JobExecutionService:
             trigger_payload=trigger_payload,
             dry_run=self._dry_run,
             owner_user_id=owner_user_id or "",
+            allow_destination_writes=allow_destination_writes,
+            invocation_source=invocation_source,
+            scope_boundary=scope_boundary,
+            api_overrides=dict(api_overrides) if api_overrides else {},
         )
+        apply_cache_fixtures_to_ctx(ctx, cache_fixtures)
         ctx._services["claude"] = self._claude
         ctx._services["google_places"] = self._google
         ctx._services["notion"] = self._notion
@@ -219,60 +266,76 @@ class JobExecutionService:
                 owner_user_id,
                 data_source_id,
             )
-        try:
-            if access_token:
-                from app.services.notion_service import NotionService
-
-                result = NotionService.create_page_with_token(
-                    access_token=access_token,
-                    data_source_id=data_source_id,
-                    properties=notion_props,
-                    icon=ctx.icon,
-                    cover=ctx.cover,
-                    dry_run=self._dry_run,
-                )
-            elif self._notion:
-                # TODO: Remove global token fallback in future PR. Require OAuth for all Notion writes.
-                result = self._notion.create_page(
-                    data_source_id=data_source_id,
-                    properties=notion_props,
-                    icon=ctx.icon,
-                    cover=ctx.cover,
-                )
-            else:
-                raise RuntimeError("NotionService not configured for target write")
-        except Exception as e:
-            logger.exception(
-                "job_execution_notion_create_failed | run_id={} job_id={} owner_user_id={} data_source_id={} "
-                "token_source={} error={}",
+        result: dict[str, Any] = {}
+        if not ctx.allow_destination_writes:
+            logger.info(
+                "job_execution_destination_write_skipped | run_id={} job_id={} invocation_source={}",
                 run_id,
                 job_id,
-                owner_user_id or "",
-                data_source_id,
-                token_source,
-                str(e)[:500],
+                ctx.invocation_source or "",
             )
-            raise
-        if self._run_repo and owner_user_id:
+            result = {
+                "destination_write_skipped": True,
+                "properties": dict(ctx.properties),
+                "icon": ctx.icon,
+                "cover": ctx.cover,
+                "run_cache": dict(ctx.run_cache),
+            }
+        else:
             try:
-                from app.domain.runs import UsageRecord
+                if access_token:
+                    from app.services.notion_service import NotionService
 
-                record = UsageRecord(
-                    id=f"usage_{uuid.uuid4().hex[:12]}",
-                    job_run_id=run_id,
-                    usage_type="external_api_call",
-                    provider="notion",
-                    metric_name="create_page",
-                    metric_value=1,
-                    owner_user_id=owner_user_id,
-                )
-                self._run_repo.save_usage_record(record)
+                    result = NotionService.create_page_with_token(
+                        access_token=access_token,
+                        data_source_id=data_source_id,
+                        properties=notion_props,
+                        icon=ctx.icon,
+                        cover=ctx.cover,
+                        dry_run=self._dry_run,
+                    )
+                elif self._notion:
+                    # TODO: Remove global token fallback in future PR. Require OAuth for all Notion writes.
+                    result = self._notion.create_page(
+                        data_source_id=data_source_id,
+                        properties=notion_props,
+                        icon=ctx.icon,
+                        cover=ctx.cover,
+                    )
+                else:
+                    raise RuntimeError("NotionService not configured for target write")
             except Exception as e:
                 logger.exception(
-                    "job_execution_save_usage_notion_create_failed | run_id={} error={}",
+                    "job_execution_notion_create_failed | run_id={} job_id={} owner_user_id={} data_source_id={} "
+                    "token_source={} error={}",
                     run_id,
-                    e,
+                    job_id,
+                    owner_user_id or "",
+                    data_source_id,
+                    token_source,
+                    str(e)[:500],
                 )
+                raise
+            if self._run_repo and owner_user_id:
+                try:
+                    from app.domain.runs import UsageRecord
+
+                    record = UsageRecord(
+                        id=f"usage_{uuid.uuid4().hex[:12]}",
+                        job_run_id=run_id,
+                        usage_type="external_api_call",
+                        provider="notion",
+                        metric_name="create_page",
+                        metric_value=1,
+                        owner_user_id=owner_user_id,
+                    )
+                    self._run_repo.save_usage_record(record)
+                except Exception as e:
+                    logger.exception(
+                        "job_execution_save_usage_notion_create_failed | run_id={} error={}",
+                        run_id,
+                        e,
+                    )
         return result or {}
 
     def _ensure_active_schema(
@@ -525,6 +588,7 @@ class JobExecutionService:
     ) -> None:
         step_id = step_data.get("id", "")
         step_template_id = step_data.get("step_template_id", "")
+        _assert_step_in_scope(ctx, stage_id, pipeline_id, step_id)
         handler = self._registry.get(step_template_id)
         if not handler:
             raise ValueError(
@@ -536,6 +600,23 @@ class JobExecutionService:
         resolved_inputs = resolve_input_bindings(input_bindings, ctx, snapshot)
 
         step_run_id = f"{pipeline_run_id}_step_{step_id}"
+        step_started_at_utc = datetime.now(timezone.utc)
+
+        step_log = StepPipelineLog(
+            run_id=ctx.run_id,
+            job_id=ctx.job_id,
+            stage_id=stage_id,
+            pipeline_id=pipeline_id,
+            step_id=step_id,
+            step_template_id=step_template_id,
+        )
+        input_summary = build_step_input_summary(
+            step_log,
+            resolved_inputs=resolved_inputs,
+            input_bindings=input_bindings,
+            config=config,
+        )
+
         if self._run_repo and owner_user_id:
             try:
                 self._run_repo.save_step_run(
@@ -548,7 +629,9 @@ class JobExecutionService:
                         owner_user_id=owner_user_id,
                         job_run_id=job_run_id,
                         stage_run_id=stage_run_id,
-                        started_at=datetime.now(timezone.utc),
+                        started_at=step_started_at_utc,
+                        input_summary=input_summary,
+                        processing_log=[],
                     )
                 )
             except Exception as e:
@@ -559,6 +642,14 @@ class JobExecutionService:
                 )
 
         ctx.step_run_id = step_run_id
+        ctx.step_pipeline_log = step_log
+
+        emit_step_input(
+            step_log,
+            resolved_inputs=resolved_inputs,
+            input_bindings=input_bindings,
+            config=config,
+        )
 
         logger.debug(
             "job_execution_step_start | run_id={} stage_id={} pipeline_id={} step_id={} template={}",
@@ -569,7 +660,9 @@ class JobExecutionService:
             step_template_id,
         )
 
+        t0: float | None = None
         try:
+            t0 = time.perf_counter()
             outputs = handler.execute(
                 step_id=step_id,
                 config=config,
@@ -578,9 +671,22 @@ class JobExecutionService:
                 ctx=ctx,
                 snapshot=snapshot,
             )
+            runtime_ms = (time.perf_counter() - t0) * 1000.0
 
             for out_name, out_val in (outputs or {}).items():
                 ctx.set_step_output(step_id, out_name, out_val)
+
+            emit_step_final(
+                step_log,
+                outputs=outputs or {},
+                status="succeeded",
+                runtime_ms=runtime_ms,
+            )
+            output_summary = build_step_output_summary(
+                outputs=outputs or {},
+                status="succeeded",
+                runtime_ms=runtime_ms,
+            )
 
             if self._run_repo and owner_user_id:
                 try:
@@ -594,8 +700,11 @@ class JobExecutionService:
                             owner_user_id=owner_user_id,
                             job_run_id=job_run_id,
                             stage_run_id=stage_run_id,
-                            started_at=datetime.now(timezone.utc),
+                            started_at=step_started_at_utc,
                             completed_at=datetime.now(timezone.utc),
+                            input_summary=input_summary,
+                            output_summary=output_summary,
+                            processing_log=list(step_log.processing_lines),
                         )
                     )
                 except Exception as e:
@@ -605,6 +714,20 @@ class JobExecutionService:
                         e,
                     )
         except Exception as e:
+            runtime_ms = (time.perf_counter() - t0) * 1000.0 if t0 is not None else 0.0
+            emit_step_final(
+                step_log,
+                outputs={},
+                status="failed",
+                runtime_ms=runtime_ms,
+                error=str(e),
+            )
+            output_summary = build_step_output_summary(
+                outputs={},
+                status="failed",
+                runtime_ms=runtime_ms,
+                error=str(e),
+            )
             if self._run_repo and owner_user_id:
                 try:
                     self._run_repo.save_step_run(
@@ -617,9 +740,12 @@ class JobExecutionService:
                             owner_user_id=owner_user_id,
                             job_run_id=job_run_id,
                             stage_run_id=stage_run_id,
-                            started_at=datetime.now(timezone.utc),
+                            started_at=step_started_at_utc,
                             completed_at=datetime.now(timezone.utc),
                             error_summary=str(e)[:500],
+                            input_summary=input_summary,
+                            output_summary=output_summary,
+                            processing_log=list(step_log.processing_lines),
                         )
                     )
                 except Exception as save_err:
@@ -629,3 +755,5 @@ class JobExecutionService:
                         save_err,
                     )
             raise
+        finally:
+            ctx.step_pipeline_log = None

@@ -99,6 +99,48 @@ def test_management_pipelines_200_list_shape(client):
     mock_job_repo.list_by_owner.assert_called_once_with(user_id)
 
 
+def test_management_reprovision_starter_401_without_auth(client):
+    """POST /management/bootstrap/reprovision-starter without auth returns 401."""
+    resp = client.post("/management/bootstrap/reprovision-starter")
+    assert resp.status_code == 401
+
+
+def test_management_reprovision_starter_200_calls_bootstrap_service(client):
+    """POST reprovision-starter invokes reprovision_owner_starter_definitions for the auth user."""
+    user_id = _setup_auth(client)
+    prev = getattr(app.state, "bootstrap_provisioning_service", None)
+    try:
+        mock_svc = MagicMock()
+        app.state.bootstrap_provisioning_service = mock_svc
+        resp = client.post(
+            "/management/bootstrap/reprovision-starter",
+            headers={"Authorization": "Bearer valid-jwt"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["job_id"] == "job_notion_place_inserter"
+        mock_svc.reprovision_owner_starter_definitions.assert_called_once_with(user_id)
+    finally:
+        app.state.bootstrap_provisioning_service = prev
+
+
+def test_management_reprovision_starter_503_when_bootstrap_disabled(client):
+    """When bootstrap service is unset, reprovision returns 503."""
+    user_id = _setup_auth(client)
+    prev = getattr(app.state, "bootstrap_provisioning_service", None)
+    try:
+        app.state.bootstrap_provisioning_service = None
+        resp = client.post(
+            "/management/bootstrap/reprovision-starter",
+            headers={"Authorization": "Bearer valid-jwt"},
+        )
+        assert resp.status_code == 503
+        assert "ENABLE_BOOTSTRAP_PROVISIONING" in (resp.json().get("detail") or "")
+    finally:
+        app.state.bootstrap_provisioning_service = prev
+
+
 def test_management_step_templates_401_without_auth(client):
     """GET /management/step-templates without Authorization returns 401."""
     resp = client.get("/management/step-templates")
@@ -1321,3 +1363,214 @@ def test_management_data_target_schema_200_returns_properties(client):
     assert data["properties"][0]["name"] == "Name"
     assert data["properties"][0]["property_type"] == "title"
     assert data["properties"][1]["options"] == [{"id": "a", "name": "Active"}, {"id": "b", "name": "Done"}]
+
+
+def _minimal_live_test_snapshot():
+    return {
+        "job": {
+            "id": "job1",
+            "stages": [
+                {
+                    "id": "st1",
+                    "sequence": 1,
+                    "pipelines": [
+                        {
+                            "id": "pipe1",
+                            "sequence": 1,
+                            "steps": [
+                                {
+                                    "id": "step1",
+                                    "sequence": 1,
+                                    "step_template_id": "step_template_optimize_input_claude",
+                                    "input_bindings": {},
+                                    "config": {},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        "target": {
+            "id": "tgt1",
+            "external_target_id": "00000000-0000-4000-8000-000000000001",
+        },
+        "step_templates": {},
+    }
+
+
+def test_management_live_test_analyze_job_scope(client):
+    """POST .../live-test/analyze returns planned calls for job scope."""
+    from app.services.job_definition_service import ResolvedJobSnapshot
+
+    user_id = _setup_auth(client)
+    snap = _minimal_live_test_snapshot()
+    resolved = ResolvedJobSnapshot(snapshot_ref="ref1", snapshot=snap)
+    mock_jd = MagicMock()
+    mock_jd.resolve_for_run.return_value = resolved
+    mock_link = MagicMock()
+    mock_link.list_trigger_ids_for_job.return_value = ["tr1"]
+    mock_job = MagicMock()
+    app.state.job_definition_service = mock_jd
+    app.state.trigger_job_link_repository = mock_link
+    app.state.job_repository = mock_job
+
+    resp = client.post(
+        "/management/pipelines/job1/live-test/analyze",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"live_test": {"scope_kind": "job"}},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("ok") is True
+    assert any(c.get("call_site_id") == "claude.optimize_input" for c in data["planned_external_calls"])
+    assert data.get("analyzer_payload_hash", "").startswith("sha1:")
+
+
+def test_management_live_test_run_enqueues_with_live_test_block(client):
+    """POST .../run validates trigger body, analyzes, and enqueues queue payload with live_test."""
+    from datetime import datetime, timezone
+
+    from app.domain.triggers import TriggerDefinition
+    from app.services.job_definition_service import ResolvedJobSnapshot
+
+    user_id = _setup_auth(client)
+    snap = _minimal_live_test_snapshot()
+    resolved = ResolvedJobSnapshot(snapshot_ref="ref1", snapshot=snap)
+    mock_jd = MagicMock()
+    mock_jd.resolve_for_run.return_value = resolved
+    mock_link = MagicMock()
+    mock_link.list_trigger_ids_for_job.return_value = ["tr1"]
+    mock_job = MagicMock()
+    mock_run = MagicMock()
+    mock_queue = MagicMock()
+    trigger = TriggerDefinition(
+        id="tr1",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="T",
+        path="/loc",
+        method="POST",
+        request_body_schema={"keywords": "string"},
+        status="active",
+        auth_mode="bearer",
+        secret_value="sec",
+        secret_last_rotated_at=datetime.now(timezone.utc),
+    )
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id.return_value = trigger
+
+    app.state.job_definition_service = mock_jd
+    app.state.trigger_job_link_repository = mock_link
+    app.state.job_repository = mock_job
+    app.state.supabase_run_repository = mock_run
+    app.state.supabase_queue_repository = mock_queue
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.post(
+        "/management/pipelines/job1/run",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "trigger_body": {"keywords": "coffee"},
+            "live_test": {"scope_kind": "job", "allow_destination_writes": False},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "accepted"
+    assert body.get("run_id")
+    mock_queue.send.assert_called_once()
+    enqueued = mock_queue.send.call_args[0][0]
+    assert enqueued.get("live_test", {}).get("invocation_source") == "editor_live_test"
+    assert enqueued.get("live_test", {}).get("allow_destination_writes") is False
+    assert "_live_test_meta" in (enqueued.get("trigger_payload") or {})
+
+
+def test_management_get_run_404_when_missing(client):
+    """GET /management/runs/{id} returns 404 when run not found for owner."""
+    user_id = _setup_auth(client)
+    mock_run = MagicMock()
+    mock_run.get_job_run.return_value = None
+    app.state.supabase_run_repository = mock_run
+
+    resp = client.get(
+        "/management/runs/00000000-0000-4000-8000-000000000099",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+
+
+def test_management_get_run_200(client):
+    """GET /management/runs/{id} returns run row."""
+    from app.domain.runs import JobRun
+
+    user_id = _setup_auth(client)
+    mock_run = MagicMock()
+    mock_run.get_job_run.return_value = JobRun(
+        id="00000000-0000-4000-8000-000000000099",
+        owner_user_id=user_id,
+        job_id="job1",
+        trigger_id="tr1",
+        target_id="tgt1",
+        status="succeeded",
+        trigger_payload={"keywords": "a"},
+    )
+    app.state.supabase_run_repository = mock_run
+
+    resp = client.get(
+        "/management/runs/00000000-0000-4000-8000-000000000099",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "00000000-0000-4000-8000-000000000099"
+    assert data["status"] == "succeeded"
+    assert data["job_id"] == "job1"
+    assert data.get("step_traces") == []
+
+
+def test_management_get_run_includes_step_traces(client):
+    """GET /management/runs/{id} returns step_traces when repository lists StepRun rows."""
+    from app.domain.runs import JobRun, StepRun
+
+    user_id = _setup_auth(client)
+    mock_run = MagicMock()
+    mock_run.get_job_run.return_value = JobRun(
+        id="00000000-0000-4000-8000-000000000099",
+        owner_user_id=user_id,
+        job_id="job1",
+        trigger_id="tr1",
+        target_id="tgt1",
+        status="running",
+        trigger_payload={},
+    )
+    mock_run.list_step_runs_for_job_run.return_value = [
+        StepRun(
+            id="sr1",
+            pipeline_run_id="pr1",
+            step_id="step_a",
+            step_template_id="tmpl_x",
+            status="succeeded",
+            owner_user_id=user_id,
+            job_run_id="00000000-0000-4000-8000-000000000099",
+            stage_run_id="st1",
+            pipeline_id="pipe1",
+            input_summary={"schema_version": 1},
+            output_summary={"schema_version": 1, "status": "succeeded"},
+            processing_log=["a", "b"],
+        )
+    ]
+    app.state.supabase_run_repository = mock_run
+
+    resp = client.get(
+        "/management/runs/00000000-0000-4000-8000-000000000099",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["step_traces"]) == 1
+    st = data["step_traces"][0]
+    assert st["step_id"] == "step_a"
+    assert st["pipeline_id"] == "pipe1"
+    assert st["processing"] == ["a", "b"]
+    assert st["input"]["schema_version"] == 1
