@@ -60,19 +60,49 @@ Useful to split work so enforcement and storage stay consistent:
 
 ## Target resolution order (global vs user vs future tiers)
 
-For **maximum allowed** style caps (all of the above), a predictable rule for beta is:
+### Three admin configuration sources (do not conflate)
 
-**`effective = min(global_ceiling, user_ceiling)`** when both exist, where each ceiling is the maximum allowed for that dimension.
+1. **Global limits** — Admin-configured **platform ceilings** for each dimension (including run counts: daily, monthly, structural caps, inventory caps, etc.). This row is the **safeguard**: no user can exceed what global allows, even if their per-user row says otherwise. **Used on every enforcement path** once limits are loaded.
 
-- **Global row** (`owner_user_id IS NULL`): platform-wide ceiling; admin-only mutation (service role or dedicated admin API), not RLS user-writable.
-- **Per-user row** (`owner_user_id = uuid`): optional override; if absent, inherit global for that dimension only if you define “inherit” per field, **or** treat missing user row as “use global only.”
+2. **Default run counts** (and, by extension, **default limits** for other dimensions if we seed them the same way) — A **separate** admin configuration: values applied **only when a new user is created**, typically by copying into that user’s `app_limits` row (or equivalent). This template is **not** consulted during runtime “what is the effective limit?” resolution. After creation, only the **user row** and **global row** matter for checks.
 
-**Future tiers (Pro / Free):** encode as either:
+3. **Per-user limits** — Stored on the user’s own row (`owner_user_id = uuid`). Optional overrides per dimension; admin-editable via the users admin UI/API.
 
-- **Option A:** Tier sets **default** per-user row template on signup / tier change; still merge with global via `min`, or  
-- **Option B:** Tier stores multipliers or absolute caps in a `plan_tiers` table; `effective = min(global, tier_cap, admin_per_user_override)`.
+### Runtime resolution algorithm (per dimension)
 
-Pick one model before building billing UX; Option A matches the current “row per user” shape with minimal new concepts.
+When computing the **effective ceiling** used for enforcement (validation, enqueue quota, etc.):
+
+1. **Read the user’s configuration** for that dimension (per-user row / stored fields).
+2. **If the user has configured values** for that dimension (non-null / explicitly set—define “configured” consistently in code, e.g. not “missing row” vs “row present with nulls”), **use those values** as the **user candidate** for that dimension.
+3. **If the user does not have configured values** for that dimension, **use the global values** for that dimension as the user candidate (inherit global into the user side of the comparison).
+4. **If neither global nor user provides a value** for that dimension (both unset / unknown), **fail with an error** — the system cannot enforce a limit it does not know. This should be rare if global limits are required to be configured for production.
+
+Then apply the **global safeguard** (platform ceiling):
+
+- **`effective_ceiling = min(global_limit, user_candidate)`** for that dimension.
+
+So: global is always the **backstop**. If global is **lower** than what the per-user row would allow, **global wins**. The **default run counts** configuration does **not** participate in this layered check—only **global** and **user** rows (after user creation) do.
+
+### Observability (tracing)
+
+Whenever limits are resolved for a request or background job, **log enough to trace the decision**, for example:
+
+- **User identity** (`owner_user_id` / subject).
+- **Which dimensions** were resolved and for what operation (e.g. enqueue, graph save).
+- **Raw inputs:** identifiers or snapshots of the **global** row and **per-user** row (or hashes/versions if rows are large), and which fields were treated as “user configured” vs inherited.
+- **Intermediate values:** `user_candidate` per dimension, `global_limit` per dimension.
+- **Outputs:** final **effective_ceiling** per dimension, or **error** with reason when resolution fails (e.g. missing global and user).
+
+Use structured logging so support and on-call can follow **why** a user hit or did not hit a cap.
+
+### Future tiers / billing (out of scope for beta)
+
+**No decision required for beta.** Paid tiers, plan SKUs, and user billing are **deferred** until we have more research on **what these runs cost** (and related unit economics). When we approach billing UX, revisit how tiers interact with limits—for example:
+
+- **Option A:** Tier adjusts **default** values at signup / tier change (similar to “default run counts”), plus per-user overrides; still apply **global safeguard** via `min(global, user_candidate)` at runtime.  
+- **Option B:** Tier stores caps in a `plan_tiers` table; `effective = min(global, tier_cap, user_candidate)` if we need a third layer.
+
+Until then, **global limits + default run counts (new users) + per-user overrides + safeguard** are enough.
 
 ---
 
@@ -101,8 +131,29 @@ For **beta**, Option 1 or 2 in Postgres is enough; align with horizontal worker 
 
 ### Admin configuration
 
-- **Service role** or **admin-only routes** to upsert global `app_limits` and per-user overrides (RLS today prevents users from editing the global row).
-- UI: admin panel section listing effective limits per user (read from merged computation).
+Admin-facing configuration falls into three buckets (see **Target resolution order** above):
+
+- **Global limits** — Platform-wide ceilings (including run counts); mandatory for safe operation; enforce **safeguard** `min(global, user_candidate)` at runtime.
+- **Default run counts** (defaults for other limit dimensions if desired) — Used **only** when **creating** a new user (seed the user’s row). **Not** read during enforcement resolution.
+- **Per-user overrides** — Edits to a specific user’s row after creation.
+
+Implementation detail: **Service role** or **admin-only routes** to upsert global rows, default-for-new-user templates, and per-user rows (RLS today prevents non-admins from editing the global row).
+
+#### Admin users API and UI (tabbed admin surface)
+
+**API — implement / extend**
+
+- **Surface limits on the existing admin users API** — the same backend surface that powers the tabbed admin experience (**Users**, **Invites**, **Cohorts**, and related user metadata). Responses for a given user should include what admins need to reason about limits, for example:
+  - **Effective limits** per dimension (after **user candidate** resolution and **`min(global, user_candidate)`** safeguard; see **Target resolution order**).
+  - **Per-user stored values** vs **global** vs **effective** (so admins see what was configured on the user row vs what actually applies).
+  - **Usage vs cap** where cheap to provide (e.g. queued runs today / this month in UTC, counts of jobs/triggers vs caps) so support can see “X of Y” without a separate tool.
+- **Mutations:** upsert of per-user limit overrides and (where exposed) global defaults should remain **admin-authenticated** only; align with RLS and service-role patterns already used for admin operations.
+
+**UI — desired behavior**
+
+- On the **Users** tab (within the same tabbed admin shell as user info, invites, cohorts): each **user row** should offer **Edit** and/or **Info** (or a single entry point) that opens **more detail** for that user.
+- That detail view (drawer, modal, or slide-over—implementation choice) must include a dedicated **Limits** section: show effective caps, usage vs limits where available, and controls or inline edit for admin-tunable overrides consistent with the API above.
+- **Global limits** and **default run counts** (new-user seeding) should be manageable from dedicated admin settings UIs; the per-user **Users** tab detail focuses on **per-user** visibility and overrides. Defaults-for-new-users are **not** shown as part of runtime “effective limit” resolution—only global + user row.
 
 ---
 
@@ -122,10 +173,16 @@ For **beta**, Option 1 or 2 in Postgres is enough; align with horizontal worker 
 
 ## Metering: daily vs monthly
 
-- **Calendar day / month** — Easiest for users to understand (“500 runs per month”). Align `period_start` to UTC or tenant timezone (document the choice; beta can use UTC).
-- **Rolling 30-day window** — Smoother; implementation is a sliding window counter or sum over `job_runs` for last 30 days; more expensive at query time unless pre-aggregated.
+- **Calendar day / month — timezone (decided):** Use **UTC** for day/month bucket boundaries (not per-user profile timezone). When implementing counters or queries, align `period_start` / window boundaries to UTC.
+- **Daily vs monthly — relationship (decided):** They are **separate caps**, evaluated independently. A user must satisfy **both** when both are configured (e.g. under daily and under monthly for the current periods).
+- **Daily cap — purpose (beta):** The primary intent is **load protection** while the product and infrastructure are still maturing: limit how hard a user can hit the service in a single day so beta traffic does not overwhelm capacity. **Limits should be admin-configurable** so we can **raise** them if users legitimately run into them too often without changing code.
+- **Monthly cap** — Broader budget over a calendar month (UTC); not derived from the daily cap (not “sum of dailies” or a single pool that replaces both). Product/billing can still use different monthly semantics later; for beta, treat **daily** and **monthly** as two independent knobs.
+- **Rolling 30-day window** (optional later) — Smoother than calendar month for some products; implementation is a sliding window counter or sum over `job_runs` for last 30 days; more expensive at query time unless pre-aggregated. Distinct from the two calendar caps above if we ever add it.
 
-Product copy in the brief mentions both “daily maximum for the month” and daily/monthly—**decide explicitly** whether monthly is a separate cap, a sum of daily caps, or one monthly pool.
+### Run quota semantics (decided for beta)
+
+- **What counts:** A run counts toward quota when it is **successfully queued** (same moment we create a `job_runs` row with `status` queued). Refining later so users are not charged for failures or no-op runs is acceptable but **not** required for the first enforcement pass.
+- **Editor live test:** `POST /management/pipelines/{pipeline_id}/run` **does not** consume per-user production run quota. `job_runs` (and queue messages) are still recorded for observability and abuse review; **do not** apply the user quota check on this path for now.
 
 ---
 
@@ -143,17 +200,20 @@ Redis appears often as a **fast path** at scale; for bounded beta traffic, Postg
 
 ## Phasing (suggested)
 
-1. **Beta-minimum:** Merge `min(global, user)` for existing three structural fields; add **inventory** caps for jobs + triggers; add **daily** run cap from `job_runs` or counter table on enqueue paths used by beta testers.
-2. **Next:** Monthly run cap; admin UI; structured error codes; metrics/alerts when users approach limits.
-3. **Later:** Tiered plans, rolling windows, Redis if needed.
+1. **Beta-minimum:** Implement resolution (**user candidate** from per-user row else global, then **`min(global, user_candidate)`**), **default run counts** seeding on user creation, and **tracing logs**; apply to existing three structural fields; add **inventory** caps for jobs + triggers; add **daily** run cap from `job_runs` or counter table on enqueue paths used by beta testers.
+2. **Next:** Monthly run cap; **admin users API + Users tab UI** (per-user detail with **Limits** section; see “Admin configuration”); structured error codes; metrics/alerts when users approach limits.
+3. **Later:** Billing / tiered plans (after cost research); rolling windows; Redis if needed.
 
 ---
 
-## Open decisions
+## Resolved decisions (beta)
 
-- Timezone for calendar buckets (UTC vs user profile).
-- Whether **failed** runs count toward quota (often yes for enqueue attempts; sometimes only `completed` runs—product choice).
-- Whether **live test** enqueue (`management` routes) shares the same quota as production triggers or a separate smaller cap.
+- **Timezone for calendar buckets:** **UTC** (see “Metering” above).
+- **Daily vs monthly:** **Separate caps** (both may apply). Daily is primarily **burst / load protection** and **tunable** by admins without deploys; see “Metering” above.
+- **What counts toward quota:** Any **successfully queued** run (initial policy: count at enqueue). Room to tighten later so users are not charged for runs that do nothing.
+- **Live test vs production:** Editor live-test enqueue **does not** apply the user run quota; runs are still stored for monitoring and abuse detection. Quota enforcement targets production-style enqueue (e.g. `locations` trigger path), not `management` live-test run.
+- **Admin sources:** **Global limits** (safeguard), **default run counts** (seed new users only—not used in runtime layered check), **per-user** row. Resolution: user candidate from user config else global; then **`effective = min(global, user_candidate)`**; **error** if a dimension has no global or user value; **structured logging** on resolution (see **Target resolution order**).
+- **Tiers / billing:** **Deferred** (not required for beta); pick Option A vs B (or another shape) only when building billing, after cost research (see **Future tiers / billing**).
 
 ---
 

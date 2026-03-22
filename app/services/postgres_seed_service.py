@@ -25,6 +25,7 @@ from app.domain.yaml_layout import (
 )
 from app.domain.repositories import TriggerJobLinkRepository
 from app.repositories.postgres_repositories import (
+    PostgresAppConfigRepository,
     PostgresConnectorInstanceRepository,
     PostgresConnectorTemplateRepository,
     PostgresJobRepository,
@@ -83,6 +84,7 @@ class PostgresBootstrapProvisioningService:
         self._targets = PostgresTargetRepository(client)
         self._triggers = PostgresTriggerRepository(client)
         self._jobs = PostgresJobRepository(client)
+        self._app_config = PostgresAppConfigRepository(client)
 
     def seed_catalog_if_needed(self) -> None:
         """Idempotently seed connector, target, and step templates from catalog YAML."""
@@ -220,6 +222,8 @@ class PostgresBootstrapProvisioningService:
         except ValueError:
             logger.warning("bootstrap_ensure_owner_skipped | invalid_owner={}", owner_user_id)
             return
+
+        self._app_config.seed_user_limits_from_defaults_if_missing(owner_user_id)
 
         trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
         if trigger:

@@ -1179,41 +1179,55 @@ class PostgresAppConfigRepository:
     """Postgres-backed app config (limits) repository."""
 
     TABLE = "app_limits"
+    NEW_USER_DEFAULTS_TABLE = "app_limits_new_user_defaults"
 
     def __init__(self, client: Client) -> None:
         self._client = client
 
-    def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
+    def get_global_row(self) -> dict[str, Any] | None:
+        """Return the platform global limits row (``owner_user_id`` IS NULL), or None."""
+        try:
+            r = self._client.table(self.TABLE).select("*").is_("owner_user_id", "null").limit(1).execute()
+        except Exception as e:
+            logger.exception("postgres_app_config_get_global_failed | error={}", e)
+            raise
+        rows = r.data or []
+        return rows[0] if rows else None
+
+    def get_user_row(self, owner_user_id: str) -> dict[str, Any] | None:
+        """Return the per-owner ``app_limits`` row if present."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
             r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
-            logger.exception("postgres_app_config_get_failed | owner={} error={}", owner_user_id, e)
+            logger.exception("postgres_app_config_get_user_row_failed | owner={} error={}", owner_user_id, e)
             raise
         rows = r.data or []
-        if rows:
-            row = rows[0]
-            return AppLimits(
-                max_stages_per_job=row.get("max_stages_per_job", 20),
-                max_pipelines_per_stage=row.get("max_pipelines_per_stage", 20),
-                max_steps_per_pipeline=row.get("max_steps_per_pipeline", 50),
-            )
-        # Fall back to global default (owner_user_id IS NULL) if supported
+        return rows[0] if rows else None
+
+    def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
+        from app.services.effective_limits import LimitsResolutionError, resolve_effective_app_limits
+
+        g = self.get_global_row()
+        if not g:
+            return None
+        u = self.get_user_row(owner_user_id)
         try:
-            r = self._client.table(self.TABLE).select("*").is_("owner_user_id", "null").limit(1).execute()
-            rows = r.data or []
-            if rows:
-                row = rows[0]
-                return AppLimits(
-                    max_stages_per_job=row.get("max_stages_per_job", 20),
-                    max_pipelines_per_stage=row.get("max_pipelines_per_stage", 20),
-                    max_steps_per_pipeline=row.get("max_steps_per_pipeline", 50),
-                )
-        except Exception:
-            pass
-        return None
+            return resolve_effective_app_limits(
+                g,
+                u,
+                owner_user_id=owner_user_id,
+                operation="get_by_owner",
+            )
+        except LimitsResolutionError as e:
+            logger.warning(
+                "postgres_app_limits_resolve_failed | owner={} error={}",
+                owner_user_id,
+                e,
+            )
+            return None
 
     def save(self, owner_user_id: str, limits: AppLimits) -> None:
         try:
@@ -1223,11 +1237,91 @@ class PostgresAppConfigRepository:
                 "max_stages_per_job": limits.max_stages_per_job,
                 "max_pipelines_per_stage": limits.max_pipelines_per_stage,
                 "max_steps_per_pipeline": limits.max_steps_per_pipeline,
+                "max_jobs_per_owner": limits.max_jobs_per_owner,
+                "max_triggers_per_owner": limits.max_triggers_per_owner,
+                "max_runs_per_utc_day": limits.max_runs_per_utc_day,
+                "max_runs_per_utc_month": limits.max_runs_per_utc_month,
             }
             self._client.table(self.TABLE).upsert(row, on_conflict="owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_app_config_save_failed | owner={} error={}", owner_user_id, e)
             raise
+
+    def upsert_global_row(self, limits: AppLimits) -> None:
+        """Replace platform global row (service role / admin only)."""
+        try:
+            payload = {
+                "max_stages_per_job": limits.max_stages_per_job,
+                "max_pipelines_per_stage": limits.max_pipelines_per_stage,
+                "max_steps_per_pipeline": limits.max_steps_per_pipeline,
+                "max_jobs_per_owner": limits.max_jobs_per_owner,
+                "max_triggers_per_owner": limits.max_triggers_per_owner,
+                "max_runs_per_utc_day": limits.max_runs_per_utc_day,
+                "max_runs_per_utc_month": limits.max_runs_per_utc_month,
+            }
+            ex = self.get_global_row()
+            if ex:
+                self._client.table(self.TABLE).update(payload).eq("id", ex["id"]).execute()
+            else:
+                row = {"owner_user_id": None, **payload}
+                self._client.table(self.TABLE).insert(row).execute()
+        except Exception as e:
+            logger.exception("postgres_app_config_upsert_global_failed | error={}", e)
+            raise
+
+    def get_new_user_defaults_row(self) -> dict[str, Any] | None:
+        """Single-row template copied to new owners at provisioning (not used in runtime merge)."""
+        try:
+            r = self._client.table(self.NEW_USER_DEFAULTS_TABLE).select("*").eq("id", 1).limit(1).execute()
+        except Exception as e:
+            logger.exception("postgres_app_limits_new_user_defaults_get_failed | error={}", e)
+            raise
+        rows = r.data or []
+        return rows[0] if rows else None
+
+    def upsert_new_user_defaults(self, limits: AppLimits) -> None:
+        """Admin: replace id=1 row in ``app_limits_new_user_defaults``."""
+        try:
+            row = {
+                "id": 1,
+                "max_stages_per_job": limits.max_stages_per_job,
+                "max_pipelines_per_stage": limits.max_pipelines_per_stage,
+                "max_steps_per_pipeline": limits.max_steps_per_pipeline,
+                "max_jobs_per_owner": limits.max_jobs_per_owner,
+                "max_triggers_per_owner": limits.max_triggers_per_owner,
+                "max_runs_per_utc_day": limits.max_runs_per_utc_day,
+                "max_runs_per_utc_month": limits.max_runs_per_utc_month,
+            }
+            self._client.table(self.NEW_USER_DEFAULTS_TABLE).upsert(row, on_conflict="id").execute()
+        except Exception as e:
+            logger.exception("postgres_app_limits_new_user_defaults_upsert_failed | error={}", e)
+            raise
+
+    def seed_user_limits_from_defaults_if_missing(self, owner_user_id: str) -> None:
+        """Insert per-owner ``app_limits`` from ``app_limits_new_user_defaults`` when no user row exists."""
+        if self.get_user_row(owner_user_id) is not None:
+            return
+        d = self.get_new_user_defaults_row()
+        if not d:
+            return
+        try:
+            limits = AppLimits(
+                max_stages_per_job=int(d["max_stages_per_job"]),
+                max_pipelines_per_stage=int(d["max_pipelines_per_stage"]),
+                max_steps_per_pipeline=int(d["max_steps_per_pipeline"]),
+                max_jobs_per_owner=int(d["max_jobs_per_owner"]),
+                max_triggers_per_owner=int(d["max_triggers_per_owner"]),
+                max_runs_per_utc_day=int(d["max_runs_per_utc_day"]),
+                max_runs_per_utc_month=int(d["max_runs_per_utc_month"]),
+            )
+            self.save(owner_user_id, limits)
+            logger.info("app_limits_seeded_from_new_user_defaults | owner={}", owner_user_id)
+        except Exception as e:
+            logger.warning(
+                "app_limits_seed_from_defaults_failed | owner={} error={}",
+                owner_user_id,
+                e,
+            )
 
 
 class PostgresOAuthConnectionStateRepository:

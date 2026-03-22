@@ -563,6 +563,10 @@ def test_management_account_200_with_limits(client):
         max_stages_per_job=10,
         max_pipelines_per_stage=20,
         max_steps_per_pipeline=50,
+        max_jobs_per_owner=50,
+        max_triggers_per_owner=50,
+        max_runs_per_utc_day=500,
+        max_runs_per_utc_month=10000,
     )
     app.state.app_config_repository = mock_app_config
 

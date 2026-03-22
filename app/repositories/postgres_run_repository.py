@@ -30,6 +30,13 @@ from app.services.trigger_request_body import (
 _VALID_RUN_STATUSES = frozenset({"pending", "running", "succeeded", "failed", "cancelled"})
 
 
+def _normalize_db_run_status(status: str) -> str:
+    """Map legacy ``queued`` to ``pending`` for ``run_status_enum``."""
+    if status == "queued":
+        return "pending"
+    return status
+
+
 def _validate_run_status(status: str) -> None:
     """Raise ValueError if status is not a valid run_status_enum value."""
     if status not in _VALID_RUN_STATUSES:
@@ -217,6 +224,24 @@ class PostgresRunRepository:
             return None
         return _row_to_job_run(rows[0])
 
+    def count_job_runs_owner_since_utc(self, owner_user_id: str, since_iso: str) -> int:
+        """Count job_runs for owner with ``created_at >= since_iso`` (timestamptz ISO)."""
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = (
+                self._client.table(self.JOB_RUNS)
+                .select("id", count="exact", head=True)
+                .eq("owner_user_id", uid)
+                .gte("created_at", since_iso)
+                .execute()
+            )
+        except ValueError:
+            return 0
+        except Exception as e:
+            logger.exception("postgres_count_job_runs_since_failed | owner={} error={}", owner_user_id, e)
+            raise
+        return int(r.count or 0)
+
     def list_job_runs_by_owner(
         self,
         owner_user_id: str,
@@ -238,7 +263,8 @@ class PostgresRunRepository:
         return [_row_to_job_run(row) for row in (r.data or [])]
 
     def save_job_run(self, run: JobRun) -> None:
-        _validate_run_status(run.status)
+        st = _normalize_db_run_status(run.status)
+        _validate_run_status(st)
         uid = str(_ensure_uuid(run.owner_user_id))
         row = {
             "id": run.id,
@@ -246,7 +272,7 @@ class PostgresRunRepository:
             "job_id": run.job_id,
             "trigger_id": run.trigger_id,
             "target_id": run.target_id,
-            "status": run.status,
+            "status": st,
             "trigger_payload": run.trigger_payload,
             "definition_snapshot_ref": run.definition_snapshot_ref,
             "platform_job_id": run.platform_job_id,
@@ -512,6 +538,76 @@ class PostgresRunRepository:
                 e,
             )
             raise
+
+    def enqueue_production_job_run_with_quota(
+        self,
+        job_id: str,
+        *,
+        run_id: str,
+        owner_user_id: str,
+        trigger_payload: dict[str, Any] | None = None,
+        keywords: str | None = None,
+        job_definition_id: str | None = None,
+        trigger_id: str | None = None,
+        target_id: str | None = None,
+        definition_snapshot_ref: str | None = None,
+        day_cap: int,
+        month_cap: int,
+    ) -> None:
+        """Insert ``job_runs`` row with atomic UTC day/month quota (production trigger path only)."""
+        from app.services.run_quota import RunQuotaExceeded, parse_run_quota_error_message
+
+        if not owner_user_id:
+            return
+        if trigger_payload is not None:
+            payload_dict: dict[str, Any] = dict(trigger_payload)
+        elif keywords is not None:
+            schema = default_keywords_request_body_schema()
+            payload_dict = build_trigger_payload(
+                validate_request_body_against_schema({"keywords": keywords}, schema),
+                schema,
+            )
+        else:
+            payload_dict = {}
+        uid = str(_ensure_uuid(owner_user_id))
+        params = {
+            "p_owner_user_id": uid,
+            "p_run_id": run_id,
+            "p_job_id": job_definition_id or job_id,
+            "p_trigger_id": trigger_id or "",
+            "p_target_id": target_id or "",
+            "p_trigger_payload": payload_dict,
+            "p_definition_snapshot_ref": definition_snapshot_ref,
+            "p_platform_job_id": job_id,
+            "p_day_cap": day_cap,
+            "p_month_cap": month_cap,
+        }
+        try:
+            self._client.rpc("enqueue_job_run_with_quota_check", params).execute()
+        except Exception as e:
+            msg = str(e)
+            parsed = parse_run_quota_error_message(msg)
+            em = getattr(e, "message", None)
+            if em and not parsed:
+                parsed = parse_run_quota_error_message(str(em))
+            if parsed:
+                raise RunQuotaExceeded(parsed) from e
+            if "LIMITS_NOT_CONFIGURED" in msg:
+                raise RuntimeError("limits_not_configured") from e
+            logger.exception(
+                "postgres_enqueue_job_run_quota_rpc_failed | run_id={} platform_job_id={} error={}",
+                run_id,
+                job_id,
+                e,
+            )
+            raise
+        logger.info(
+            "postgres_run_enqueue_quota_ok | run_id={} platform_job_id={} owner={} definition_snapshot_ref={}",
+            run_id,
+            job_id,
+            owner_user_id,
+            definition_snapshot_ref,
+        )
 
     def update_job_status(
         self,

@@ -20,7 +20,7 @@ Success for beta: a reviewer can walk the route tree (see below) without hitting
 
 - **Authenticated shell** — Sidebar nav, top bar (`TopBarContext` titles/actions), main content width and padding, scroll behavior, sign-out affordance.
 - **Public shell** — Landing, auth, legal pages using `PublicLayout` (header, content region).
-- **Management list and settings pages** — Dashboard, Pipelines index, Triggers, Connections, Data Targets, Account & Billing, admin Theme (when visible).
+- **Management list and settings pages** — Dashboard, Pipelines index, Triggers, Connections, Data Targets, Account, admin Theme (when visible).
 - **Runtime theming** — Surfaces that consume `GET /theme/runtime` via [`useRuntimeUiTheme`](../../../../../notion_pipeliner_ui/src/hooks/useRuntimeUiTheme.ts) should remain legible and on-token when admin theme overrides apply (contrast, focus rings, semantic colors).
 - **Cross-cutting patterns** — Buttons, form fields, cards, tables, empty states, error copy placement (align with [`styleguide/components.md`](../../../../../notion_pipeliner_ui/styleguide/components.md)).
 

@@ -95,3 +95,7 @@ Without this step, the integration will not see the database in the source list.
 4. Authorize in Notion
 5. You should be redirected back to Connections with the Notion workspace connected
 6. Click **Refresh databases** and select databases to use as targets
+
+## See also
+
+- [Render: custom domains, HTTPS, redirects, and Notion OAuth](../../render-custom-domains-and-notion-oauth.md) — production API/UI hostnames, `NOTION_OAUTH_REDIRECT_URI`, `FRONTEND_BASE_URL`, CORS, and Supabase Auth URL configuration.

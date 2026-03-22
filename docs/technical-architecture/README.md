@@ -10,6 +10,7 @@ Implementation-facing documentation: reference architecture, phased technical pl
 - **Incidents:** [incident_investigations/](./incident_investigations/)
 - **Tech debt backlog:** [tech-debt/](./tech-debt/)
 - **Troubleshooting notes:** [troubleshooting/](./troubleshooting/)
+- **Render custom domains:** [render-custom-domains-and-notion-oauth.md](./render-custom-domains-and-notion-oauth.md) — HTTPS, redirects, CORS, Notion OAuth, Supabase Auth URLs
 - **Manual SQL:** [sql/manual/](./sql/manual/)
 
 Superseded technical writeups can move under [archive/](./archive/).

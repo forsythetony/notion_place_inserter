@@ -10,7 +10,7 @@ When you **add**, **rename**, **archive**, or **finish an architecture push** th
 
 ## What to update
 
-1. **New doc** — Add one bullet (or table row) with a short human title, link to the file (path relative to `work-log.md`), and status **Not started** or **In progress** as appropriate. For **Goal 1: Beta user launch** in `work-log.md`, use the **Review** column: **Unexpanded** / **Ready for review** / **Reviewed** (see Goal 1 table footnote in `work-log.md`).
+1. **New doc** — Add one bullet (or table row) with a short human title, link to the file (path relative to `work-log.md`), and status **Not started** or **In progress** as appropriate. For **Goal 1: Beta user launch** in `work-log.md`, set **Status** to include review readiness where relevant: **Unexpanded** / **Ready for review** / **Reviewed** (see Goal 1 table footnote in `work-log.md`).
 2. **Shipped / investigation closed** — Set status to **Complete on YYYY-MM-DD** (use the date the work landed or the finding was accepted). Match the tone: *“Pipeline live testing from the editor … Complete on 2026-03-20”*.
 3. **Superseded** — Keep the row; set status to **Superseded** (optionally point to the replacement doc in the same line).
 4. **Tech-debt / open investigations** — Use **Open** until resolved; then **Complete on** or **Won’t fix** with a short reason.

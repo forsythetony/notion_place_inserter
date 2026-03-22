@@ -4,6 +4,8 @@
 **Audience:** Frontend + platform engineers; product for scope trade-offs  
 **Primary code:** `notion_pipeliner_ui` — [`PipelineEditorPlaceholder.tsx`](../../../../../notion_pipeliner_ui/src/routes/PipelineEditorPlaceholder.tsx) (`StepInspectorForm`, graph nodes)
 
+**Scheduling:** Plan this push **toward the end of beta prep** — after resource limits, worker/scaling, observability, and cross-page UI polish are far enough along that contracts and editor scope are stable.
+
 ---
 
 ## Product / architecture brief

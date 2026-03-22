@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
 
+from app.domain.limits import AppLimits
 from app.main import app
 from app.services.job_definition_service import ResolvedJobSnapshot
 from app.services.trigger_request_body import default_keywords_request_body_schema
@@ -52,6 +53,20 @@ def _mock_link_repo():
     mock.list_job_ids_for_trigger.return_value = list(ids)
     mock.list_dispatchable_job_ids_for_trigger.return_value = list(ids)
     return mock
+
+
+def _mock_app_config_repo():
+    m = MagicMock()
+    m.get_by_owner.return_value = AppLimits(
+        max_stages_per_job=20,
+        max_pipelines_per_stage=20,
+        max_steps_per_pipeline=50,
+        max_jobs_per_owner=50,
+        max_triggers_per_owner=50,
+        max_runs_per_utc_day=500,
+        max_runs_per_utc_month=10000,
+    )
+    return m
 
 
 def test_post_triggers_401_without_auth(client):
@@ -187,6 +202,7 @@ def test_post_triggers_async_returns_accepted(client):
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = mock_link_repo
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -201,16 +217,18 @@ def test_post_triggers_async_returns_accepted(client):
     assert len(data["job_ids"]) == 1
     assert data["job_ids"][0].startswith("loc_")
 
-    mock_run_repo.create_job.assert_called_once()
-    call_kw = mock_run_repo.create_job.call_args[1]
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
+    call_args = mock_run_repo.enqueue_production_job_run_with_quota.call_args
+    call_kw = call_args[1]
+    assert call_args[0][0].startswith("loc_")
     assert call_kw["trigger_payload"]["keywords"] == "park"
-    assert call_kw["status"] == "queued"
-    assert call_kw["job_id"].startswith("loc_")
     assert call_kw["owner_user_id"] == "bootstrap"
     assert "run_id" in call_kw
     assert call_kw.get("job_definition_id") == "job_notion_place_inserter"
     assert call_kw.get("trigger_id") == "trigger_http_locations"
     assert call_kw.get("definition_snapshot_ref") == "job_snapshot:bootstrap:job_notion_place_inserter:abc123"
+    assert call_kw.get("day_cap") == 500
+    assert call_kw.get("month_cap") == 10000
 
     mock_queue_repo.send.assert_called_once()
     call_args = mock_queue_repo.send.call_args
@@ -244,6 +262,7 @@ def test_post_triggers_async_422_when_all_linked_jobs_disabled(client):
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = mock_link_repo
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -286,6 +305,7 @@ def test_post_triggers_async_503_when_trigger_unavailable(client):
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = _mock_link_repo()
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -313,6 +333,7 @@ def test_post_triggers_async_503_when_job_unavailable(client):
     app.state.supabase_run_repository = mock_run_repo
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -399,6 +420,7 @@ def test_post_triggers_async_503_when_send_raises(client):
     app.state.supabase_run_repository = mock_run_repo
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -410,10 +432,10 @@ def test_post_triggers_async_503_when_send_raises(client):
 
 
 def test_post_triggers_async_503_when_create_job_raises(client):
-    """POST /triggers/{user_id}/locations when create_job raises returns 503; send is never called."""
+    """POST /triggers/{user_id}/locations when enqueue quota RPC raises returns 503; send is never called."""
     mock_queue_repo = MagicMock()
     mock_run_repo = MagicMock()
-    mock_run_repo.create_job.side_effect = RuntimeError("Supabase unavailable")
+    mock_run_repo.enqueue_production_job_run_with_quota.side_effect = RuntimeError("Supabase unavailable")
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
@@ -426,6 +448,7 @@ def test_post_triggers_async_503_when_create_job_raises(client):
     app.state.supabase_run_repository = mock_run_repo
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -433,15 +456,15 @@ def test_post_triggers_async_503_when_create_job_raises(client):
         json={"keywords": "park"},
     )
     assert resp.status_code == 503
-    mock_run_repo.create_job.assert_called_once()
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
     mock_queue_repo.send.assert_not_called()
 
 
 def test_post_triggers_async_503_when_create_run_raises(client):
-    """POST /triggers/{user_id}/locations when create_job (run persistence) raises returns 503; send is never called."""
+    """POST /triggers/{user_id}/locations when enqueue quota RPC raises returns 503; send is never called."""
     mock_queue_repo = MagicMock()
     mock_run_repo = MagicMock()
-    mock_run_repo.create_job.side_effect = RuntimeError("Run persistence unavailable")
+    mock_run_repo.enqueue_production_job_run_with_quota.side_effect = RuntimeError("Run persistence unavailable")
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
@@ -454,6 +477,7 @@ def test_post_triggers_async_503_when_create_run_raises(client):
     app.state.supabase_run_repository = mock_run_repo
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -461,7 +485,7 @@ def test_post_triggers_async_503_when_create_run_raises(client):
         json={"keywords": "park"},
     )
     assert resp.status_code == 503
-    mock_run_repo.create_job.assert_called_once()
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
     mock_queue_repo.send.assert_not_called()
 
 
@@ -496,6 +520,7 @@ def test_post_triggers_async_logs_correlation_on_success(client, captured_logs):
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = _mock_link_repo()
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -504,7 +529,7 @@ def test_post_triggers_async_logs_correlation_on_success(client, captured_logs):
     )
     assert resp.status_code == 200
     job_id = resp.json()["job_ids"][0]
-    run_id = mock_run_repo.create_job.call_args[1]["run_id"]
+    run_id = mock_run_repo.enqueue_production_job_run_with_quota.call_args[1]["run_id"]
 
     enqueued = next((e for e in captured_logs if "locations_enqueued" in e["message"]), None)
     assert enqueued is not None
@@ -529,6 +554,7 @@ def test_post_triggers_async_logs_correlation_on_failure(client, captured_logs):
     app.state.supabase_run_repository = mock_run_repo
     app.state.job_definition_service = mock_job_definition_service
     app.state.trigger_service = mock_trigger_service
+    app.state.app_config_repository = _mock_app_config_repo()
 
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -536,8 +562,8 @@ def test_post_triggers_async_logs_correlation_on_failure(client, captured_logs):
         json={"keywords": "park"},
     )
     assert resp.status_code == 503
-    job_id = mock_run_repo.create_job.call_args[1]["job_id"]
-    run_id = mock_run_repo.create_job.call_args[1]["run_id"]
+    job_id = mock_run_repo.enqueue_production_job_run_with_quota.call_args[0][0]
+    run_id = mock_run_repo.enqueue_production_job_run_with_quota.call_args[1]["run_id"]
 
     failed = next((e for e in captured_logs if "locations_enqueue_failed" in e["message"]), None)
     assert failed is not None

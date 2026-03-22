@@ -27,7 +27,7 @@ Ship the app shell and navigation behavior: public entry with sign-in/sign-out a
 - Post-auth redirect lands on dashboard with no intermediate dead-end route
 - Shared layout shell is reused by dashboard and editor routes
 - Shell styling conforms to p5_pr01 style guide (tokens, spacing, typography)
-- Left nav structure is in place for Pipelines, Triggers, Database Targets, Account & Billing (per PRD target configuration)
+- Left nav structure is in place for Pipelines, Triggers, Database Targets, Account (per PRD target configuration)
 
 ## Out of scope
 

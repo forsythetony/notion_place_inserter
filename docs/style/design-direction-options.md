@@ -12,7 +12,7 @@ This document proposes visual design directions for `notion_pipeliner_ui` based 
 - Dark, modern palette preference, but calm/zen over synthwave/futuristic.
 - Consistent system across:
   - Public pages (`Home`, `About`)
-  - Authenticated app (`Dashboard`, `Pipelines`, `Database targets`, `Triggers`, `Account/Billing`)
+  - Authenticated app (`Dashboard`, `Pipelines`, `Database targets`, `Triggers`, `Account`)
 - Pipeline editor is the primary interaction surface:
   - stage boxes
   - drag/move interactions
@@ -154,7 +154,7 @@ Regardless of option, these are required for the editor UX:
   - `Pipelines`
   - `Triggers`
   - `Database Targets`
-  - `Account & Billing`
+  - `Account`
 - Top utility area for global actions (search, account, quick create).
 - Dashboard and public pages should use the same typography and color tokens, with lighter structural complexity on public pages.
 

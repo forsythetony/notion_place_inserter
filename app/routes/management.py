@@ -754,6 +754,17 @@ def create_pipeline(
     from app.services.validation_service import JobGraph
 
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
+    app_config_repo = getattr(request.app.state, "app_config_repository", None)
+    if app_config_repo:
+        eff = app_config_repo.get_by_owner(ctx.user_id)
+        if eff is not None and len(job_repo.list_by_owner(ctx.user_id)) >= eff.max_jobs_per_owner:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Maximum number of pipelines (jobs) reached for this account.",
+                    "code": "job_limit_exceeded",
+                },
+            )
     try:
         job_repo.save_job_graph(graph, skip_reference_checks=True)
     except ValidationError as e:
@@ -1143,6 +1154,17 @@ def create_trigger(
         created_at=now,
         updated_at=now,
     )
+    app_config_repo = getattr(request.app.state, "app_config_repository", None)
+    if app_config_repo:
+        eff = app_config_repo.get_by_owner(ctx.user_id)
+        if eff is not None and len(trigger_repo.list_by_owner(ctx.user_id)) >= eff.max_triggers_per_owner:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "message": "Maximum number of triggers reached for this account.",
+                    "code": "trigger_limit_exceeded",
+                },
+            )
     trigger_repo.save(trigger)
     schema_summary = (
         list(schema.keys())
@@ -1290,6 +1312,10 @@ def get_account(
                 "max_stages_per_job": limits.max_stages_per_job,
                 "max_pipelines_per_stage": limits.max_pipelines_per_stage,
                 "max_steps_per_pipeline": limits.max_steps_per_pipeline,
+                "max_jobs_per_owner": limits.max_jobs_per_owner,
+                "max_triggers_per_owner": limits.max_triggers_per_owner,
+                "max_runs_per_utc_day": limits.max_runs_per_utc_day,
+                "max_runs_per_utc_month": limits.max_runs_per_utc_month,
             }
 
     return payload

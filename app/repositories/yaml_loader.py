@@ -200,6 +200,10 @@ def parse_app_limits(data: dict[str, Any]) -> AppLimits:
         max_stages_per_job=data.get("max_stages_per_job", 20),
         max_pipelines_per_stage=data.get("max_pipelines_per_stage", 20),
         max_steps_per_pipeline=data.get("max_steps_per_pipeline", 50),
+        max_jobs_per_owner=data.get("max_jobs_per_owner", 50),
+        max_triggers_per_owner=data.get("max_triggers_per_owner", 50),
+        max_runs_per_utc_day=data.get("max_runs_per_utc_day", 500),
+        max_runs_per_utc_month=data.get("max_runs_per_utc_month", 10000),
     )
 
 

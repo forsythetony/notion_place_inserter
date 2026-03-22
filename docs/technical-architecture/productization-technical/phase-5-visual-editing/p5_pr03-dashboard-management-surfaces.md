@@ -9,7 +9,7 @@ Fill out the dashboard area with the core management pages that prepare users fo
 - Build dashboard subpages for:
   - **Pipelines** list — browse, create new, open existing; handoff to editor route
   - **Connections** list — view and manage integration connections (connector instances)
-  - **Account Management** page — account setup, billing placeholder, or equivalent
+  - **Account Management** page — account setup, profile and limits, or equivalent
 - Add table/list empty states, loading states, error states, and primary actions (create, open, refresh where relevant)
 - Wire read/list interactions to Phase 4 datastore-backed APIs for user-scoped resources
 - Apply p5_pr01 style guide for all surfaces
@@ -35,7 +35,7 @@ Fill out the dashboard area with the core management pages that prepare users fo
 
 - Pipeline editor implementation — p5_pr04
 - Full CRUD for connections (create/edit/delete) beyond list and basic actions
-- Billing or payment integration
+- In-app payment or subscription checkout (deferred past beta)
 - Activity history / run history (separate future story)
 
 ## Dependencies

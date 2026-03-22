@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Header, HTTPException, Request
 from loguru import logger
 
 from app.dependencies import _extract_bearer_token
+from app.services.run_quota import RunQuotaExceeded
 from app.services.trigger_request_body import (
     build_trigger_payload,
     debug_payload_json_for_logging,
@@ -205,6 +206,21 @@ def invoke_trigger(
             detail="Unable to enqueue request",
         )
 
+    app_config_repo = getattr(request.app.state, "app_config_repository", None)
+    if app_config_repo is None:
+        logger.warning("locations_enqueue_skipped | app_config_repository_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to enqueue request",
+        )
+    eff_limits = app_config_repo.get_by_owner(user_id)
+    if eff_limits is None:
+        logger.error("locations_enqueue_skipped | effective_limits_unavailable user_id={}", user_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Limits not configured",
+        )
+
     bootstrap_svc = getattr(request.app.state, "bootstrap_provisioning_service", None)
     if bootstrap_svc is not None:
         try:
@@ -257,16 +273,17 @@ def invoke_trigger(
         target_id = target_data.get("id", "")
 
         try:
-            run_repo.create_job(
-                job_id=job_id,
-                trigger_payload=trigger_payload,
-                status="queued",
-                owner_user_id=user_id,
+            run_repo.enqueue_production_job_run_with_quota(
+                job_id,
                 run_id=run_id,
+                owner_user_id=user_id,
+                trigger_payload=trigger_payload,
                 job_definition_id=job_definition_id,
                 trigger_id=trigger.id,
                 target_id=target_id,
                 definition_snapshot_ref=snapshot.snapshot_ref,
+                day_cap=eff_limits.max_runs_per_utc_day,
+                month_cap=eff_limits.max_runs_per_utc_month,
             )
             payload = {
                 "job_id": job_id,
@@ -302,6 +319,8 @@ def invoke_trigger(
                 send_result.message_id,
                 queue_repo._config.queue_name,
             )
+        except RunQuotaExceeded as e:
+            raise HTTPException(status_code=429, detail=e.detail)
         except Exception:
             logger.exception(
                 "locations_enqueue_failed | job_id={} run_id={}",
