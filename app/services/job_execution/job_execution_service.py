@@ -16,11 +16,12 @@ from app.services.pipeline_live_test.scoped_snapshot import apply_cache_fixtures
 
 if TYPE_CHECKING:
     from app.domain.repositories import RunRepository
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_pipeline_log import (
     StepPipelineLog,
     build_step_input_summary,
     build_step_output_summary,
+    build_step_trace_full,
     emit_step_final,
     emit_step_input,
 )
@@ -617,6 +618,14 @@ class JobExecutionService:
             config=config,
         )
 
+        step_handle = StepExecutionHandle(step_run_id=step_run_id, pipeline_log=step_log)
+        trace_full_initial = build_step_trace_full(
+            step_log,
+            resolved_inputs=resolved_inputs,
+            input_bindings=input_bindings,
+            config=config,
+        )
+
         if self._run_repo and owner_user_id:
             try:
                 self._run_repo.save_step_run(
@@ -631,6 +640,7 @@ class JobExecutionService:
                         stage_run_id=stage_run_id,
                         started_at=step_started_at_utc,
                         input_summary=input_summary,
+                        step_trace_full=trace_full_initial,
                         processing_log=[],
                     )
                 )
@@ -640,9 +650,6 @@ class JobExecutionService:
                     step_run_id,
                     e,
                 )
-
-        ctx.step_run_id = step_run_id
-        ctx.step_pipeline_log = step_log
 
         emit_step_input(
             step_log,
@@ -669,6 +676,7 @@ class JobExecutionService:
                 input_bindings=input_bindings,
                 resolved_inputs=resolved_inputs,
                 ctx=ctx,
+                step_handle=step_handle,
                 snapshot=snapshot,
             )
             runtime_ms = (time.perf_counter() - t0) * 1000.0
@@ -687,6 +695,13 @@ class JobExecutionService:
                 status="succeeded",
                 runtime_ms=runtime_ms,
             )
+            trace_full_final = build_step_trace_full(
+                step_log,
+                resolved_inputs=resolved_inputs,
+                input_bindings=input_bindings,
+                config=config,
+                outputs=outputs or {},
+            )
 
             if self._run_repo and owner_user_id:
                 try:
@@ -704,6 +719,7 @@ class JobExecutionService:
                             completed_at=datetime.now(timezone.utc),
                             input_summary=input_summary,
                             output_summary=output_summary,
+                            step_trace_full=trace_full_final,
                             processing_log=list(step_log.processing_lines),
                         )
                     )
@@ -728,6 +744,13 @@ class JobExecutionService:
                 runtime_ms=runtime_ms,
                 error=str(e),
             )
+            trace_full_failed = build_step_trace_full(
+                step_log,
+                resolved_inputs=resolved_inputs,
+                input_bindings=input_bindings,
+                config=config,
+                outputs={},
+            )
             if self._run_repo and owner_user_id:
                 try:
                     self._run_repo.save_step_run(
@@ -745,6 +768,7 @@ class JobExecutionService:
                             error_summary=str(e)[:500],
                             input_summary=input_summary,
                             output_summary=output_summary,
+                            step_trace_full=trace_full_failed,
                             processing_log=list(step_log.processing_lines),
                         )
                     )
@@ -755,5 +779,3 @@ class JobExecutionService:
                         save_err,
                     )
             raise
-        finally:
-            ctx.step_pipeline_log = None

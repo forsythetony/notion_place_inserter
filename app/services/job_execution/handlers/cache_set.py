@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 
 
@@ -18,11 +18,12 @@ class CacheSetHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         cache_key = config.get("cache_key")
         value = resolved_inputs.get("value")
-        ctx.log_step_processing(f"Writing run cache (key={cache_key!r}).")
+        step_handle.log_processing(f"Writing run cache (key={cache_key!r}).")
         if cache_key is not None:
             ctx.run_cache[cache_key] = value
         return {}

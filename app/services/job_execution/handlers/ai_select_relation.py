@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
@@ -170,6 +170,7 @@ class AiSelectRelationHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         source_value = resolved_inputs.get("source_value") or resolved_inputs.get("value")
@@ -179,7 +180,7 @@ class AiSelectRelationHandler(StepRuntime):
 
         manual = consume_manual_api_response(ctx, "claude.ai_select_relation")
         if manual is not None and isinstance(manual, dict):
-            ctx.log_step_processing("Using live-test manual API override (claude.ai_select_relation).")
+            step_handle.log_processing("Using live-test manual API override (claude.ai_select_relation).")
             return {
                 "selected_page_pointer": manual.get("selected_page_pointer"),
                 "selected_relation": manual.get("selected_relation") or [],
@@ -238,7 +239,7 @@ class AiSelectRelationHandler(StepRuntime):
             id_source,
         )
 
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Querying Notion related data source for candidates (related_db={related_db!r}, key_lookup={key_lookup!r})."
         )
         candidates = _fetch_candidate_pages(notion.client, data_source_id, key_lookup)
@@ -256,7 +257,7 @@ class AiSelectRelationHandler(StepRuntime):
             logger.warning("ai_select_relation_no_claude | step_id={}", step_id)
             return {"selected_page_pointer": None, "selected_relation": []}
 
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Calling Claude to choose best relation (candidates_count={len(candidates)})."
         )
         selected_id = claude.choose_best_relation_from_candidates(

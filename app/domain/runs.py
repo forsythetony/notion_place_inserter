@@ -25,6 +25,7 @@ class JobRun:
     platform_job_id: str | None = None
     retry_count: int = 0
     result_json: dict[str, Any] | None = None
+    created_at: datetime | None = None
 
 
 @dataclass
@@ -70,6 +71,8 @@ class StepRun:
     pipeline_id: str | None = None
     input_summary: dict[str, Any] | None = None
     output_summary: dict[str, Any] | None = None
+    # Full JSON trace for admin Monitoring (resolved inputs, bindings, config, outputs); no truncation.
+    step_trace_full: dict[str, Any] | None = None
     processing_log: list[str] | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -89,3 +92,4 @@ class UsageRecord:
     owner_user_id: str = ""
     step_run_id: str | None = None
     metadata: dict[str, Any] | None = None
+    created_at: datetime | None = None

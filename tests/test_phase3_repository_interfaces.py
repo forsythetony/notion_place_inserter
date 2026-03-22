@@ -115,6 +115,7 @@ def test_run_repository_has_expected_methods():
     expected = {
         "get_job_run",
         "list_job_runs_by_owner",
+        "list_recent_job_runs",
         "save_job_run",
         "save_stage_run",
         "save_pipeline_run",

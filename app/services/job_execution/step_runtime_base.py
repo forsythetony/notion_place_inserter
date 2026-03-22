@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 
 
 class StepRuntime(ABC):
@@ -22,6 +22,7 @@ class StepRuntime(ABC):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         """

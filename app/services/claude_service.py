@@ -7,15 +7,17 @@ from typing import Any, NamedTuple
 import anthropic
 from loguru import logger
 
+from app.llm_defaults import CLAUDE_HAIKU_45_MODEL, DEFAULT_CLAUDE_MESSAGES_MODEL
+
+_MODEL_SONNET = DEFAULT_CLAUDE_MESSAGES_MODEL
+_MODEL_AI_PROMPT = CLAUDE_HAIKU_45_MODEL
+
 
 class OptionSelectionResult(NamedTuple):
     """Result of single-select with optional new value suggestion."""
 
     value: str | None
     is_new: bool
-
-
-_MODEL_SONNET = "claude-sonnet-4-20250514"
 
 
 class ClaudeService:
@@ -40,7 +42,7 @@ class ClaudeService:
         system: str,
         user_message: str,
         response_text: str,
-        model: str = _MODEL_SONNET,
+        model: str = DEFAULT_CLAUDE_MESSAGES_MODEL,
     ) -> None:
         self._last_optimize_llm_trace = {
             "model": model,
@@ -137,7 +139,7 @@ Infer a value for the Notion property "{prop_name}" (type: {prop_type}).
 Allowed options (if select/multi_select): {options_str}
 Return only the value, nothing else. If you cannot infer, return empty string."""
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=256,
             system="You infer Notion property values from place research. Be concise.",
             messages=[{"role": "user", "content": prompt}],
@@ -194,7 +196,7 @@ Rules:
 - If there is no clear match, return empty string.
 - Return only the option text (or empty string), nothing else."""
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=128,
             system="You map structured place data to one allowed option. Do not invent options.",
             messages=[{"role": "user", "content": prompt}],
@@ -290,7 +292,7 @@ Rules:
             claude_prompt_preview=prompt_preview,
         ).info("claude_option_suggest_prompt_preview")
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=128,
             system="You map structured place data to one option. Be precise.",
             messages=[{"role": "user", "content": prompt}],
@@ -406,7 +408,7 @@ Rules:
 - If nothing applies, return {{"values": []}}.
 - Return JSON only, no markdown or prose."""
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=256,
             system="You map structured place data to allowed multi-select options. Be concise.",
             messages=[{"role": "user", "content": prompt}],
@@ -467,7 +469,7 @@ Select the single best matching candidate. Use the "{key_lookup}" field and geog
 
         try:
             response = self._client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=_MODEL_SONNET,
                 max_tokens=128,
                 system=system,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -610,7 +612,7 @@ Select a single emoji that best represents this place (e.g. landmark, restaurant
 Return only the emoji character, nothing else. No explanation, no quotes."""
         try:
             response = self._client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=_MODEL_SONNET,
                 max_tokens=32,
                 system="You select one emoji to represent a place. Return only the emoji.",
                 messages=[{"role": "user", "content": prompt}],
@@ -639,7 +641,7 @@ Examples: bridge, restaurant, museum, park, landmark, coffee shop, library.
 Return only the search term, nothing else. No quotes, no punctuation, no explanation."""
         try:
             response = self._client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=_MODEL_SONNET,
                 max_tokens=32,
                 system="You generate short icon search terms for places. Return only the term.",
                 messages=[{"role": "user", "content": prompt}],
@@ -656,9 +658,16 @@ Return only the search term, nothing else. No quotes, no punctuation, no explana
     def _extract_text(self, response) -> str:
         usage = getattr(response, "usage", None)
         if usage is not None:
+            model_attr = getattr(response, "model", None)
+            model_id = (
+                model_attr.strip()
+                if isinstance(model_attr, str) and model_attr.strip()
+                else DEFAULT_CLAUDE_MESSAGES_MODEL
+            )
             self._last_usage = {
                 "input_tokens": getattr(usage, "input_tokens", 0) or 0,
                 "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+                "model": model_id,
             }
         else:
             self._last_usage = None
@@ -684,7 +693,7 @@ Return only the search term, nothing else. No quotes, no punctuation, no explana
         Returns the poem text from the response.
         """
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=1024,
             system="You are a creative poet. Write a short, evocative poem inspired by the given seed or theme.",
             messages=[{"role": "user", "content": f"Write a poem inspired by: {seed}"}],
@@ -713,7 +722,7 @@ Rules:
 - Include location/address, type/category, and notable details when available.
 - Return only the paragraph text, no headings or bullet points."""
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_SONNET,
             max_tokens=512,
             system="You rewrite structured place data into a single factual paragraph. Never invent facts.",
             messages=[{"role": "user", "content": prompt}],
@@ -749,7 +758,7 @@ Rules:
             user_content = f"{prompt}\n\n{value_str}" if value_str else prompt
 
         response = self._client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=_MODEL_AI_PROMPT,
             max_tokens=max_tokens,
             system="You follow instructions precisely. Return only the requested output.",
             messages=[{"role": "user", "content": user_content}],
@@ -758,5 +767,5 @@ Rules:
         return result
 
     def get_last_usage(self) -> dict | None:
-        """Return last API usage from most recent call: {input_tokens, output_tokens}."""
+        """Return last API usage from most recent call: {input_tokens, output_tokens, model}."""
         return self._last_usage

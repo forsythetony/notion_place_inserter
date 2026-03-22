@@ -26,6 +26,8 @@ def _str_max_for_input() -> int:
 
 
 STEP_TRACE_SCHEMA_VERSION = 1
+# Full admin/debug trace (no per-string truncation; JSON-safe only).
+STEP_TRACE_FULL_SCHEMA_VERSION = 2
 
 
 def _json_default_for_db(o: Any) -> Any:
@@ -107,6 +109,34 @@ def build_step_output_summary(
     return json_safe_for_db(raw)
 
 
+def build_step_trace_full(
+    log: StepPipelineLog,
+    *,
+    resolved_inputs: dict[str, Any],
+    input_bindings: dict[str, Any],
+    config: dict[str, Any],
+    outputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Full step trace for admin Monitoring (no string truncation; PostgREST-safe JSON)."""
+    raw: dict[str, Any] = {
+        "schema_version": STEP_TRACE_FULL_SCHEMA_VERSION,
+        "meta": {
+            "run_id": log.run_id,
+            "job_id": log.job_id,
+            "stage_id": log.stage_id,
+            "pipeline_id": log.pipeline_id,
+            "step_id": log.step_id,
+            "step_template_id": log.step_template_id,
+        },
+        "resolved_inputs": json_safe_for_db(dict(resolved_inputs)),
+        "input_bindings": json_safe_for_db(dict(input_bindings)),
+        "config": json_safe_for_db(dict(config)),
+    }
+    if outputs is not None:
+        raw["outputs"] = json_safe_for_db(dict(outputs))
+    return json_safe_for_db(raw)
+
+
 def sanitize_for_step_log(obj: Any, *, max_str: int | None = None) -> Any:
     """Recursively copy structures; truncate strings longer than ``max_str``."""
     m = max_str if max_str is not None else _str_max_for_input()
@@ -145,7 +175,7 @@ def _format_kv_lines(data: dict[str, Any], *, max_str: int) -> list[str]:
 
 @dataclass
 class StepPipelineLog:
-    """Per-step logger bound to orchestration ids; use via ``ExecutionContext.log_step_processing``."""
+    """Per-step logger bound to orchestration ids; use via ``StepExecutionHandle.log_processing``."""
 
     run_id: str
     job_id: str

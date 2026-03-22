@@ -484,6 +484,7 @@ def parse_step_run(data: dict[str, Any]) -> "StepRun":
         pipeline_id=data.get("pipeline_id"),
         input_summary=data.get("input_summary"),
         output_summary=data.get("output_summary"),
+        step_trace_full=data.get("step_trace_full"),
         processing_log=data.get("processing_log"),
         started_at=_parse_datetime(data.get("started_at")),
         completed_at=_parse_datetime(data.get("completed_at")),

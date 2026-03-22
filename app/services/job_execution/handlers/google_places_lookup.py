@@ -8,7 +8,7 @@ from typing import Any
 from loguru import logger
 
 from app.env_bootstrap import is_pipeline_trace_verbose
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
@@ -23,7 +23,7 @@ def _processing_preview(text: str, max_len: int = _PROCESSING_PREVIEW_MAX) -> st
     return s[: max_len - 3] + "..."
 
 
-def _log_google_places_http_traces(ctx: ExecutionContext, google: Any) -> None:
+def _log_google_places_http_traces(google: Any, step_handle: StepExecutionHandle) -> None:
     """Emit URL, redacted headers, optional body, and response preview for each Places HTTP call."""
     getter = getattr(google, "get_http_traces", None)
     if not callable(getter):
@@ -37,21 +37,21 @@ def _log_google_places_http_traces(ctx: ExecutionContext, google: Any) -> None:
             continue
         op = t.get("operation", "")
         idx = f"{i + 1}/{n}"
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Google Places HTTP trace [{idx}] {op} {t.get('method', '')} "
             f"status={t.get('http_status')}"
         )
-        ctx.log_step_processing(f"URL: {t.get('url', '')}")
-        ctx.log_step_processing(
+        step_handle.log_processing(f"URL: {t.get('url', '')}")
+        step_handle.log_processing(
             "Request headers (redacted): "
             f"{_processing_preview(json.dumps(t.get('request_headers', {}), ensure_ascii=False))}"
         )
         if t.get("request_body") is not None:
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 "Request body: "
                 f"{_processing_preview(json.dumps(t.get('request_body'), ensure_ascii=False, default=str))}"
             )
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Response preview: {_processing_preview(t.get('response_body_preview', '') or '')}"
         )
 
@@ -66,6 +66,7 @@ class GooglePlacesLookupHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         query = resolved_inputs.get("query") or ""
@@ -75,8 +76,8 @@ class GooglePlacesLookupHandler(StepRuntime):
 
         manual = consume_manual_api_response(ctx, "google_places.lookup")
         if manual is not None:
-            ctx.log_step_processing("Using live-test manual API override (google_places.lookup).")
-            ctx.log_step_processing(
+            step_handle.log_processing("Using live-test manual API override (google_places.lookup).")
+            step_handle.log_processing(
                 f"Manual override payload (preview): {_processing_preview(json.dumps(manual, ensure_ascii=False, default=str))}"
             )
             if isinstance(manual, dict):
@@ -87,11 +88,11 @@ class GooglePlacesLookupHandler(StepRuntime):
             return {"search_response": None, "selected_place": None}
 
         if not google:
-            ctx.log_step_processing("Google Places service unavailable; skipping search.")
+            step_handle.log_processing("Google Places service unavailable; skipping search.")
             return {"search_response": None, "selected_place": None}
 
         fetch_details = config.get("fetch_details_if_needed", True)
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Calling Google Places searchText with query preview={str(query)[:120]!r} fetch_details={fetch_details}"
         )
         trace_extra = (
@@ -112,7 +113,7 @@ class GooglePlacesLookupHandler(StepRuntime):
                 owner_user_id=ctx.owner_user_id,
                 provider="google_places",
                 operation="search_places",
-                step_run_id=ctx.step_run_id,
+                step_run_id=step_handle.step_run_id,
             )
 
         logger.bind(
@@ -125,7 +126,7 @@ class GooglePlacesLookupHandler(StepRuntime):
         )
 
         if place and fetch_details:
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Enriching place with details (place_id={place.get('id', '')[:40]!r})."
             )
             place = self._enrich_with_details_if_needed(
@@ -138,10 +139,10 @@ class GooglePlacesLookupHandler(StepRuntime):
                     owner_user_id=ctx.owner_user_id,
                     provider="google_places",
                     operation="get_place_details",
-                    step_run_id=ctx.step_run_id,
+                    step_run_id=step_handle.step_run_id,
                 )
 
-        _log_google_places_http_traces(ctx, google)
+        _log_google_places_http_traces(google, step_handle)
 
         return {
             "search_response": raw_search_response if raw_search_response else (place or {}),

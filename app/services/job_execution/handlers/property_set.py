@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 
 _ALLOWED_PAGE_METADATA_FIELDS = frozenset({"cover_image", "icon_image"})
@@ -22,6 +22,7 @@ class PropertySetHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         value = resolved_inputs.get("value")
@@ -29,7 +30,7 @@ class PropertySetHandler(StepRuntime):
 
         if not getattr(ctx, "allow_destination_writes", True):
             if target_kind == "page_metadata":
-                ctx.log_step_processing(
+                step_handle.log_processing(
                     "Skipping page_metadata property_set (live test: destination writes disabled)."
                 )
                 logger.info(
@@ -43,7 +44,7 @@ class PropertySetHandler(StepRuntime):
             )
 
         if target_kind == "page_metadata":
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Setting page metadata (target_field={config.get('target_field')!r})."
             )
             target_field = config.get("target_field")
@@ -58,7 +59,7 @@ class PropertySetHandler(StepRuntime):
 
         schema_property_id = config.get("schema_property_id")
         if schema_property_id is not None:
-            ctx.log_step_processing(f"Recording property for page payload (schema_property_id={schema_property_id!r}).")
+            step_handle.log_processing(f"Recording property for page payload (schema_property_id={schema_property_id!r}).")
             ctx.set_property(schema_property_id, value)
         return {}
 

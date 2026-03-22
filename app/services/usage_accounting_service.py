@@ -7,6 +7,7 @@ import uuid
 from loguru import logger
 
 from app.domain.runs import UsageRecord
+from app.llm_defaults import DEFAULT_CLAUDE_MESSAGES_MODEL
 
 
 class UsageAccountingService:
@@ -40,7 +41,7 @@ class UsageAccountingService:
             metadata={
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
-                "model": model or "claude-sonnet-4-20250514",
+                "model": model or DEFAULT_CLAUDE_MESSAGES_MODEL,
             },
         )
         try:

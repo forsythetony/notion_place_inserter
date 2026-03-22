@@ -7,7 +7,7 @@ from typing import Any
 from loguru import logger
 
 from app.env_bootstrap import is_pipeline_trace_verbose
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
@@ -76,6 +76,7 @@ class OptimizeInputClaudeHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         query = resolved_inputs.get("query") or ""
@@ -85,8 +86,8 @@ class OptimizeInputClaudeHandler(StepRuntime):
 
         manual = consume_manual_api_response(ctx, "claude.optimize_input")
         if manual is not None:
-            ctx.log_step_processing("Using live-test manual API override (claude.optimize_input).")
-            ctx.log_step_processing(
+            step_handle.log_processing("Using live-test manual API override (claude.optimize_input).")
+            step_handle.log_processing(
                 f"Manual override payload (preview): {_processing_preview(str(manual))}"
             )
             if isinstance(manual, dict) and "optimized_query" in manual:
@@ -94,11 +95,11 @@ class OptimizeInputClaudeHandler(StepRuntime):
             return {"optimized_query": str(manual).strip() if manual is not None else ""}
 
         if not claude:
-            ctx.log_step_processing("Claude unavailable; passing query through unchanged.")
+            step_handle.log_processing("Claude unavailable; passing query through unchanged.")
             return {"optimized_query": str(query).strip()}
 
         if not str(query).strip():
-            ctx.log_step_processing("Empty query; skipping optimization.")
+            step_handle.log_processing("Empty query; skipping optimization.")
             return {"optimized_query": ""}
 
         query_schema = None
@@ -117,7 +118,7 @@ class OptimizeInputClaudeHandler(StepRuntime):
 
         base_prompt = config.get("prompt")
         mode = "target_schema" if query_schema else "place_query_fallback"
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Calling Claude optimize_input (mode={mode}, linked_template_id={linked_template_id!r})."
         )
         if is_pipeline_trace_verbose():
@@ -154,20 +155,20 @@ class OptimizeInputClaudeHandler(StepRuntime):
             if isinstance(raw, dict):
                 trace = raw
         if trace:
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Claude API model={trace.get('model', '')} (optimize_input)"
             )
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Claude system prompt (preview): {_processing_preview(str(trace.get('system_prompt', '')), 2000)}"
             )
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Claude user message (preview): {_processing_preview(str(trace.get('user_message', '')), 2000)}"
             )
-            ctx.log_step_processing(
+            step_handle.log_processing(
                 f"Claude assistant text (preview): {_processing_preview(str(trace.get('assistant_text', '')), 2000)}"
             )
         else:
-            ctx.log_step_processing("Claude optimize_input completed.")
+            step_handle.log_processing("Claude optimize_input completed.")
         if is_pipeline_trace_verbose():
             logger.bind(run_id=ctx.run_id, step_id=step_id, event="pipeline_trace").debug(
                 "pipeline_trace | optimize_input | after_claude | optimized_query={}",
@@ -184,6 +185,7 @@ class OptimizeInputClaudeHandler(StepRuntime):
                     provider="anthropic",
                     prompt_tokens=usage.get("input_tokens", 0),
                     completion_tokens=usage.get("output_tokens", 0),
-                    step_run_id=ctx.step_run_id,
+                    step_run_id=step_handle.step_run_id,
+                    model=usage.get("model"),
                 )
         return {"optimized_query": rewritten or str(query).strip()}

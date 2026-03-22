@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 
 
@@ -56,6 +56,7 @@ class DataTransformHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         value = resolved_inputs.get("value")
@@ -64,12 +65,12 @@ class DataTransformHandler(StepRuntime):
         fallback_value = config.get("fallback_value")
 
         if operation == "extract_key" and source_path:
-            ctx.log_step_processing(f"Data transform extract_key (path={source_path!r}).")
+            step_handle.log_processing(f"Data transform extract_key (path={source_path!r}).")
             segments = _parse_path(source_path)
             extracted = _extract_at_path(value, segments) if segments else None
             transformed = extracted if extracted is not None else fallback_value
         else:
-            ctx.log_step_processing(f"Data transform (operation={operation!r}); using fallback.")
+            step_handle.log_processing(f"Data transform (operation={operation!r}); using fallback.")
             transformed = fallback_value
 
         return {"transformed_value": transformed}

@@ -1,6 +1,22 @@
 # Architecture push: Enhanced user monitoring and cost tracking
 
-**Status:** **Open** — implementation not started. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
+**Status:** **In progress** — core operator path shipped; see **Implementation status** below. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
+
+## Implementation status
+
+**Shipped**
+
+* **Usage coverage** — Freepik `search_icons` → `usage_records`; Google Places / Anthropic patterns unchanged.
+* **Postgres** — `usage_provider_definitions` (YAML seed) + repo helpers for runs, structure counts, usage by `job_run_id`.
+* **Admin APIs** — `GET /auth/admin/users/{user_id}/runs`, `GET .../runs/{job_run_id}`, `GET /auth/admin/usage-providers`; responses include **`usageRollups`** and **`estimatedCostUsd`** (rollups + per `usageRecord` on detail) via **`usage_rate_cards`** and [`UsageCostEstimationService`](../../../../app/services/usage_cost_estimation_service.py).
+* **Admin UI** — **Monitoring** at **`/admin/monitoring`** (sidebar under Admin): pick user → paginated run list (counts, tokens/API calls, est. cost) → run detail (usage table, step `processingLog`).
+
+**Remaining (follow-ups)**
+
+* Nightly / materialized **rollups** for large-scale dashboards; **user-level summary** strip (totals for a date window) without N+1 list calls.
+* **Handler audit** (e.g. Notion) for full `usage_records` coverage.
+* **Admin UI** for editing rate cards (today: SQL / migration seed) — **Tech Deck:** [`tech-deck-admin-providers-page.md`](./tech-deck-admin-providers-page.md).
+* **Polish** — CSV export, anomaly hints, account-owner cost (post-beta).
 
 ---
 
@@ -125,17 +141,15 @@ First-party integrations we already ship (**Google Places**, **Freepik**, **Anth
 | `optimize_input` | Same pattern |
 | `google_places_lookup` | `record_external_api_call` for Google Places operations (see handler for `provider` / `operation` / metadata) |
 
-### Freepik Icons API — usage attribution (**planned**, not in runtime yet)
+### Freepik Icons API — usage attribution (**shipped**)
 
 **Why it matters:** The **Freepik Icons API** (`SearchIconsHandler` / [`FreepikService`](../../../../app/services/freepik_service.py)) is a **paid third-party** dependency (`FREEPIK_API_KEY`). Each icon search issues HTTP to Freepik; that usage **drives platform cost** and must be visible in **`usage_records`** so the [admin run explorer](#admin-run-explorer-per-user) and rate-card math include it alongside Google Places and Anthropic.
 
-**Intended implementation (for a future coverage ticket):** After a real API attempt (not a live-test **manual override**), call `UsageAccountingService.record_external_api_call` with `provider` = **`freepik`**, `operation` = **`search_icons`**, plus `job_run_id`, `owner_user_id`, and `step_run_id` when present. Do not record when the resolved query is empty (no request). Align with the pattern used in [`google_places_lookup`](../../../../app/services/job_execution/handlers/google_places_lookup.py).
-
-**Documentation-only workflow note:** A short-lived change added this recording in `SearchIconsHandler` and was **reverted** so the team could keep an architecture pass **doc-first** without shipping runtime behavior in the same session. The **rationale above** stands; wire-up belongs in implementation work with unit tests and (if needed) a work-log entry.
+**Implementation:** After a real API attempt (not a live-test **manual override**), `SearchIconsHandler` calls `UsageAccountingService.record_external_api_call` with `provider` = **`freepik`**, `operation` = **`search_icons`**, plus `job_run_id`, `owner_user_id`, and `step_run_id` when present. Empty **resolved query** skips both the HTTP call and usage (no billable request). Aligns with [`google_places_lookup`](../../../../app/services/job_execution/handlers/google_places_lookup.py).
 
 **Gaps (as of this writing):**
 
-* **Freepik (`search_icons`)** — does **not** yet write `usage_records`; required for accurate operator cost views—see [Freepik Icons API — usage attribution](#freepik-icons-api--usage-attribution-planned-not-in-runtime-yet).
+* **Freepik (`search_icons`)** — ~~does **not** yet write `usage_records`~~ **done** — rows use `provider=freepik`, `metric_name=search_icons`.
 * **Notion** (and other integrations) may not emit `usage_records` for every API touchpoint—confirm per handler and add `record_external_api_call` (or a dedicated `usage_type`) where billable or capacity-relevant.
 * **No unified “trigger fired count”** beyond inferring from **`job_runs`** rows (each run carries `trigger_id`)—see below.
 * **No dollar amounts** in DB—only raw usage suitable for **later** multiplication by rate cards.
@@ -168,7 +182,7 @@ Keep **pricing out of hot path** execution: store **raw usage** first; apply **r
 1. **Versioned rate card** configuration (admin-editable later), e.g. JSON or table rows keyed by `(provider, usage_type, model | operation | sku_id)` with **effective date ranges** so list prices can change.
 2. **LLM** — Map `(model, input_tokens, output_tokens)` to vendor list or internal **$/1M tokens** for input vs output (Anthropic publishes token pricing per model).
 3. **Google Places** — Map `(operation, metadata.sku or field mask)` to per-call or per-SKU cost; pricing is product-specific (Places API New vs Legacy, etc.)—**online vendor docs** should be the source of truth when implementing, not hardcoded guesses in this doc.
-4. **Freepik** — When **`search_icons`** emits usage (see [Freepik section](#freepik-icons-api--usage-attribution-planned-not-in-runtime-yet)), map `search_icons` (per-call) to Freepik API plan pricing; raw **`usage_records`** should use `provider=freepik`, `metric_name=search_icons`.
+4. **Freepik** — Map `search_icons` (per-call) to Freepik API plan pricing; raw **`usage_records`** use `provider=freepik`, `metric_name=search_icons` (see [Freepik Icons API](#freepik-icons-api--usage-attribution-shipped)).
 5. **Notion** — If/when metering is added, align with Notion’s billing model for the integration surface you use.
 
 Output artifacts:
@@ -208,7 +222,7 @@ This is **product/operator analytics** on persisted run data—not live platform
 | **How many stages** | `stage_runs` | **Count** rows where `job_run_id` = the run. |
 | **Cost of the run (estimated)** | `usage_records` + rate cards | Sum **estimated cost** after applying the rate-card layer (see [Cost estimation](#cost-estimation-estimated-usd-or-internal-credits)); until rate cards ship, show **raw signals** (tokens, call counts) as the primary “cost proxy.” |
 | **Google API calls** | `usage_records` | Filter `job_run_id`, `provider` = `google_places` (and future Google surfaces), `usage_type` = `external_api_call`; **`metric_value`** is typically **1** per logical call; **`metric_name`** / **`metadata`** carry operation/SKU hints. |
-| **Freepik API calls** | `usage_records` (**target**) | Once **`search_icons`** persists usage, filter `job_run_id`, `provider` = **`freepik`**, `usage_type` = `external_api_call`, `metric_name` = **`search_icons`**. **Not emitted today** — see [Freepik Icons API — usage attribution](#freepik-icons-api--usage-attribution-planned-not-in-runtime-yet). Use for **call volume and rate-card cost** (Freepik bills the platform, not the end user). |
+| **Freepik API calls** | `usage_records` | Filter `job_run_id`, `provider` = **`freepik`**, `usage_type` = `external_api_call`, `metric_name` = **`search_icons`**. Use for **call volume and rate-card cost** (Freepik bills the platform, not the end user). |
 | **Claude / Anthropic usage** | `usage_records` | Filter `job_run_id`, `provider` = **`anthropic`**, `usage_type` = **`llm_tokens`**; **`metadata`** holds `model`, `prompt_tokens`, `completion_tokens` where recorded. Aggregate **total tokens** and optionally **invocation count** (row count) per run. |
 
 **Hierarchy reminder:** one **`job_runs`** row is the top-level “run” the user triggered. Under it: **`stage_runs`** → **`pipeline_run_executions`** → **`step_runs`**. Counts above are **instances executed**, not definition counts from the job YAML.
@@ -258,10 +272,10 @@ Authentication: **admin-only** (same pattern as other `/management/*` or dedicat
 
 ## Phased delivery (suggested)
 
-1. **Coverage** — Audit all step handlers and external clients; ensure every billable or capacity-relevant call produces a **`usage_record`** (or explicit non-billable flag in metadata if needed for debugging only). **Include Freepik** (`search_icons`) per [above](#freepik-icons-api--usage-attribution-planned-not-in-runtime-yet).
-2. **Admin run explorer** — Admin-only **list + detail** APIs for all `job_runs` of a target user: timestamps, counts (`stage_runs`, `pipeline_run_executions`, `step_runs`), **`usage_records`** rollups (Google calls, Freepik once recorded, Claude tokens), and step-level **`processing_log`**; Admin Users UI entry point. Depends on coverage being trustworthy; can ship **raw counts/tokens** before rate cards.
+1. **Coverage** — Audit all step handlers and external clients; ensure every billable or capacity-relevant call produces a **`usage_record`**. **Freepik** (`search_icons`) is [shipped](#freepik-icons-api--usage-attribution-shipped).
+2. **Admin run explorer** — **Shipped:** admin **list + detail** APIs + **Admin → Monitoring** UI (`/admin/monitoring`): timestamps, structure counts, usage rollups, step **`processing_log`**, **estimated USD** from rate cards.
 3. **Rollups + API** — Nightly or incremental aggregation; minimal **admin read API** for totals by user and window (complements per-run explorer for dashboard-style summaries).
-4. **Rate cards + estimated cost** — Config + calculation layer; show USD or “credits” in UI (including run list/detail).
+4. **Rate cards + estimated cost** — **Shipped (v1):** `usage_rate_cards` table + read-time estimates in admin APIs and Monitoring UI. **Follow-up:** admin-editable rate cards UI, versioned effective dates, credits mode.
 5. **Polish** — Export, anomaly hints (spike in runs or cost), links from cost view to run detail.
 
 ---
@@ -277,4 +291,4 @@ Authentication: **admin-only** (same pattern as other `/management/*` or dedicat
 
 ## Summary
 
-The platform already persists **LLM token** and **some external API** usage via `UsageAccountingService` and `usage_records`. **Enhanced monitoring** means completing **coverage** (including **Freepik** when implemented — see [Freepik section](#freepik-icons-api--usage-attribution-planned-not-in-runtime-yet)) using a **consistent call-site usage payload** (see [Target pattern](#target-pattern-generic-usage-objects-at-api-call-sites)), supporting **non-uniform units** (e.g. per-word billing — [Generic Book Service example](#worked-example-generic-book-service-per-word-returned)), an optional **provider registry** for admin onboarding ([see above](#provider--integration-registry-admin-onboarding-target)) plus **YAML bootstrap** for shipped providers ([Bootstrapping built-in providers](#bootstrapping-built-in-providers-yaml-catalog--upsert)), defining **aggregation and rate cards**, exposing **operator-facing summaries** (including an **admin per-user run explorer**: when a run occurred, stage/pipeline/step counts, Google / **Freepik (planned)** / Claude usage, step logs), and tying **run and trigger** analytics to `job_runs`—without conflating this with **quota enforcement** (see limits doc).
+The platform already persists **LLM token** and **some external API** usage via `UsageAccountingService` and `usage_records`. **Enhanced monitoring** means completing **coverage** (including **Freepik** — [shipped](#freepik-icons-api--usage-attribution-shipped)) using a **consistent call-site usage payload** (see [Target pattern](#target-pattern-generic-usage-objects-at-api-call-sites)), supporting **non-uniform units** (e.g. per-word billing — [Generic Book Service example](#worked-example-generic-book-service-per-word-returned)), an optional **provider registry** for admin onboarding ([see above](#provider--integration-registry-admin-onboarding-target)) plus **YAML bootstrap** for shipped providers ([Bootstrapping built-in providers](#bootstrapping-built-in-providers-yaml-catalog--upsert)), **`usage_rate_cards`** for **estimated USD** in admin APIs and **Admin → Monitoring**, and **operator-facing run explorer** (stage/pipeline/step counts, Google / Freepik / Claude usage, step logs)—without conflating this with **quota enforcement** (see limits doc).

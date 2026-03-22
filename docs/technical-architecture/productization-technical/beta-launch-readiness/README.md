@@ -21,6 +21,7 @@ See **Goals → Goal 1: Beta user launch** in [`docs/technical-architecture/work
 | [Invitations — create invitation modal](./invitations-create-invitation-modal.md) | **Complete on 2026-03-22** · **Ready for review** |
 | [Users & cohorts tabs — UI parity with Invitations](./admin-users-and-cohorts-ui-parity-with-invitations.md) | **Complete on 2026-03-22** · **Ready for review** |
 | [Pipeline cell / step detail UI polish](./pipeline-cell-step-detail-ui-polish.md) | **Open** — **schedule toward end of beta prep** · **Ready for review** |
+| [Tech Deck: Admin Providers page](./tech-deck-admin-providers-page.md) (usage providers & rate cards UI) | **Open** · **Ready for review** |
 
 _Status values for review readiness: **Unexpanded** = brief only, no detailed design. **Ready for review** = architecture/spec written. **Reviewed** = human sign-off (none recorded yet). Combine with delivery state where relevant. See Goal 1 in [`work-log.md`](../../work-log.md)._
 

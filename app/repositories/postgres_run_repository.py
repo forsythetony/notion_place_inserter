@@ -92,6 +92,7 @@ def _row_to_step_run(row: dict[str, Any], *, pipeline_id: str | None = None) -> 
         pipeline_id=pipeline_id,
         input_summary=_coerce_jsonb_value(row.get("input_summary")),
         output_summary=_coerce_jsonb_value(row.get("output_summary")),
+        step_trace_full=_coerce_jsonb_value(row.get("step_trace_full")),
         processing_log=pl_list,
         started_at=_parse_dt(row.get("started_at")),
         completed_at=_parse_dt(row.get("completed_at")),
@@ -115,6 +116,57 @@ def _row_to_job_run(row: dict[str, Any]) -> JobRun:
         completed_at=_parse_dt(row.get("completed_at")),
         error_summary=row.get("error_summary"),
         result_json=row.get("result_json"),
+        created_at=_parse_dt(row.get("created_at")),
+    )
+
+
+def _row_to_stage_run(row: dict[str, Any]) -> StageRun:
+    return StageRun(
+        id=str(row["id"]),
+        job_run_id=str(row["job_run_id"]),
+        stage_id=row["stage_id"],
+        status=str(row["status"]),
+        owner_user_id=str(row["owner_user_id"]),
+        started_at=_parse_dt(row.get("started_at")),
+        completed_at=_parse_dt(row.get("completed_at")),
+    )
+
+
+def _row_to_pipeline_run(row: dict[str, Any]) -> PipelineRun:
+    return PipelineRun(
+        id=str(row["id"]),
+        stage_run_id=str(row["stage_run_id"]),
+        pipeline_id=row["pipeline_id"],
+        status=str(row["status"]),
+        owner_user_id=str(row["owner_user_id"]),
+        job_run_id=str(row["job_run_id"]),
+        started_at=_parse_dt(row.get("started_at")),
+        completed_at=_parse_dt(row.get("completed_at")),
+    )
+
+
+def _row_to_usage_record(row: dict[str, Any]) -> UsageRecord:
+    mv = row.get("metric_value")
+    if mv is None:
+        metric_value = 0.0
+    elif isinstance(mv, (int, float)):
+        metric_value = float(mv)
+    else:
+        try:
+            metric_value = float(mv)
+        except (TypeError, ValueError):
+            metric_value = 0.0
+    return UsageRecord(
+        id=str(row["id"]),
+        job_run_id=str(row["job_run_id"]),
+        usage_type=str(row["usage_type"]),
+        provider=str(row["provider"]),
+        metric_name=str(row["metric_name"]),
+        metric_value=metric_value,
+        owner_user_id=str(row["owner_user_id"]),
+        step_run_id=str(row["step_run_id"]) if row.get("step_run_id") else None,
+        metadata=_coerce_jsonb_value(row.get("metadata")),
+        created_at=_parse_dt(row.get("created_at")),
     )
 
 
@@ -248,17 +300,60 @@ class PostgresRunRepository:
         *,
         job_id: str | None = None,
         limit: int = 100,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        offset: int = 0,
     ) -> list[JobRun]:
         try:
+            if limit <= 0:
+                return []
             uid = str(_ensure_uuid(owner_user_id))
             q = self._client.table(self.JOB_RUNS).select("*").eq("owner_user_id", uid)
             if job_id:
                 q = q.eq("job_id", job_id)
-            r = q.order("created_at", desc=True).limit(limit).execute()
+            if from_iso:
+                q = q.gte("created_at", from_iso)
+            if to_iso:
+                q = q.lte("created_at", to_iso)
+            r = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         except ValueError:
             return []
         except Exception as e:
             logger.exception("postgres_list_job_runs_failed | owner={} error={}", owner_user_id, e)
+            raise
+        return [_row_to_job_run(row) for row in (r.data or [])]
+
+    def list_recent_job_runs(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        owner_user_ids: list[str] | None = None,
+    ) -> list[JobRun]:
+        """Most recent job runs across all owners (global admin), optionally filtered."""
+        try:
+            if limit <= 0:
+                return []
+            q = self._client.table(self.JOB_RUNS).select("*")
+            if owner_user_ids:
+                uuids: list[str] = []
+                for raw in owner_user_ids:
+                    try:
+                        uuids.append(str(_ensure_uuid(raw)))
+                    except Exception:
+                        continue
+                if not uuids:
+                    return []
+                q = q.in_("owner_user_id", uuids)
+            if from_iso:
+                q = q.gte("created_at", from_iso)
+            if to_iso:
+                q = q.lte("created_at", to_iso)
+            r = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        except Exception as e:
+            logger.exception("postgres_list_recent_job_runs_failed | error={}", e)
             raise
         return [_row_to_job_run(row) for row in (r.data or [])]
 
@@ -360,6 +455,7 @@ class PostgresRunRepository:
             "status": run.status,
             "input_summary": run.input_summary,
             "output_summary": run.output_summary,
+            "step_trace_full": run.step_trace_full,
             "processing_log": run.processing_log if run.processing_log is not None else [],
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
@@ -384,7 +480,7 @@ class PostgresRunRepository:
                 self._client.table(self.STEP_RUNS)
                 .select(
                     "id, pipeline_run_id, step_id, step_template_id, job_run_id, stage_run_id, "
-                    "owner_user_id, status, input_summary, output_summary, processing_log, "
+                    "owner_user_id, status, input_summary, output_summary, step_trace_full, processing_log, "
                     "started_at, completed_at, error_summary, created_at"
                 )
                 .eq("job_run_id", str(job_run_uuid))
@@ -423,6 +519,142 @@ class PostgresRunRepository:
         for row in rows:
             pid = pipeline_ids.get(str(row["pipeline_run_id"]))
             out.append(_row_to_step_run(row, pipeline_id=pid))
+        return out
+
+    def list_stage_runs_for_job_run(
+        self, job_run_id: str, owner_user_id: str
+    ) -> list[StageRun]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            job_run_uuid = UUID(job_run_id)
+        except ValueError:
+            return []
+        try:
+            r = (
+                self._client.table(self.STAGE_RUNS)
+                .select("*")
+                .eq("job_run_id", str(job_run_uuid))
+                .eq("owner_user_id", uid)
+                .order("created_at", desc=False)
+                .execute()
+            )
+        except Exception as e:
+            logger.exception(
+                "postgres_list_stage_runs_for_job_run_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        return [_row_to_stage_run(row) for row in (r.data or [])]
+
+    def list_pipeline_run_executions_for_job_run(
+        self, job_run_id: str, owner_user_id: str
+    ) -> list[PipelineRun]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            job_run_uuid = UUID(job_run_id)
+        except ValueError:
+            return []
+        try:
+            r = (
+                self._client.table(self.PIPELINE_RUNS)
+                .select("*")
+                .eq("job_run_id", str(job_run_uuid))
+                .eq("owner_user_id", uid)
+                .order("created_at", desc=False)
+                .execute()
+            )
+        except Exception as e:
+            logger.exception(
+                "postgres_list_pipeline_run_executions_for_job_run_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        return [_row_to_pipeline_run(row) for row in (r.data or [])]
+
+    def list_usage_records_for_job_run(
+        self, job_run_id: str, owner_user_id: str
+    ) -> list[UsageRecord]:
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            job_run_uuid = UUID(job_run_id)
+        except ValueError:
+            return []
+        try:
+            r = (
+                self._client.table(self.USAGE_RECORDS)
+                .select("*")
+                .eq("job_run_id", str(job_run_uuid))
+                .eq("owner_user_id", uid)
+                .order("created_at", desc=False)
+                .execute()
+            )
+        except Exception as e:
+            logger.exception(
+                "postgres_list_usage_records_for_job_run_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        return [_row_to_usage_record(row) for row in (r.data or [])]
+
+    def count_run_structure_for_job_run(self, job_run_id: str, owner_user_id: str) -> dict[str, int]:
+        """Count stage_runs, pipeline_run_executions, and step_runs rows for a job run."""
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            jrid = str(UUID(job_run_id))
+        except ValueError:
+            return {"stages": 0, "pipelines": 0, "steps": 0}
+        out = {"stages": 0, "pipelines": 0, "steps": 0}
+        try:
+            rs = (
+                self._client.table(self.STAGE_RUNS)
+                .select("id", count="exact", head=True)
+                .eq("job_run_id", jrid)
+                .eq("owner_user_id", uid)
+                .execute()
+            )
+            out["stages"] = int(rs.count or 0)
+        except Exception as e:
+            logger.exception(
+                "postgres_count_stage_runs_for_job_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        try:
+            rp = (
+                self._client.table(self.PIPELINE_RUNS)
+                .select("id", count="exact", head=True)
+                .eq("job_run_id", jrid)
+                .eq("owner_user_id", uid)
+                .execute()
+            )
+            out["pipelines"] = int(rp.count or 0)
+        except Exception as e:
+            logger.exception(
+                "postgres_count_pipeline_runs_for_job_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
+        try:
+            rst = (
+                self._client.table(self.STEP_RUNS)
+                .select("id", count="exact", head=True)
+                .eq("job_run_id", jrid)
+                .eq("owner_user_id", uid)
+                .execute()
+            )
+            out["steps"] = int(rst.count or 0)
+        except Exception as e:
+            logger.exception(
+                "postgres_count_step_runs_for_job_failed | job_run_id={} error={}",
+                job_run_id,
+                e,
+            )
+            raise
         return out
 
     def save_usage_record(self, record: UsageRecord) -> None:

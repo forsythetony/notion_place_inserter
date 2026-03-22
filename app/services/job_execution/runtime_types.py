@@ -9,6 +9,21 @@ from app.services.job_execution.step_pipeline_log import StepPipelineLog
 
 
 @dataclass
+class StepExecutionHandle:
+    """
+    Per-step execution scope passed into handlers. Safe under parallel pipelines:
+    usage and processing lines use this handle instead of mutable fields on shared ExecutionContext.
+    """
+
+    step_run_id: str
+    pipeline_log: StepPipelineLog
+
+    def log_processing(self, message: str) -> None:
+        """Append a PROCESSING line for this step only."""
+        self.pipeline_log.processing(message)
+
+
+@dataclass
 class ExecutionContext:
     """
     Mutable run-scoped state for a single job execution.
@@ -21,12 +36,6 @@ class ExecutionContext:
     trigger_payload: dict[str, Any]
     dry_run: bool = False
     owner_user_id: str = ""
-
-    # Current step run id (set during step execution for usage attribution)
-    step_run_id: str | None = None
-
-    # Set only for the duration of ``_run_step``; used by ``log_step_processing``.
-    step_pipeline_log: StepPipelineLog | None = None
 
     # Step outputs: step_id -> {output_name: value}
     step_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -65,9 +74,3 @@ class ExecutionContext:
 
     def set_property(self, schema_property_id: str, value: Any) -> None:
         self.properties[schema_property_id] = value
-
-    def log_step_processing(self, message: str) -> None:
-        """Emit a standardized PROCESSING line for the current step (no-op if not in a step run)."""
-        spl = self.step_pipeline_log
-        if spl is not None:
-            spl.processing(message)

@@ -44,6 +44,8 @@ from app.repositories.yaml_loader import (
     parse_trigger_definition,
 )
 
+USAGE_PROVIDERS_CATALOG_YAML = "product_model/catalog/usage_providers.yaml"
+
 # Starter definitions derived from bootstrap YAML
 STARTER_TRIGGER_PATH = "/locations"
 STARTER_JOB_SLUG = "notion_place_inserter"
@@ -121,7 +123,41 @@ class PostgresBootstrapProvisioningService:
                 except (KeyError, TypeError) as e:
                     logger.warning("bootstrap_skip_step_template | id={} error={}", tid, e)
 
+        self._seed_usage_provider_definitions_from_yaml()
+
         logger.info("bootstrap_seed_catalog_complete")
+
+    def _seed_usage_provider_definitions_from_yaml(self) -> None:
+        """Upsert built-in usage provider labels from version-controlled YAML."""
+        data = load_yaml_file(USAGE_PROVIDERS_CATALOG_YAML)
+        if not data:
+            logger.debug("bootstrap_skip_usage_providers | missing_or_empty_yaml")
+            return
+        providers = data.get("providers")
+        if not isinstance(providers, list):
+            return
+        for p in providers:
+            if not isinstance(p, dict):
+                continue
+            pid = p.get("provider_id")
+            if not pid or not isinstance(pid, str):
+                continue
+            row = {
+                "provider_id": pid,
+                "display_name": p.get("display_name") or pid,
+                "description": (p.get("description") or "") if isinstance(p.get("description"), str) else "",
+                "billing_unit": (p.get("billing_unit") or "call")
+                if isinstance(p.get("billing_unit"), str)
+                else "call",
+                "notes": p.get("notes") if isinstance(p.get("notes"), str) else None,
+            }
+            try:
+                self._client.table("usage_provider_definitions").upsert(
+                    row, on_conflict="provider_id"
+                ).execute()
+                logger.debug("bootstrap_seed_usage_provider | id={}", pid)
+            except Exception as e:
+                logger.warning("bootstrap_skip_usage_provider | id={} error={}", pid, e)
 
     def _provision_owner_starter_definitions(self, owner_user_id: str, uid: str) -> None:
         """

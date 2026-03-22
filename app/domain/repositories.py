@@ -161,7 +161,23 @@ class RunRepository(Protocol):
         self, platform_job_id: str, owner_user_id: str
     ) -> JobRun | None: ...
     def list_job_runs_by_owner(
-        self, owner_user_id: str, *, job_id: str | None = None, limit: int = 100
+        self,
+        owner_user_id: str,
+        *,
+        job_id: str | None = None,
+        limit: int = 100,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        offset: int = 0,
+    ) -> list[JobRun]: ...
+    def list_recent_job_runs(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        owner_user_ids: list[str] | None = None,
     ) -> list[JobRun]: ...
     def save_job_run(self, run: JobRun) -> None: ...
     def save_stage_run(self, run: StageRun) -> None: ...

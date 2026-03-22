@@ -103,6 +103,9 @@ class YamlRunRepository:
         *,
         job_id: str | None = None,
         limit: int = 100,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        offset: int = 0,
     ) -> list[JobRun]:
         root = _project_root()
         runs_dir = root / tenant_runs_dir(owner_user_id, self._base)
@@ -126,10 +129,37 @@ class YamlRunRepository:
                 except (KeyError, TypeError):
                     continue
         result.sort(
-            key=lambda r: (r.started_at or r.completed_at or ""),
+            key=lambda r: (r.created_at or r.started_at or r.completed_at or ""),
             reverse=True,
         )
-        return result[:limit]
+        if from_iso or to_iso:
+            filtered: list[JobRun] = []
+            for r in result:
+                ts = r.created_at or r.started_at
+                if ts is None:
+                    continue
+                iso = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                if from_iso and iso < from_iso:
+                    continue
+                if to_iso and iso > to_iso:
+                    continue
+                filtered.append(r)
+            result = filtered
+        if limit <= 0:
+            return []
+        return result[offset : offset + limit]
+
+    def list_recent_job_runs(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        owner_user_ids: list[str] | None = None,
+    ) -> list[JobRun]:
+        """YAML repo has no global index; admin explorer uses Postgres."""
+        return []
 
     def list_step_runs_for_job_run(
         self, job_run_id: str, owner_user_id: str

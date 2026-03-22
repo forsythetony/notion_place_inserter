@@ -3,11 +3,12 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dependencies import AuthContext, require_admin_managed_auth
+from app.domain.runs import JobRun, PipelineRun, StageRun, StepRun, UsageRecord
 from app.domain.limits import AppLimits
 from app.services.effective_limits import (
     LimitsResolutionError,
@@ -15,6 +16,12 @@ from app.services.effective_limits import (
     resolve_effective_app_limits,
 )
 from app.services.supabase_auth_repository import SupabaseAuthRepository
+from app.services.usage_cost_estimation_service import (
+    RateCardRow,
+    estimate_usage_record_usd,
+    parse_rate_card_rows,
+    sum_estimated_usd,
+)
 
 router = APIRouter(prefix="/auth/admin", tags=["auth", "admin"])
 
@@ -41,6 +48,145 @@ def _profile_row_to_item(row: dict) -> dict:
         "cohortKey": row.get("cohort_key"),
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
+    }
+
+
+def _dt_iso(val: datetime | None) -> str | None:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.isoformat()
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
+
+
+def _run_repo_or_501(request: Request):
+    repo = getattr(request.app.state, "supabase_run_repository", None)
+    if repo is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Admin run explorer requires Postgres run repository",
+        )
+    return repo
+
+
+def _job_run_admin_dict(run: JobRun) -> dict:
+    return {
+        "id": run.id,
+        "ownerUserId": run.owner_user_id,
+        "jobId": run.job_id,
+        "triggerId": run.trigger_id,
+        "targetId": run.target_id,
+        "status": run.status,
+        "triggerPayload": run.trigger_payload or {},
+        "definitionSnapshotRef": run.definition_snapshot_ref,
+        "platformJobId": run.platform_job_id,
+        "retryCount": run.retry_count,
+        "startedAt": _dt_iso(run.started_at),
+        "completedAt": _dt_iso(run.completed_at),
+        "errorSummary": run.error_summary,
+        "resultJson": run.result_json,
+        "createdAt": _dt_iso(run.created_at),
+    }
+
+
+def _load_rate_card_rows(request: Request) -> list[RateCardRow]:
+    client = getattr(request.app.state, "supabase_client", None)
+    if client is None:
+        return []
+    try:
+        r = client.table("usage_rate_cards").select("*").execute()
+        return parse_rate_card_rows(r.data or [])
+    except Exception as e:
+        logger.warning("usage_rate_cards_load_failed | error={}", e)
+        return []
+
+
+def _usage_rollups_from_records(
+    records: list[UsageRecord],
+    rate_rows: list[RateCardRow] | None = None,
+) -> dict:
+    totals = {"llmTokens": 0, "externalApiCalls": 0}
+    by_provider: dict[str, dict[str, int]] = {}
+    for ur in records:
+        p = ur.provider
+        if p not in by_provider:
+            by_provider[p] = {"llmTokens": 0, "externalApiCalls": 0}
+        if ur.usage_type == "llm_tokens":
+            v = int(ur.metric_value)
+            totals["llmTokens"] += v
+            by_provider[p]["llmTokens"] += v
+        elif ur.usage_type == "external_api_call":
+            v = int(ur.metric_value)
+            totals["externalApiCalls"] += v
+            by_provider[p]["externalApiCalls"] += v
+    out: dict = {"totals": totals, "byProvider": by_provider}
+    if rate_rows is not None:
+        out["estimatedCostUsd"] = round(sum_estimated_usd(records, rate_rows), 6)
+    return out
+
+
+def _usage_record_admin_dict(u: UsageRecord, *, estimated_cost_usd: float | None = None) -> dict:
+    d = {
+        "id": u.id,
+        "jobRunId": u.job_run_id,
+        "usageType": u.usage_type,
+        "provider": u.provider,
+        "metricName": u.metric_name,
+        "metricValue": u.metric_value,
+        "ownerUserId": u.owner_user_id,
+        "stepRunId": u.step_run_id,
+        "metadata": u.metadata,
+        "createdAt": _dt_iso(u.created_at),
+    }
+    if estimated_cost_usd is not None:
+        d["estimatedCostUsd"] = round(estimated_cost_usd, 6)
+    return d
+
+
+def _stage_run_admin_dict(s: StageRun) -> dict:
+    return {
+        "id": s.id,
+        "jobRunId": s.job_run_id,
+        "stageId": s.stage_id,
+        "status": s.status,
+        "ownerUserId": s.owner_user_id,
+        "startedAt": _dt_iso(s.started_at),
+        "completedAt": _dt_iso(s.completed_at),
+    }
+
+
+def _pipeline_run_admin_dict(p: PipelineRun) -> dict:
+    return {
+        "id": p.id,
+        "stageRunId": p.stage_run_id,
+        "pipelineId": p.pipeline_id,
+        "jobRunId": p.job_run_id,
+        "status": p.status,
+        "ownerUserId": p.owner_user_id,
+        "startedAt": _dt_iso(p.started_at),
+        "completedAt": _dt_iso(p.completed_at),
+    }
+
+
+def _step_run_admin_dict(s: StepRun) -> dict:
+    return {
+        "id": s.id,
+        "pipelineRunId": s.pipeline_run_id,
+        "stepId": s.step_id,
+        "stepTemplateId": s.step_template_id,
+        "jobRunId": s.job_run_id,
+        "stageRunId": s.stage_run_id,
+        "pipelineId": s.pipeline_id,
+        "status": s.status,
+        "inputSummary": s.input_summary,
+        "outputSummary": s.output_summary,
+        "stepTraceFull": s.step_trace_full,
+        "processingLog": s.processing_log or [],
+        "startedAt": _dt_iso(s.started_at),
+        "completedAt": _dt_iso(s.completed_at),
+        "errorSummary": s.error_summary,
     }
 
 
@@ -194,6 +340,197 @@ def delete_cohort_admin(
         ctx.user_id,
         cohort_id,
     )
+
+
+@router.get("/usage-providers")
+def list_usage_providers_admin(
+    request: Request,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    """Catalog rows for usage_records.provider labels (YAML-seeded)."""
+    client = getattr(request.app.state, "supabase_client", None)
+    if client is None:
+        raise HTTPException(status_code=501, detail="Supabase client not configured")
+    logger.info("admin_list_usage_providers | admin_user_id={}", ctx.user_id)
+    try:
+        r = client.table("usage_provider_definitions").select("*").order("provider_id").execute()
+    except Exception as e:
+        logger.exception("admin_list_usage_providers_failed | error={}", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to load usage provider definitions (migration applied?)",
+        ) from e
+    items = []
+    for row in r.data or []:
+        items.append(
+            {
+                "providerId": row["provider_id"],
+                "displayName": row.get("display_name"),
+                "description": row.get("description") or "",
+                "billingUnit": row.get("billing_unit") or "call",
+                "notes": row.get("notes"),
+                "createdAt": row.get("created_at"),
+                "updatedAt": row.get("updated_at"),
+            }
+        )
+    return {"items": items}
+
+
+@router.get("/runs")
+def list_recent_runs_admin(
+    request: Request,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    from_ts: str | None = Query(None, alias="from"),
+    to_ts: str | None = Query(None, alias="to"),
+    user_ids: list[str] | None = Query(
+        None,
+        description="Repeat this query param to restrict runs to these owner user ids (UUIDs).",
+    ),
+):
+    """Paginated recent job runs across all users with structure counts and usage rollups per run."""
+    run_repo = _run_repo_or_501(request)
+    owner_filter = user_ids if user_ids else None
+    logger.info(
+        "admin_list_recent_runs | admin_user_id={} limit={} offset={}",
+        ctx.user_id,
+        limit,
+        offset,
+    )
+    runs = run_repo.list_recent_job_runs(
+        limit=limit,
+        offset=offset,
+        from_iso=from_ts,
+        to_iso=to_ts,
+        owner_user_ids=owner_filter,
+    )
+    rate_rows = _load_rate_card_rows(request)
+    items = []
+    for jr in runs:
+        uid = jr.owner_user_id
+        counts = run_repo.count_run_structure_for_job_run(jr.id, uid)
+        usage_rows = run_repo.list_usage_records_for_job_run(jr.id, uid)
+        items.append(
+            {
+                "userId": uid,
+                "jobRun": _job_run_admin_dict(jr),
+                "counts": {
+                    "stages": counts["stages"],
+                    "pipelines": counts["pipelines"],
+                    "steps": counts["steps"],
+                },
+                "usageRollups": _usage_rollups_from_records(usage_rows, rate_rows),
+            }
+        )
+    next_offset = offset + len(runs)
+    has_more = len(runs) == limit
+    return {
+        "items": items,
+        "nextOffset": next_offset if has_more else None,
+        "hasMore": has_more,
+    }
+
+
+@router.get("/users/{user_id}/runs")
+def list_user_runs_admin(
+    request: Request,
+    user_id: UUID,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+    limit: int = Query(30, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    from_ts: str | None = Query(None, alias="from"),
+    to_ts: str | None = Query(None, alias="to"),
+):
+    """Paginated job runs for a user with structure counts and usage rollups per run."""
+    uid = str(user_id)
+    run_repo = _run_repo_or_501(request)
+    logger.info(
+        "admin_list_user_runs | admin_user_id={} target_user_id={} limit={} offset={}",
+        ctx.user_id,
+        uid,
+        limit,
+        offset,
+    )
+    runs = run_repo.list_job_runs_by_owner(
+        uid,
+        limit=limit,
+        offset=offset,
+        from_iso=from_ts,
+        to_iso=to_ts,
+    )
+    rate_rows = _load_rate_card_rows(request)
+    items = []
+    for jr in runs:
+        counts = run_repo.count_run_structure_for_job_run(jr.id, uid)
+        usage_rows = run_repo.list_usage_records_for_job_run(jr.id, uid)
+        items.append(
+            {
+                "jobRun": _job_run_admin_dict(jr),
+                "counts": {
+                    "stages": counts["stages"],
+                    "pipelines": counts["pipelines"],
+                    "steps": counts["steps"],
+                },
+                "usageRollups": _usage_rollups_from_records(usage_rows, rate_rows),
+            }
+        )
+    next_offset = offset + len(runs)
+    has_more = len(runs) == limit
+    return {
+        "userId": uid,
+        "items": items,
+        "nextOffset": next_offset if has_more else None,
+        "hasMore": has_more,
+    }
+
+
+@router.get("/users/{user_id}/runs/{job_run_id}")
+def get_user_run_detail_admin(
+    request: Request,
+    user_id: UUID,
+    job_run_id: UUID,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    """Single job run with stages, pipelines, steps, usage_records, and rollups."""
+    uid = str(user_id)
+    jrid = str(job_run_id)
+    run_repo = _run_repo_or_501(request)
+    logger.info(
+        "admin_get_user_run_detail | admin_user_id={} target_user_id={} job_run_id={}",
+        ctx.user_id,
+        uid,
+        jrid,
+    )
+    jr = run_repo.get_job_run(jrid, uid)
+    if jr is None:
+        raise HTTPException(status_code=404, detail="Job run not found for this user")
+    counts = run_repo.count_run_structure_for_job_run(jrid, uid)
+    usage_rows = run_repo.list_usage_records_for_job_run(jrid, uid)
+    stages = run_repo.list_stage_runs_for_job_run(jrid, uid)
+    pipelines = run_repo.list_pipeline_run_executions_for_job_run(jrid, uid)
+    steps = run_repo.list_step_runs_for_job_run(jrid, uid)
+    rate_rows = _load_rate_card_rows(request)
+    return {
+        "userId": uid,
+        "jobRun": _job_run_admin_dict(jr),
+        "counts": {
+            "stages": counts["stages"],
+            "pipelines": counts["pipelines"],
+            "steps": counts["steps"],
+        },
+        "usageRollups": _usage_rollups_from_records(usage_rows, rate_rows),
+        "usageRecords": [
+            _usage_record_admin_dict(
+                u,
+                estimated_cost_usd=estimate_usage_record_usd(u, rate_rows),
+            )
+            for u in usage_rows
+        ],
+        "stageRuns": [_stage_run_admin_dict(s) for s in stages],
+        "pipelineRunExecutions": [_pipeline_run_admin_dict(p) for p in pipelines],
+        "stepRuns": [_step_run_admin_dict(s) for s in steps],
+    }
 
 
 # --- Resource limits (Postgres app_limits) ---

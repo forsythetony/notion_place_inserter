@@ -148,7 +148,7 @@ def test_save_job_run_upserts(repo, mock_client):
 
 def test_list_job_runs_by_owner_returns_runs(repo, mock_client):
     """list_job_runs_by_owner returns JobRuns for owner."""
-    mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+    mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = MagicMock(
         data=[
             {
                 "id": "run-1",
@@ -167,6 +167,44 @@ def test_list_job_runs_by_owner_returns_runs(repo, mock_client):
     assert len(runs) == 1
     assert runs[0].id == "run-1"
     assert runs[0].status == "succeeded"
+
+
+def test_list_recent_job_runs_global_order_and_range(repo, mock_client):
+    """list_recent_job_runs queries job_runs without owner filter, newest first."""
+    mock_client.table.return_value.select.return_value.order.return_value.range.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "run-2",
+                "owner_user_id": "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+                "job_id": "job1",
+                "trigger_id": "t1",
+                "target_id": "t2",
+                "status": "succeeded",
+                "trigger_payload": {},
+                "platform_job_id": "loc_2",
+                "retry_count": 0,
+            },
+        ]
+    )
+    runs = repo.list_recent_job_runs(limit=10, offset=0)
+    assert len(runs) == 1
+    assert runs[0].id == "run-2"
+    mock_client.table.assert_called_with("job_runs")
+    chain = mock_client.table.return_value.select.return_value
+    chain.order.assert_called_once()
+    chain.order.return_value.range.assert_called_once_with(0, 9)
+
+
+def test_list_recent_job_runs_filters_by_owner_ids(repo, mock_client):
+    """list_recent_job_runs uses in_ when owner_user_ids is non-empty."""
+    uid = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
+    mock_client.table.return_value.select.return_value.in_.return_value.order.return_value.range.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    repo.list_recent_job_runs(limit=5, owner_user_ids=[uid])
+    mock_client.table.return_value.select.return_value.in_.assert_called_once()
+    call_kw = mock_client.table.return_value.select.return_value.in_.call_args
+    assert call_kw[0][0] == "owner_user_id"
 
 
 def test_insert_event_logs_and_does_not_raise(repo):

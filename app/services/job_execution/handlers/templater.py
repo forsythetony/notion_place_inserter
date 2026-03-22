@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from app.services.job_execution.binding_resolver import resolve_binding
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 
 
@@ -32,6 +32,7 @@ class TemplaterHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         template = config.get("template") or ""
@@ -55,7 +56,7 @@ class TemplaterHandler(StepRuntime):
             else:
                 resolved[key] = str(val)
 
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Rendering template (placeholder_keys={sorted(resolved.keys())!s})."
         )
         rendered = _render_template(template, resolved)

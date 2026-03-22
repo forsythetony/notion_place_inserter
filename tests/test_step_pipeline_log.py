@@ -6,6 +6,7 @@ from app.services.job_execution.step_pipeline_log import (
     StepPipelineLog,
     build_step_input_summary,
     build_step_output_summary,
+    build_step_trace_full,
     emit_step_final,
     emit_step_input,
     json_safe_for_db,
@@ -104,6 +105,29 @@ def test_build_step_input_and_output_summary_v1():
     assert out["status"] == "succeeded"
     assert out["error"] is None
     assert out["runtime_ms"] == 1.2346
+
+
+def test_build_step_trace_full_does_not_truncate_long_strings():
+    """Admin trace must preserve full strings (unlike input_summary)."""
+    long_s = "y" * 500
+    log = StepPipelineLog(
+        run_id="r1",
+        job_id="j1",
+        stage_id="st1",
+        pipeline_id="p1",
+        step_id="s1",
+        step_template_id="tmpl",
+    )
+    full = build_step_trace_full(
+        log,
+        resolved_inputs={"prompt": long_s},
+        input_bindings={},
+        config={},
+        outputs={"x": 1},
+    )
+    assert full["schema_version"] == 2
+    assert full["resolved_inputs"]["prompt"] == long_s
+    assert full["outputs"]["x"] == 1
 
 
 def test_processing_lines_accumulate():

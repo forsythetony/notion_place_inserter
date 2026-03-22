@@ -6,7 +6,8 @@ import pytest
 
 from app.services.job_execution.binding_resolver import resolve_binding, resolve_input_bindings
 from app.services.job_execution.job_execution_service import JobExecutionService
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
+from app.services.job_execution.step_pipeline_log import StepPipelineLog
 from app.services.job_execution.handlers import (
     AiPromptHandler,
     AiSelectRelationHandler,
@@ -21,6 +22,46 @@ from app.services.job_execution.handlers import (
 )
 from app.services.job_execution.step_runtime_registry import StepRuntimeRegistry
 from app.services.job_execution.target_write_adapter import build_notion_properties_payload
+
+
+def _make_step_handle(step_run_id: str = "sr_test") -> StepExecutionHandle:
+    pl = StepPipelineLog(
+        run_id="r1",
+        job_id="j1",
+        stage_id="s1",
+        pipeline_id="p1",
+        step_id="step1",
+        step_template_id="tpl1",
+    )
+    return StepExecutionHandle(step_run_id=step_run_id, pipeline_log=pl)
+
+
+def test_step_execution_handle_isolates_processing_lines():
+    """Parallel pipelines: each handle appends only to its own StepPipelineLog."""
+    la = StepPipelineLog(
+        run_id="r1",
+        job_id="j1",
+        stage_id="s1",
+        pipeline_id="p1",
+        step_id="a",
+        step_template_id="t1",
+    )
+    lb = StepPipelineLog(
+        run_id="r1",
+        job_id="j1",
+        stage_id="s1",
+        pipeline_id="p2",
+        step_id="b",
+        step_template_id="t1",
+    )
+    ha = StepExecutionHandle(step_run_id="sr_a", pipeline_log=la)
+    hb = StepExecutionHandle(step_run_id="sr_b", pipeline_log=lb)
+    ha.log_processing("line-a")
+    hb.log_processing("line-b")
+    assert any("line-a" in x for x in la.processing_lines)
+    assert any("line-b" in x for x in lb.processing_lines)
+    assert not any("line-b" in x for x in la.processing_lines)
+    assert not any("line-a" in x for x in lb.processing_lines)
 
 
 def test_resolve_signal_ref_trigger_payload():
@@ -225,6 +266,7 @@ def test_cache_set_handler_stores_in_run_cache():
         input_bindings={"value": {"signal_ref": "trigger.payload.raw_input"}},
         resolved_inputs={"value": "stored_value"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert ctx.run_cache.get("my_key") == "stored_value"
@@ -241,6 +283,7 @@ def test_cache_get_handler_returns_cached_value():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result == {"value": "cached"}
@@ -256,6 +299,7 @@ def test_property_set_handler_stores_in_properties():
         input_bindings={"value": {}},
         resolved_inputs={"value": ["History", "Landmark"]},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert ctx.properties.get("prop_tags") == ["History", "Landmark"]
@@ -272,6 +316,7 @@ def test_property_set_handler_stores_in_page_metadata_cover():
         input_bindings={"value": {}},
         resolved_inputs={"value": payload},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert ctx.cover == payload
@@ -288,6 +333,7 @@ def test_property_set_handler_stores_in_page_metadata_icon():
         input_bindings={"value": {}},
         resolved_inputs={"value": payload},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert ctx.icon == payload
@@ -303,6 +349,7 @@ def test_property_set_handler_page_metadata_converts_url_string():
         input_bindings={"value": {}},
         resolved_inputs={"value": "https://example.com/img.png"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert ctx.cover == {"type": "external", "external": {"url": "https://example.com/img.png"}}
@@ -319,6 +366,7 @@ def test_data_transform_handler_extract_key():
         input_bindings={"value": {}},
         resolved_inputs={"value": value},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["transformed_value"] == "places/abc/photos/xyz"
@@ -338,6 +386,7 @@ def test_data_transform_handler_returns_fallback_when_path_missing():
         input_bindings={"value": {}},
         resolved_inputs={"value": {"photos": [{"name": "x"}]}},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["transformed_value"] == "default.jpg"
@@ -359,6 +408,7 @@ def test_templater_handler_renders_template():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["rendered_value"] == "44.9778, -93.265"  # float str() drops trailing zero
@@ -385,6 +435,7 @@ def test_templater_handler_signal_ref_resolution():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["rendered_value"] == "19.43, -99.16"
@@ -408,6 +459,7 @@ def test_templater_handler_cache_key_ref_resolution():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["rendered_value"] == "44.9778, -93.265"  # float str() drops trailing zero
@@ -426,6 +478,7 @@ def test_templater_handler_missing_key_renders_empty():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["rendered_value"] == "x--z"
@@ -447,6 +500,7 @@ def test_templater_handler_non_string_values_stringify():
         input_bindings={},
         resolved_inputs={},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["rendered_value"] == "42 3.14"
@@ -464,8 +518,11 @@ def test_step_runtime_registry_get_returns_templater_handler():
 def test_search_icons_handler_returns_url_when_freepik_available():
     """SearchIconsHandler returns image_url from Freepik when service available."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
     ctx._services["freepik"] = MagicMock()
     ctx._services["freepik"].get_first_icon_url.return_value = "https://cdn.freepik.com/icon.png"
+    usage = MagicMock()
+    ctx._services["usage_accounting"] = usage
     handler = SearchIconsHandler()
     result = handler.execute(
         step_id="step_search",
@@ -473,9 +530,17 @@ def test_search_icons_handler_returns_url_when_freepik_available():
         input_bindings={"query": {}},
         resolved_inputs={"query": "coffee shop"},
         ctx=ctx,
+        step_handle=_make_step_handle("step_run_1"),
         snapshot={},
     )
     assert result["image_url"] == "https://cdn.freepik.com/icon.png"
+    usage.record_external_api_call.assert_called_once()
+    call_kw = usage.record_external_api_call.call_args.kwargs
+    assert call_kw["provider"] == "freepik"
+    assert call_kw["operation"] == "search_icons"
+    assert call_kw["job_run_id"] == "r1"
+    assert call_kw["owner_user_id"] == ctx.owner_user_id
+    assert call_kw["step_run_id"] == "step_run_1"
 
 
 def test_search_icons_handler_returns_none_when_no_freepik():
@@ -488,9 +553,33 @@ def test_search_icons_handler_returns_none_when_no_freepik():
         input_bindings={"query": {}},
         resolved_inputs={"query": "bridge"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["image_url"] is None
+
+
+def test_search_icons_handler_skips_usage_when_query_empty():
+    """SearchIconsHandler does not call Freepik or record usage for an empty query."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
+    freepik = MagicMock()
+    ctx._services["freepik"] = freepik
+    usage = MagicMock()
+    ctx._services["usage_accounting"] = usage
+    handler = SearchIconsHandler()
+    result = handler.execute(
+        step_id="step_search",
+        config={},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "   "},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["image_url"] is None
+    freepik.get_first_icon_url.assert_not_called()
+    usage.record_external_api_call.assert_not_called()
 
 
 def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
@@ -510,6 +599,7 @@ def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
             input_bindings={"value": {}},
             resolved_inputs={"value": "https://example.com/image.jpg"},
             ctx=ctx,
+            step_handle=_make_step_handle(),
             snapshot={},
         )
     assert result["notion_image_url"] == {
@@ -536,6 +626,7 @@ def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_availab
             input_bindings={"value": {}},
             resolved_inputs={"value": "https://example.com/image.jpg"},
             ctx=ctx,
+            step_handle=_make_step_handle(),
             snapshot={},
         )
     assert result["notion_image_url"] == {
@@ -564,6 +655,7 @@ def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_o
         input_bindings={"value": {}},
         resolved_inputs={"value": "places/abc/photos/def"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
 
@@ -602,6 +694,7 @@ def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_availab
             input_bindings={"value": {}},
             resolved_inputs={"value": "https://example.com/image.jpg"},
             ctx=ctx,
+            step_handle=_make_step_handle(),
             snapshot={},
         )
 
@@ -641,6 +734,7 @@ def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
                 input_bindings={"value": {}},
                 resolved_inputs={"value": "https://example.com/image.jpg"},
                 ctx=ctx,
+                step_handle=_make_step_handle(),
                 snapshot={},
             )
 
@@ -670,6 +764,7 @@ def test_optimize_input_claude_handler_returns_optimized_query():
         input_bindings={"query": {}},
         resolved_inputs={"query": "coffee shop"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert "optimized_query" in result
@@ -727,6 +822,7 @@ def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_out
         input_bindings={"query": {}},
         resolved_inputs={"query": "stone arch bridge minneapolis"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot=snapshot,
     )
     assert result["optimized_query"] == "Stone Arch Bridge Minneapolis MN"
@@ -756,6 +852,7 @@ def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no
         input_bindings={"query": {}},
         resolved_inputs={"query": "coffee shop"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["optimized_query"] == "coffee shop"
@@ -811,6 +908,7 @@ def test_optimize_input_claude_handler_include_target_query_schema_false_skips_s
         input_bindings={"query": {}},
         resolved_inputs={"query": "stone arch bridge"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot=snapshot,
     )
     assert result["optimized_query"] == "Stone Arch Bridge"
@@ -869,6 +967,7 @@ def test_optimize_input_claude_handler_linked_step_id_override():
         input_bindings={"query": {}},
         resolved_inputs={"query": "Stone Arch Bridge"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot=snapshot,
     )
     assert result["optimized_query"] == "bridge"
@@ -895,6 +994,7 @@ def test_ai_prompt_handler_returns_value_when_claude_available():
         input_bindings={"value": {}},
         resolved_inputs={"value": {"displayName": "Joe's Coffee", "formattedAddress": "123 Main St"}},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["value"] == "A charming café in downtown."
@@ -920,6 +1020,7 @@ def test_ai_prompt_handler_returns_empty_when_no_claude():
         input_bindings={"value": {}},
         resolved_inputs={"value": "input text"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={},
     )
     assert result["value"] == ""
@@ -995,6 +1096,7 @@ def test_ai_select_relation_handler_no_match_returns_empty():
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": {"displayName": "Stone Arch Bridge", "formattedAddress": "Minneapolis, MN"}},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"external_target_id": "ds-locations"}}},
     )
     assert result["selected_page_pointer"] is None or result["selected_relation"] == []
@@ -1022,6 +1124,7 @@ def test_ai_select_relation_handler_selects_match_when_claude_returns_id():
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": {"displayName": "Stone Arch Bridge", "formattedAddress": "Minneapolis, MN"}},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"external_target_id": "ds-locations"}}},
     )
     assert result["selected_relation"] == [{"id": "loc-1"}]
@@ -1051,6 +1154,7 @@ def test_ai_select_relation_prefers_get_data_source_id_over_external_target_id()
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": "1401 West River Rd N, Minneapolis, MN 55411, USA"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={
             "targets": {
                 "target_locations": {
@@ -1082,6 +1186,7 @@ def test_ai_select_relation_returns_empty_on_query_failure():
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": "Minneapolis, MN"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"display_name": "Locations"}}},
     )
     assert result["selected_relation"] == []
@@ -1111,6 +1216,7 @@ def test_ai_select_relation_accepts_address_only_input():
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": "1401 West River Rd N, Minneapolis, MN 55411, USA"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"display_name": "Locations"}}},
     )
     assert result["selected_relation"] == [{"id": "loc-twin"}]
@@ -1149,6 +1255,7 @@ def test_ai_select_relation_uses_valid_filter_properties_from_data_source_schema
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": "Minneapolis, MN"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"display_name": "Locations"}}},
     )
 
@@ -1192,6 +1299,7 @@ def test_ai_select_relation_retries_without_filter_properties_on_validation_erro
         input_bindings={"source_value": {}},
         resolved_inputs={"source_value": "Minneapolis, MN"},
         ctx=ctx,
+        step_handle=_make_step_handle(),
         snapshot={"targets": {"target_locations": {"display_name": "Locations"}}},
     )
 

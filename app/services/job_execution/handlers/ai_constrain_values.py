@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.job_execution.binding_resolver import resolve_binding
-from app.services.job_execution.runtime_types import ExecutionContext
+from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
@@ -20,12 +20,13 @@ class AiConstrainValuesClaudeHandler(StepRuntime):
         input_bindings: dict[str, Any],
         resolved_inputs: dict[str, Any],
         ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
         source_value = resolved_inputs.get("source_value")
         manual = consume_manual_api_response(ctx, "claude.ai_constrain_values")
         if manual is not None:
-            ctx.log_step_processing("Using live-test manual API override (claude.ai_constrain_values).")
+            step_handle.log_processing("Using live-test manual API override (claude.ai_constrain_values).")
             if isinstance(manual, dict) and "selected_values" in manual:
                 sv = manual.get("selected_values") or []
                 return {"selected_values": list(sv) if isinstance(sv, list) else [sv]}
@@ -33,7 +34,7 @@ class AiConstrainValuesClaudeHandler(StepRuntime):
 
         claude = ctx.get_service("claude")
         if not claude:
-            ctx.log_step_processing("Claude unavailable; no selected values.")
+            step_handle.log_processing("Claude unavailable; no selected values.")
             return {"selected_values": []}
 
         allowable_src = config.get("allowable_values_source") or {}
@@ -49,11 +50,11 @@ class AiConstrainValuesClaudeHandler(StepRuntime):
             elif opts is not None:
                 options = [str(opts)]
         if not options:
-            ctx.log_step_processing("No allowable options from schema; returning empty selection.")
+            step_handle.log_processing("No allowable options from schema; returning empty selection.")
             return {"selected_values": []}
 
         allow_suggest = bool(config.get("allowable_value_eagerness", 0) or 0)
-        ctx.log_step_processing(
+        step_handle.log_processing(
             f"Calling Claude to constrain values (options_count={len(options)}, allow_suggest={allow_suggest})."
         )
         candidate_context = self._build_candidate_context(source_value)
