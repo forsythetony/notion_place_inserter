@@ -24,6 +24,7 @@ def config():
         table_pipeline_run_events="pipeline_run_events",
         table_user_profiles="user_profiles",
         table_invitation_codes="invitation_codes",
+        table_user_cohorts="user_cohorts",
     )
 
 

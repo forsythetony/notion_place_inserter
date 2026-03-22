@@ -24,6 +24,7 @@ def config():
         table_pipeline_run_events="pipeline_run_events",
         table_user_profiles="user_profiles",
         table_invitation_codes="invitation_codes",
+        table_user_cohorts="user_cohorts",
     )
 
 
@@ -271,6 +272,34 @@ def test_claim_invitation_code_for_signup_claims_and_upserts_profile(repo, mock_
     assert payload["user_id"] == user_id
     assert payload["user_type"] == USER_TYPE_BETA_TESTER
     assert payload["invitation_code_id"] == "inv-999"
+    assert payload.get("cohort_id") is None
+
+
+def test_claim_invitation_code_for_signup_sets_profile_cohort_from_invitation(
+    repo, mock_client
+):
+    """Profile cohort_id matches invitation when present."""
+    user_id = "550e8400-e29b-41d4-a716-446655440000"
+    code = "k" * 20
+    cohort_uuid = "a0000000-0000-4000-8000-000000000001"
+    claimed_row = {
+        "id": "inv-999",
+        "code": code,
+        "claimed": True,
+        "user_type": USER_TYPE_BETA_TESTER,
+        "cohort_id": cohort_uuid,
+    }
+    mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[claimed_row]
+    )
+    mock_client.table.return_value.upsert.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    result = repo.claim_invitation_code_for_signup(code, user_id)
+    assert result is not None
+    call_kw = mock_client.table.return_value.upsert.call_args
+    payload = call_kw[0][0]
+    assert payload["cohort_id"] == cohort_uuid
 
 
 def test_claim_invitation_code_for_signup_returns_none_when_claim_fails(repo, mock_client):
@@ -293,3 +322,101 @@ def test_generate_invitation_code_returns_20_char_code_when_no_collision(repo, m
     code = repo.generate_invitation_code()
     assert len(code) == 20
     assert all(c in "0123456789abcdef" for c in code)
+
+
+def test_list_user_profiles_for_admin_merges_email_from_auth(repo, mock_client):
+    """Admin profile list merges email from auth.admin.list_users."""
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    mock_user = MagicMock()
+    mock_user.id = uid
+    mock_user.email = "merged@example.com"
+    # Real supabase_auth returns list[User] from list_users(), not { users: [...] }
+    mock_client.auth.admin.list_users.return_value = [mock_user]
+
+    mock_client.table.return_value.select.return_value.order.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "user_id": uid,
+                "user_type": USER_TYPE_STANDARD,
+                "invitation_code_id": None,
+                "cohort_id": None,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+    rows = repo.list_user_profiles_for_admin()
+    assert len(rows) == 1
+    assert rows[0]["email"] == "merged@example.com"
+    assert rows[0]["cohort_key"] is None
+
+
+def test_list_invitation_codes_for_admin_merges_claimed_by_email(repo, mock_client):
+    """Admin invitation list merges claimed_by_email from auth users map."""
+    claimer = "660e8400-e29b-41d4-a716-446655440001"
+    mock_user = MagicMock()
+    mock_user.id = claimer
+    mock_user.email = "claimer@example.com"
+    mock_client.auth.admin.list_users.return_value = [mock_user]
+
+    mock_client.table.return_value.select.return_value.order.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "inv-1",
+                "code": "a" * 20,
+                "user_type": USER_TYPE_STANDARD,
+                "claimed": True,
+                "claimed_by_user_id": claimer,
+                "cohort_id": None,
+                "issued_to": None,
+                "created_at": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+    rows = repo.list_invitation_codes_for_admin()
+    assert len(rows) == 1
+    assert rows[0]["claimed_by_email"] == "claimer@example.com"
+
+
+def test_list_user_profiles_for_admin_accepts_list_users_wrapper_object(repo, mock_client):
+    """Older SDK shape: list_users returns an object with .users (still supported)."""
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    mock_user = MagicMock()
+    mock_user.id = uid
+    mock_user.email = "wrapped@example.com"
+    mock_list_resp = MagicMock()
+    mock_list_resp.users = [mock_user]
+    mock_client.auth.admin.list_users.return_value = mock_list_resp
+
+    mock_client.table.return_value.select.return_value.order.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "user_id": uid,
+                "user_type": USER_TYPE_STANDARD,
+                "invitation_code_id": None,
+                "cohort_id": None,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+    rows = repo.list_user_profiles_for_admin()
+    assert rows[0]["email"] == "wrapped@example.com"
+
+
+def test_auth_user_id_to_email_map_returns_empty_on_list_users_failure(repo, mock_client):
+    """Email map failure does not raise; callers still get DB rows without email."""
+    mock_client.auth.admin.list_users.side_effect = RuntimeError("network")
+    mock_client.table.return_value.select.return_value.order.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                "user_type": USER_TYPE_STANDARD,
+                "cohort_id": None,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+    rows = repo.list_user_profiles_for_admin()
+    assert rows[0]["email"] is None

@@ -1,6 +1,29 @@
 # Decision Log
 
-A chronological record of decisions and work done during the multi-tenant productization project.
+Primary hub for multi-tenant productization: **Goals** (launch gates and linked architecture pushes), **Decisions**, **Next thing to work on**, the **Architecture document index** for `docs/technical-architecture/`, and a chronological **Log** of completed work.
+
+## Goals
+
+Top-level buckets for delegating work. Each goal links **open** architecture pushes (placeholders are OK until expanded).
+
+### Goal 1: Beta user launch
+
+Work we believe we must complete (or have a clear architecture for) before a **small-group beta**. Architecture documents live under [`productization-technical/beta-launch-readiness/`](./productization-technical/beta-launch-readiness/README.md).
+
+| Architecture push | Doc | Status | Review |
+|-------------------|-----|--------|--------|
+| Admin invitation management (generate/list/revoke; **user cohorts** + admin UI) | [admin-invitation-management-ui.md](./productization-technical/beta-launch-readiness/admin-invitation-management-ui.md) | **Complete on 2026-03-22** (migration `user_cohorts`, admin APIs, `/admin/users` UI) | **Ready for review** |
+| Pipeline cell / step detail UI — general + template-specific polish | [pipeline-cell-step-detail-ui-polish.md](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) | **Open** | **Ready for review** |
+| Global + per-user resource limits (incl. daily/monthly run caps) | [global-and-per-user-resource-limits.md](./productization-technical/beta-launch-readiness/global-and-per-user-resource-limits.md) | **Open** | **Ready for review** |
+| Enhanced user monitoring and API cost attribution | [enhanced-user-monitoring-and-cost-tracking.md](./productization-technical/beta-launch-readiness/enhanced-user-monitoring-and-cost-tracking.md) | **Open** | **Ready for review** |
+| Worker horizontal scaling vs queue/DB constraints | [worker-horizontal-scaling-and-queue-coordination.md](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) | **Open** | **Ready for review** |
+| Error handling, metrics, traces, OTEL vs bespoke, user-visible logs | [error-handling-observability-and-telemetry.md](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) | **Open** | **Ready for review** |
+| Cross-page UI polish pass | [beta-ui-general-polish.md](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) | **Open** | **Ready for review** |
+| Invitations tab — readability & accessibility (admin) | [invitations-tab-readability-and-accessibility.md](./productization-technical/beta-launch-readiness/invitations-tab-readability-and-accessibility.md) | **Complete on 2026-03-22** (`App.css`, `AdminUsersPage.tsx`) | **Ready for review** |
+| Create invitation — modal workflow (admin) | [invitations-create-invitation-modal.md](./productization-technical/beta-launch-readiness/invitations-create-invitation-modal.md) | **Complete on 2026-03-22** (`CreateInvitationModal`, `AdminUsersPage` Invitations tab, `App.css`, `router.test.tsx`) | **Ready for review** |
+| Users & cohorts tabs — UI parity with Invitations (cards, pills, modals) | [admin-users-and-cohorts-ui-parity-with-invitations.md](./productization-technical/beta-launch-readiness/admin-users-and-cohorts-ui-parity-with-invitations.md) | **Complete on 2026-03-22** (`CopyableId`, cohort modals, `AdminUsersPage` cards + filters, `App.css`, tests) | **Ready for review** |
+
+_Audit (2026-03-22): **Review** uses **Unexpanded** (brief + “Detailed design (TBD)” only), **Ready for review** (full architecture/spec written; no human sign-off recorded here), **Reviewed** (none yet)._
 
 ---
 
@@ -38,7 +61,7 @@ Significant decisions with rationale, alternatives considered, and context.
 
 ## Architecture document index
 
-Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *Complete on YYYY-MM-DD* when the doc’s intent is delivered or the investigation is closed; *Open* / *In progress* for backlog or partial work; *Reference* for hubs and historical snapshots. Update when adding or shipping docs (see `.cursor/rules/architecture-doc-index.mdc`).
+Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *Complete on YYYY-MM-DD* when the doc’s intent is delivered or the investigation is closed; *Open* / *In progress* for backlog or partial work; *Reference* for hubs and historical snapshots. **Review** (Goal 1 beta table): *Unexpanded* / *Ready for review* / *Reviewed* — see Goal 1 table footnote. Update when adding or shipping docs (see `.cursor/rules/architecture-doc-index.mdc`).
 
 ### Top-level
 
@@ -74,7 +97,21 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Worker Memory Starvation Investigation (2026-03-13)](./incident_investigations/worker_memory_starvation_2026-03-13/findings_and_recommendations.md) — **Complete on 2026-03-13**
 - [Network FD Leak Remediation Findings](./incident_investigations/worker_memory_starvation_2026-03-13/network_fd_leak_remediation.md) — **Complete on 2026-03-13**
 
-### `productization-technical/`
+### `productization-technical/beta-launch-readiness/` (beta gate)
+
+- [Beta launch readiness — hub](./productization-technical/beta-launch-readiness/README.md) — **Reference**
+- [Admin invitation management UI](./productization-technical/beta-launch-readiness/admin-invitation-management-ui.md) — **Complete on 2026-03-22** — **Ready for review**
+- [Pipeline cell / step detail UI polish](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) — **Open** — **Ready for review**
+- [Global and per-user resource limits](./productization-technical/beta-launch-readiness/global-and-per-user-resource-limits.md) — **Open** — **Ready for review**
+- [Enhanced user monitoring and cost tracking](./productization-technical/beta-launch-readiness/enhanced-user-monitoring-and-cost-tracking.md) — **Open** — **Ready for review**
+- [Worker horizontal scaling and queue coordination](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) — **Open** — **Ready for review**
+- [Error handling, observability, and telemetry](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) — **Open** — **Ready for review**
+- [Beta UI general polish](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) — **Open** — **Ready for review**
+- [Invitations tab readability & accessibility](./productization-technical/beta-launch-readiness/invitations-tab-readability-and-accessibility.md) — **Complete on 2026-03-22** — **Ready for review**
+- [Invitations — create invitation modal](./productization-technical/beta-launch-readiness/invitations-create-invitation-modal.md) — **Complete on 2026-03-22** — **Ready for review**
+- [Users & cohorts tabs — UI parity with Invitations](./productization-technical/beta-launch-readiness/admin-users-and-cohorts-ui-parity-with-invitations.md) — **Complete on 2026-03-22** — **Ready for review**
+
+### `productization-technical/` (phase docs)
 
 - [Technical Documentation](./productization-technical/README.md) — **Reference**
 - [Phase 1 PR Task Index](./productization-technical/phase-1-platform-migration/index.md) — **Complete on 2026-03-13**
@@ -164,6 +201,21 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-22 | admin-invitation-management-ui doc closed | Marked [admin-invitation-management-ui.md](./productization-technical/beta-launch-readiness/admin-invitation-management-ui.md) **Complete**: hub table + status, checklist `[x]`, §7 routing/tab/email aligned with shipped UI (`Users` default, Auth email on profiles/invites); beta [README](./productization-technical/beta-launch-readiness/README.md) inventory row **Complete on 2026-03-22**. |
+| 2026-03-22 | admin-user-email-list_users-return-shape | Fixed admin email enrichment: `auth.admin.list_users` in supabase-py returns `list[User]` directly, not `{ users: [...] }`; `_auth_user_id_to_email_map` now handles both shapes so profile/invitation emails resolve from Auth. |
+| 2026-03-22 | admin-user-email-display-search | Admin Users/Invitations: `SupabaseAuthRepository._auth_user_id_to_email_map` (paginated `auth.admin.list_users`) merges `email` on user profiles and `claimed_by_email` on invitations; `GET /auth/admin/user-profiles` + `GET /auth/invitations` expose `email` / `claimedByEmail`; `AdminUsersPage` shows email beside user-type pill; client-side search includes email (and claimed user id on Invitations); `App.css` `.admin-invite-card__header-email`; tests `test_supabase_auth_repository.py` + `test_invitation_routes.py`. |
+| 2026-03-22 | admin-users-cohorts-ui-parity implementation | Shipped UI parity: `notion_pipeliner_ui` `CopyableId.tsx`, `CreateCohortModal.tsx`, `EditCohortDescriptionModal.tsx`; `AdminUsersPage` Users tab (filters + `UserDirectoryCard`), Cohorts tab (cards + modals, no inline form); Invitations full UUID + CSS wrap for ids/pills; `App.css` `.admin-copyable-id` / badge/code pill; `router.test.tsx` Create cohort modal; architecture doc + Goal 1 + styleguide `admin-management.md` updated. |
+| 2026-03-22 | admin-users-cohorts-ui-parity-with-invitations spec | Added `beta-launch-readiness/admin-users-and-cohorts-ui-parity-with-invitations.md` (Users + Cohorts tabs aligned with Invitations: card layout, pills, full copyable IDs, modal-only cohort create; Invitations UUID display fix); Goal 1 table + beta hub + architecture index updated. |
+| 2026-03-22 | invitations-create-invitation-modal | Shipped Create Invitation modal on `/admin/users/invitations`: `CreateInvitationModal.tsx` (portal, `issueAdminInvitation`, in-modal success + Done, `aria-modal` + focus trap/restore), header primary button in `AdminUsersPage.tsx`, filters/list moved up; styles `.admin-invite-section-header`, `.admin-invite-create-modal-*`; `router.test.tsx` flow test; TS fix `ScopeStagePicker` `stage_id` nullability. |
+| 2026-03-22 | invitations-tab-readability (UI) | Aligned Invitations tab CSS in `notion_pipeliner_ui/App.css` with readability spec: 14px field labels, 15px slot values, 13px slot/section secondary labels, 40px copy targets, focus-visible on issue/filter inputs, larger badges/code pill padding, status dot + list spacing; scoped under `.admin-users-page` where needed. |
+| 2026-03-22 | invitations-create-invitation-modal spec | Added `beta-launch-readiness/invitations-create-invitation-modal.md` (Create invitation button + modal for issuing codes; API unchanged); Goal 1 table + architecture index + beta hub updated. |
+| 2026-03-22 | invitations-tab-readability | Implemented admin Invitations tab readability spec: larger typography and 40px+ controls in `App.css` (`.admin-invite-*` + `.admin-users-page` scoped table/forms/tabs); claimed-by user id shows `truncateId` with full `title` and unchanged copy behavior in `AdminUsersPage.tsx`. |
+| 2026-03-22 | admin-invitation-management-ui | Shipped admin invitations & cohorts: migration `20260322120000_user_cohorts.sql` (`user_cohorts`, `cohort_id` on `invitation_codes` / `user_profiles`); `GET`/`DELETE` `/auth/invitations`, `POST` with `cohortId`, `/auth/admin/user-profiles` + `/auth/admin/cohorts` CRUD; claim-for-signup stamps `user_profiles.cohort_id`; `notion_pipeliner_ui` `/admin/users` (Invitations \| Users \| Cohorts), API client + tests. |
+| 2026-03-22 | expand-architecture pipeline-cell-step-detail-ui-polish | Expanded `beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md`: terminology (canvas cell vs inspector), baseline `StepInspectorForm`/`StepNode`, API contracts table, mermaid data flow, gaps, staged target design (generic schema renderer vs template registry), risks, observability, links to Phase 5 hierarchy + binding picker docs; Goal 1 + hub + index **Review** → **Ready for review**. |
+| 2026-03-22 | expand-architecture error-handling-observability | Expanded `beta-launch-readiness/error-handling-observability-and-telemetry.md`: repo audit (loguru, pipeline logging, sequential vs parallel failure semantics, `run_id`/`job_id`, `pipeline_run_events`, worker signals, gaps); target design (failure policy, OTEL vs bespoke, operator vs user-visible data, pluggable facade, multi-instance, Supabase role); risks, phases, mermaid; Goal 1 + hub + index **Review** → **Ready for review**. |
+| 2026-03-22 | expand-architecture worker-horizontal-scaling | Expanded `beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md`: pgmq VT + multi-consumer semantics, single `SUPABASE_QUEUE_NAME`, stateless worker, idempotency limits, DB/provider bottlenecks, Render scaling pattern, observability pointers; Goal 1 + index **Review** → **Ready for review**. |
+| 2026-03-22 | expand-architecture monitoring-cost | Expanded `beta-launch-readiness/enhanced-user-monitoring-and-cost-tracking.md`: current `UsageAccountingService`/`usage_records` behavior, gaps, attribution dimensions, rate-card cost model, aggregation/admin UX, phases, open questions; Goal 1 + hub + index **Review** → **Ready for review**. |
+| 2026-03-21 | beta-launch-readiness-docs | Added **Goals → Goal 1: Beta user launch** in `work-log.md` with seven linked **Open** architecture pushes; created `productization-technical/beta-launch-readiness/` hub + placeholder docs (invites, step-detail UI, limits, monitoring/cost, worker scaling, error/observability/telemetry, UI polish); indexed under Architecture document index. |
 | 2026-03-21 | p5_admin_styling_complete | **Milestone:** Admin/runtime styling considered complete for now — DB + API + `/admin/theme`, app-wide `AppShell` theme, `ui-style-guide-first.mdc` (style guide defines intent; code uses global tokens for theme propagation). |
 | 2026-03-21 | p5_runtime_theme_global_shell | Applied runtime theme app-wide: `useRuntimeUiTheme` + `cssVars` on `AppShell` root; semantic token remaps + `--background`/`--bg` on `.app-shell`; removed `/pipelines` pilot-only wrapper and duplicate fetch. |
 | 2026-03-21 | td-2026-03-21-test-notion-oauth-db-empty-token-exit-code | Logged tech debt: `tests/test_test_notion_oauth_db.py::test_script_exits_1_when_token_empty` fails (script exits 0 vs expected 1 for `--token ""`); see `docs/technical-architecture/tech-debt/td-2026-03-21-test-notion-oauth-db-empty-token-exit-code.md`. |

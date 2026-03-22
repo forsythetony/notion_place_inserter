@@ -128,11 +128,13 @@ def test_issue_invitation_200_admin_success(client):
     assert data["issued_to"] == "user@example.com"
     assert data["platform_issued_on"] == "beta-signup"
     assert data["claimed"] is False
+    assert data.get("cohortId") is None
     mock_auth_repo.create_invitation_code.assert_called_once_with(
         code=code,
         user_type="STANDARD",
         issued_to="user@example.com",
         platform_issued_on="beta-signup",
+        cohort_id=None,
     )
 
 
@@ -550,3 +552,186 @@ def test_claim_for_signup_logs_invalid_code(client, captured_logs):
         json={"code": "a" * 20},
     )
     assert any("invite_claim_for_signup_rejected" in e["message"] for e in captured_logs)
+
+
+def test_list_invitations_200_admin(client):
+    """GET /auth/invitations returns items for admin."""
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.list_invitation_codes_for_admin.return_value = [
+        {
+            "id": "i1",
+            "code": "a" * 20,
+            "user_type": "STANDARD",
+            "cohort_id": None,
+            "cohort_key": None,
+            "issued_to": "x@y.com",
+            "platform_issued_on": "web",
+            "claimed": False,
+            "date_issued": "2026-01-01T00:00:00+00:00",
+            "date_claimed": None,
+            "claimed_at": None,
+            "claimed_by_user_id": None,
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    resp = client.get(
+        "/auth/invitations",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["userType"] == "STANDARD"
+    assert data["items"][0]["code"] == "a" * 20
+
+
+def test_list_invitations_403_non_admin(client):
+    """GET /auth/invitations as non-admin returns 403."""
+    _setup_standard_auth()
+    resp = client.get(
+        "/auth/invitations",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 403
+
+
+def test_delete_invitation_204_unclaimed(client):
+    """DELETE unclaimed invitation returns 204."""
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.delete_unclaimed_invitation_by_id.return_value = "deleted"
+    resp = client.delete(
+        "/auth/invitations/550e8400-e29b-41d4-a716-446655440000",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 204
+
+
+def test_delete_invitation_404_not_found(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.delete_unclaimed_invitation_by_id.return_value = "not_found"
+    resp = client.delete(
+        "/auth/invitations/550e8400-e29b-41d4-a716-446655440000",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+
+
+def test_delete_invitation_409_claimed(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.delete_unclaimed_invitation_by_id.return_value = "claimed"
+    resp = client.delete(
+        "/auth/invitations/550e8400-e29b-41d4-a716-446655440000",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 409
+
+
+def test_issue_invitation_400_invalid_cohort_id(client):
+    """POST /auth/invitations with unknown cohortId returns 400."""
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.get_cohort_by_id.return_value = None
+    resp = client.post(
+        "/auth/invitations",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={
+            "userType": "STANDARD",
+            "cohortId": "a0000000-0000-4000-8000-000000000099",
+        },
+    )
+    assert resp.status_code == 400
+    mock_auth_repo.create_invitation_code.assert_not_called()
+
+
+def test_issue_invitation_passes_cohort_id_to_create(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.get_invitation_by_issued_to.return_value = None
+    mock_auth_repo.generate_invitation_code.return_value = "b" * 20
+    cid = "a0000000-0000-4000-8000-000000000001"
+    mock_auth_repo.get_cohort_by_id.return_value = {"id": cid, "key": "STUDENT_A"}
+    mock_auth_repo.create_invitation_code.return_value = {
+        "id": "inv-c",
+        "code": "b" * 20,
+        "user_type": "BETA_TESTER",
+        "cohort_id": cid,
+        "claimed": False,
+    }
+    resp = client.post(
+        "/auth/invitations",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"userType": "BETA_TESTER", "cohortId": cid},
+    )
+    assert resp.status_code == 200
+    mock_auth_repo.create_invitation_code.assert_called_once()
+    kw = mock_auth_repo.create_invitation_code.call_args.kwargs
+    assert kw["cohort_id"] == cid
+
+
+def test_list_user_profiles_admin_200(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.list_user_profiles_for_admin.return_value = [
+        {
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "user_type": "STANDARD",
+            "email": "user@example.com",
+            "invitation_code_id": None,
+            "cohort_id": None,
+            "cohort_key": None,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    resp = client.get(
+        "/auth/admin/user-profiles",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["userId"] == "550e8400-e29b-41d4-a716-446655440000"
+    assert resp.json()["items"][0]["email"] == "user@example.com"
+
+
+def test_list_user_profiles_admin_403(client):
+    _setup_standard_auth()
+    resp = client.get(
+        "/auth/admin/user-profiles",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 403
+
+
+def test_list_cohorts_admin_200(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.list_cohorts.return_value = [
+        {
+            "id": "c1",
+            "key": "A",
+            "description": "d",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    resp = client.get(
+        "/auth/admin/cohorts",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["key"] == "A"
+
+
+def test_create_cohort_409_duplicate_key(client):
+    _setup_admin_auth()
+    mock_auth_repo = app.state.supabase_auth_repository
+    mock_auth_repo.get_cohort_by_key.return_value = {"id": "x"}
+    resp = client.post(
+        "/auth/admin/cohorts",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={"key": "DUPE", "description": "x"},
+    )
+    assert resp.status_code == 409

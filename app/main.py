@@ -47,7 +47,7 @@ from app.services.job_execution import JobExecutionService
 from app.services.notion_oauth_service import NotionOAuthService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.routes import auth_context, invitations, locations, management, notion_oauth, signup, test, ui_theme
+from app.routes import auth_admin, auth_context, invitations, locations, management, notion_oauth, signup, test, ui_theme
 from app.services.signup_orchestration_service import SignupOrchestrationService
 from app.services.ui_theme_service import UiThemeService
 
@@ -346,6 +346,7 @@ app.include_router(management.router)
 app.include_router(notion_oauth.router)
 app.include_router(signup.router)
 app.include_router(invitations.router)
+app.include_router(auth_admin.router)
 app.include_router(locations.router)
 app.include_router(test.router)
 

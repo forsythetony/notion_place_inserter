@@ -1,5 +1,7 @@
 """Invitation code issuance and claim routes."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,6 +18,51 @@ from app.services.supabase_auth_repository import USER_TYPES
 router = APIRouter(prefix="/auth/invitations", tags=["auth", "invitations"])
 
 
+def _iso_or_raw(value: object) -> object:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def _invitation_row_to_list_item(row: dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "code": row["code"],
+        "userType": row["user_type"],
+        "cohortId": str(row["cohort_id"]) if row.get("cohort_id") else None,
+        "cohortKey": row.get("cohort_key"),
+        "issuedTo": row.get("issued_to"),
+        "platformIssuedOn": row.get("platform_issued_on"),
+        "claimed": bool(row.get("claimed")),
+        "dateIssued": _iso_or_raw(row.get("date_issued")),
+        "dateClaimed": _iso_or_raw(row.get("date_claimed")),
+        "claimedAt": _iso_or_raw(row.get("claimed_at")),
+        "claimedByUserId": str(row["claimed_by_user_id"])
+        if row.get("claimed_by_user_id")
+        else None,
+        "claimedByEmail": row.get("claimed_by_email"),
+        "createdAt": _iso_or_raw(row.get("created_at")),
+    }
+
+
+def _issue_response_body(row: dict) -> dict:
+    """POST /auth/invitations JSON (snake_case legacy + cohortId for admin UI)."""
+    out = {
+        "code": row["code"],
+        "id": str(row["id"]),
+        "user_type": row["user_type"],
+        "issued_to": row.get("issued_to"),
+        "platform_issued_on": row.get("platform_issued_on"),
+        "claimed": bool(row.get("claimed", False)),
+    }
+    cid = row.get("cohort_id")
+    out["cohortId"] = str(cid) if cid else None
+    out["cohort_id"] = out["cohortId"]
+    return out
+
+
 class InvitationIssueRequest(BaseModel):
     """Request body for POST /auth/invitations (admin-only)."""
 
@@ -24,6 +71,7 @@ class InvitationIssueRequest(BaseModel):
     user_type: str = Field(alias="userType")
     issued_to: str | None = Field(default=None, alias="issuedTo")
     platform_issued_on: str | None = Field(default=None, alias="platformIssuedOn")
+    cohort_id: UUID | None = Field(default=None, alias="cohortId")
 
 
 class InvitationValidateRequest(BaseModel):
@@ -36,6 +84,41 @@ class InvitationClaimRequest(BaseModel):
     """Request body for POST /auth/invitations/claim."""
 
     code: str
+
+
+@router.get("")
+def list_invitations(
+    request: Request,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    """List all invitation codes (admin-only). Client filters in v1."""
+    auth_repo = request.app.state.supabase_auth_repository
+    logger.info("admin_list_invitations | admin_user_id={}", ctx.user_id)
+    rows = auth_repo.list_invitation_codes_for_admin()
+    return {"items": [_invitation_row_to_list_item(r) for r in rows]}
+
+
+@router.delete("/{invitation_id}", status_code=204)
+def delete_invitation(
+    request: Request,
+    invitation_id: UUID,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    """Revoke an unclaimed invitation (admin-only)."""
+    auth_repo = request.app.state.supabase_auth_repository
+    result = auth_repo.delete_unclaimed_invitation_by_id(invitation_id)
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if result == "claimed":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete a claimed invitation",
+        )
+    logger.info(
+        "admin_delete_invitation | admin_user_id={} invitation_id={}",
+        ctx.user_id,
+        invitation_id,
+    )
 
 
 @router.post("")
@@ -59,18 +142,21 @@ def issue_invitation(
         )
     auth_repo = request.app.state.supabase_auth_repository
 
+    cohort_id_str: str | None = None
+    if body.cohort_id is not None:
+        cohort = auth_repo.get_cohort_by_id(body.cohort_id)
+        if cohort is None:
+            raise HTTPException(
+                status_code=400,
+                detail="cohortId does not reference an existing cohort",
+            )
+        cohort_id_str = str(body.cohort_id)
+
     # Idempotent: if issuedTo is non-empty and already exists, return existing row
     if body.issued_to and body.issued_to.strip():
         existing = auth_repo.get_invitation_by_issued_to(body.issued_to)
         if existing is not None:
-            return {
-                "code": existing["code"],
-                "id": str(existing["id"]),
-                "user_type": existing["user_type"],
-                "issued_to": existing.get("issued_to"),
-                "platform_issued_on": existing.get("platform_issued_on"),
-                "claimed": existing.get("claimed", False),
-            }
+            return _issue_response_body(existing)
 
     code = auth_repo.generate_invitation_code()
     row = auth_repo.create_invitation_code(
@@ -78,15 +164,9 @@ def issue_invitation(
         user_type=body.user_type,
         issued_to=body.issued_to,
         platform_issued_on=body.platform_issued_on,
+        cohort_id=cohort_id_str,
     )
-    return {
-        "code": row["code"],
-        "id": str(row["id"]),
-        "user_type": row["user_type"],
-        "issued_to": row.get("issued_to"),
-        "platform_issued_on": row.get("platform_issued_on"),
-        "claimed": False,
-    }
+    return _issue_response_body(row)
 
 
 @router.post("/validate")

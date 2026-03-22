@@ -17,6 +17,7 @@ class SupabaseConfig:
     table_pipeline_run_events: str
     table_user_profiles: str
     table_invitation_codes: str
+    table_user_cohorts: str
 
 
 def _require_non_empty(value: str, env_var: str) -> str:
@@ -94,4 +95,5 @@ def load_supabase_config() -> SupabaseConfig:
         table_invitation_codes=_default_table(
             "invitation_codes", "invitation_codes"
         ),
+        table_user_cohorts=_default_table("user_cohorts", "user_cohorts"),
     )
