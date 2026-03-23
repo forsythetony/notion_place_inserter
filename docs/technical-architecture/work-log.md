@@ -112,6 +112,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 
 ### `incident_investigations/`
 
+- [Render API web service — deploy / startup (Render)](./incident_investigations/render-api-web-service-deploy-2026-03-23.md) — **Complete on 2026-03-23**
 - [Neighborhood Debug Logging Verification](./incident_investigations/neighborhood_debug_verification.md) — **Reference (incident record)**
 - [Notion Data Source Error Findings (Log-Only)](./incident_investigations/notion-data-source-error-findings-2026-03-15.md) — **Complete on 2026-03-15**
 - [Notion Database ID vs Data Source ID — Fix Plan](./incident_investigations/notion-id-fix-plan-2026-03-16.md) — **Complete on 2026-03-16**
@@ -225,6 +226,8 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-23 | render-health-check | `GET /health` in `app/main.py` (200, no auth) for Render/load balancers; `render.yaml` `healthCheckPath: /health` (root `/` returns 401 without `Authorization`, so default health checks fail deploy). `tests/test_health_route.py`. |
+| 2026-03-23 | render-api-deploy incident | [render-api-web-service-deploy-2026-03-23.md](./incident_investigations/render-api-web-service-deploy-2026-03-23.md): Runtime logs show successful startup (`Application startup complete`, Uvicorn `0.0.0.0:10000`); ~42s later graceful shutdown consistent with platform SIGTERM; raw logs removed from repo (publishable key + identifiers), replaced with redacted excerpt; architecture index marked **Complete on 2026-03-23**. |
 | 2026-03-23 | eula-versioning implementation | **Backend:** migration `20260323120000_eula_versions.sql` (`eula_versions`, profile `eula_version_id`/`eula_accepted_at`, seed published row, `publish_eula_version` RPC, RLS); `eula_validation.py`; `SupabaseAuthRepository` EULA CRUD + signup profile fields; `SignupOrchestrationService` + `POST /auth/signup` require published `eula_version_id` + attestation; `app/routes/eula.py` (`GET /auth/eula/current`, `/auth/admin/eula/versions` CRUD/publish/copy); admin profiles expose `eulaVersionId`/`eulaAcceptedAt`. **Frontend:** `getCurrentEula`, `signUpWithInvitation` + EULA body; signup modal (scroll sentinel + checkbox); `AdminEulaPage`, `/admin/eula`, `AppShell` nav; tests (`AuthPage`, pytest). **Docs:** eula architecture doc status + work-log index. |
 | 2026-03-22 | eula-versioning architecture doc | Added [eula-versioning-and-acceptance.md](./productization-technical/beta-launch-readiness/eula-versioning-and-acceptance.md): `eula_versions` (full text, SHA-256, JSON `plain_language_summary` with dos/donts/cautions), single published row constraint, `user_profiles` acceptance columns, GET current + extended signup API, `/admin/eula` management, signup modal flow; Goal 1 open push + architecture index + beta hub updated. |
 | 2026-03-22 | admin-monitoring-filter-toolbar | `notion_pipeliner_ui`: Recent job runs filter toolbar — single flex row (From/To with calendar icons, `MonitoringUsersFilter` checkbox popover + count badge, pill presets + ghost Clear, secondary Apply); muted filter helper copy; card background + bottom border before results; scoped CSS in `App.css`. |

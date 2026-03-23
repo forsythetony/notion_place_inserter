@@ -339,6 +339,17 @@ if _cors_origins:
         allow_headers=["Authorization", "Content-Type"],
     )
 
+
+@app.get("/health")
+def health():
+    """Liveness for load balancers and Render (no auth; must return 2xx).
+
+    The root `/` route requires ``Authorization`` and returns 401 without it, so
+    it must not be used as Render's health check path.
+    """
+    return {"status": "ok"}
+
+
 app.include_router(auth_context.router)
 app.include_router(ui_theme.runtime_router)
 app.include_router(ui_theme.admin_router)
