@@ -25,6 +25,7 @@ Work we believe we must complete (or have a clear architecture or decision for) 
 
 | Type | Push | Doc | Notes | Status |
 |------|------|-----|-------|--------|
+| Architecture | **EULA acceptance UI — signup blocked** (cannot read EULA; accept CTA broken) | [td-2026-03-23-eula-accept-page-signup-blocker.md](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md) | P0 — blocks all new signups; Cursor subagent `.cursor/agents/eula-signup-blocker.md` | **Open** (blocker) |
 | Architecture | Enhanced user monitoring and API cost attribution | [enhanced-user-monitoring-and-cost-tracking.md](./productization-technical/beta-launch-readiness/enhanced-user-monitoring-and-cost-tracking.md) | Monitoring UI `/admin/monitoring`; `usage_rate_cards` + `estimatedCostUsd`; rollups/handler audit/editor UI TBD | **In progress** · **Ready for review** |
 | Architecture | Worker horizontal scaling vs queue/DB constraints | [worker-horizontal-scaling-and-queue-coordination.md](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) | — | **Open** · **Ready for review** |
 | Architecture | Error handling, metrics, traces, OTEL vs bespoke, user-visible logs | [error-handling-observability-and-telemetry.md](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) | — | **Open** · **Ready for review** |
@@ -76,7 +77,8 @@ Significant decisions with rationale, alternatives considered, and context.
 
 ## Next thing to work on
 
-1. **Fix pipeline zoom** — When clicking on a node (especially a stage), the view is way zoomed out. Improve zoom/viewport behavior on node selection.
+1. **Fix EULA signup blocker (P0)** — EULA accept step: users cannot read the EULA and the accept/continue control does not work; signup is impossible for new users. See [td-2026-03-23-eula-accept-page-signup-blocker.md](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md); delegate with subagent **eula-signup-blocker** (`.cursor/agents/eula-signup-blocker.md`).
+2. **Fix pipeline zoom** — When clicking on a node (especially a stage), the view is way zoomed out. Improve zoom/viewport behavior on node selection.
 
 ---
 
@@ -134,7 +136,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Invitations — create invitation modal](./productization-technical/beta-launch-readiness/invitations-create-invitation-modal.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Users & cohorts tabs — UI parity with Invitations](./productization-technical/beta-launch-readiness/admin-users-and-cohorts-ui-parity-with-invitations.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Pipeline cell / step detail UI polish](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) — **Open** (late in beta prep) · **Ready for review**
-- [EULA versioning, acceptance, and admin management](./productization-technical/beta-launch-readiness/eula-versioning-and-acceptance.md) — **Complete on 2026-03-23** · **Ready for review**
+- [EULA versioning, acceptance, and admin management](./productization-technical/beta-launch-readiness/eula-versioning-and-acceptance.md) — **Complete on 2026-03-23** · **Ready for review** · **Regression (P0 signup):** [EULA accept UI blocker](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md) — **Open**
 
 ### `productization-technical/` (phase docs)
 
@@ -214,6 +216,9 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Tech Debt Story: Trigger Secret Plaintext in List Response](./tech-debt/td-2026-03-15-trigger-secret-plaintext-in-list-response.md) — **Open**
 - [Tech Debt: Pipeline editor graph spacing after trigger metadata loads](./tech-debt/td-2026-03-19-pipeline-editor-trigger-layout-after-async-resolve.md) — **Open**
 - [Tech Debt: `test_notion_oauth_db` empty `--token` exit code](./tech-debt/td-2026-03-21-test-notion-oauth-db-empty-token-exit-code.md) — **Open**
+- [Tech Debt: Data source refresh duplicates targets / pollutes store](./tech-debt/td-2026-03-23-datasource-refresh-duplicate-targets.md) — **Open**
+- [Tech Debt: EULA accept step broken — signup blocked](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md) — **Open**
+- [Tech Debt: Render/Supabase read errors under load](./tech-debt/td-2026-03-23-render-supabase-read-errors-under-load.md) — **Open**
 
 ### `troubleshooting/`
 
@@ -227,6 +232,9 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-23 | td-2026-03-23-render-supabase-read-errors-under-load | Logged production API read failures on `/management/account` and `/theme/runtime`; outlined resolution push around Render right-sizing, HTTP client/pool hardening, and short-TTL caching for low-churn account/theme payloads. |
+| 2026-03-23 | eula-signup-blocker P0 | Filed blocker: EULA accept step unusable (cannot read text; accept CTA broken) — signup blocked. Tech debt [td-2026-03-23-eula-accept-page-signup-blocker.md](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md); project subagent `.cursor/agents/eula-signup-blocker.md`; **Next thing to work on** + Goal 1 open push + architecture index updated. |
+| 2026-03-23 | td-2026-03-23-datasource-refresh-duplicate-targets | Logged bug: Data Targets **Refresh** can duplicate discovered sources / targets instead of idempotent metadata refresh; see `docs/technical-architecture/tech-debt/td-2026-03-23-datasource-refresh-duplicate-targets.md`. |
 | 2026-03-23 | startup-phase-logs | `app/main.py` lifespan: `startup_phase` INFO logs with `elapsed_ms` (`begin` → `required_env_ok` → `supabase_repos_ready` → `bootstrap_done`/`bootstrap_skipped` → `signup_stack_ready` → `notion_init_done` → `all_services_wired` → `ready_to_accept_requests`) to pinpoint slow or stuck Render deploy health checks. |
 | 2026-03-23 | render-health-check | `GET /health` in `app/main.py` (200, no auth) for Render/load balancers; `render.yaml` `healthCheckPath: /health` (root `/` returns 401 without `Authorization`, so default health checks fail deploy). `tests/test_health_route.py`. |
 | 2026-03-23 | render-api-deploy incident | [render-api-web-service-deploy-2026-03-23.md](./incident_investigations/render-api-web-service-deploy-2026-03-23.md): Runtime logs show successful startup (`Application startup complete`, Uvicorn `0.0.0.0:10000`); ~42s later graceful shutdown consistent with platform SIGTERM; raw logs removed from repo (publishable key + identifiers), replaced with redacted excerpt; architecture index marked **Complete on 2026-03-23**. |

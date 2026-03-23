@@ -1,0 +1,10 @@
+---
+description: File reproducible Notion Pipeliner bugs into tech-debt (use /file-bug command)
+alwaysApply: true
+---
+
+# File an app bug
+
+When the user reports a **bug in Notion Pipeliner** (wrong behavior in `app/`, `notion_pipeliner_ui/`, worker, or Supabase-backed flows), use the **file-bug** workflow in `.cursor/commands/file-bug.md` to add `docs/technical-architecture/tech-debt/td-YYYY-MM-DD-{slug}.md` and update the **Architecture document index** in `docs/technical-architecture/work-log.md` per `.cursor/rules/architecture-doc-index.mdc`.
+
+**Do not** use this for production **incidents / postmortems**—those use `.cursor/commands/incident-investigation.md` and `docs/technical-architecture/incident_investigations/`.
