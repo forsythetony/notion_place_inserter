@@ -9,6 +9,10 @@ from loguru import logger
 from supabase import Client
 
 from app.integrations.supabase_config import SupabaseConfig
+from app.services.eula_validation import (
+    compute_content_sha256,
+    validate_plain_language_summary,
+)
 
 USER_TYPE_ADMIN = "ADMIN"
 USER_TYPE_STANDARD = "STANDARD"
@@ -19,6 +23,8 @@ INVITATION_CODE_LENGTH = 20
 MAX_ISSUE_RETRIES = 3
 
 _COHORT_UNSET = object()
+
+_TABLE_EULA_VERSIONS = "eula_versions"
 
 
 class SupabaseAuthRepository:
@@ -38,11 +44,17 @@ class SupabaseAuthRepository:
         *,
         invitation_code_id: UUID | str | None = None,
         cohort_id: Any = _COHORT_UNSET,
+        eula_version_id: UUID | str | None = None,
+        eula_accepted_at: str | None = None,
     ) -> None:
         """Insert or update a user profile. Enforces user_type enum values."""
         if user_type not in USER_TYPES:
             raise ValueError(
                 f"user_type must be one of {USER_TYPES}, got {user_type!r}"
+            )
+        if (eula_version_id is None) ^ (eula_accepted_at is None):
+            raise ValueError(
+                "eula_version_id and eula_accepted_at must both be set or both omitted"
             )
         uid = str(user_id) if isinstance(user_id, UUID) else user_id
         payload: dict[str, Any] = {
@@ -56,6 +68,13 @@ class SupabaseAuthRepository:
                 if isinstance(invitation_code_id, UUID)
                 else invitation_code_id
             )
+        if eula_version_id is not None:
+            payload["eula_version_id"] = (
+                str(eula_version_id)
+                if isinstance(eula_version_id, UUID)
+                else eula_version_id
+            )
+            payload["eula_accepted_at"] = eula_accepted_at
         if cohort_id is not _COHORT_UNSET:
             if cohort_id is None:
                 payload["cohort_id"] = None
@@ -284,21 +303,199 @@ class SupabaseAuthRepository:
         self,
         code: str,
         user_id: UUID | str,
+        *,
+        eula_version_id: UUID | str | None = None,
+        eula_accepted_at: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Atomically claim an invitation code and provision/update user profile.
         Returns claimed row on success, None if code invalid or already claimed.
+        When eula_version_id and eula_accepted_at are set (invite signup API),
+        both are stored on the profile. Otherwise omitted (legacy claim-for-signup).
         """
+        if (eula_version_id is None) ^ (eula_accepted_at is None):
+            raise ValueError(
+                "eula_version_id and eula_accepted_at must both be set or both omitted"
+            )
         row = self.claim_invitation_code(code, user_id)
         if row is None:
             return None
+        kw: dict[str, Any] = {}
+        if eula_version_id is not None:
+            kw["eula_version_id"] = eula_version_id
+            kw["eula_accepted_at"] = eula_accepted_at
         self.upsert_profile(
             user_id,
             row["user_type"],
             invitation_code_id=row["id"],
             cohort_id=row.get("cohort_id"),
+            **kw,
         )
         return row
+
+    def get_published_eula(self) -> dict[str, Any] | None:
+        """Return the single published eula_versions row, or None."""
+        try:
+            resp = (
+                self._client.table(_TABLE_EULA_VERSIONS)
+                .select("*")
+                .eq("status", "published")
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_published_eula_failed")
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else None
+
+    def get_eula_version_by_id(self, version_id: UUID | str) -> dict[str, Any] | None:
+        vid = str(version_id) if isinstance(version_id, UUID) else version_id
+        try:
+            resp = (
+                self._client.table(_TABLE_EULA_VERSIONS)
+                .select("*")
+                .eq("id", vid)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_eula_version_by_id_failed | id={}", vid)
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else None
+
+    def list_eula_versions_for_admin(self) -> list[dict[str, Any]]:
+        """All EULA versions, newest first."""
+        try:
+            resp = (
+                self._client.table(_TABLE_EULA_VERSIONS)
+                .select("*")
+                .order("created_at", desc=True)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_list_eula_versions_failed")
+            raise
+        return [dict(r) for r in (resp.data or []) if isinstance(r, dict)]
+
+    def insert_eula_draft(
+        self,
+        version_label: str,
+        full_text: str,
+        plain_language_summary: Any,
+        *,
+        created_by_user_id: UUID | str | None = None,
+    ) -> dict[str, Any]:
+        """Insert a draft EULA row. Validates summary and content hash."""
+        summary = validate_plain_language_summary(plain_language_summary)
+        sha = compute_content_sha256(full_text)
+        payload: dict[str, Any] = {
+            "status": "draft",
+            "version_label": version_label.strip(),
+            "full_text": full_text,
+            "content_sha256": sha,
+            "plain_language_summary": summary,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if created_by_user_id is not None:
+            payload["created_by_user_id"] = (
+                str(created_by_user_id)
+                if isinstance(created_by_user_id, UUID)
+                else created_by_user_id
+            )
+        try:
+            resp = self._client.table(_TABLE_EULA_VERSIONS).insert(payload).execute()
+        except Exception:
+            logger.exception("supabase_insert_eula_draft_failed")
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            raise RuntimeError("insert eula draft returned no data")
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else {}
+
+    def update_eula_draft(
+        self,
+        version_id: UUID | str,
+        *,
+        version_label: str | None = None,
+        full_text: str | None = None,
+        plain_language_summary: Any | None = None,
+    ) -> dict[str, Any] | None:
+        """Update a draft EULA only. Recomputes hash when full_text changes."""
+        row = self.get_eula_version_by_id(version_id)
+        if row is None:
+            return None
+        if row.get("status") != "draft":
+            raise ValueError("Only draft EULA versions can be edited")
+        payload: dict[str, Any] = {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if version_label is not None:
+            payload["version_label"] = version_label.strip()
+        if full_text is not None:
+            payload["full_text"] = full_text
+            payload["content_sha256"] = compute_content_sha256(full_text)
+        if plain_language_summary is not None:
+            payload["plain_language_summary"] = validate_plain_language_summary(
+                plain_language_summary
+            )
+        if len(payload) == 1:
+            return row
+        vid = str(version_id) if isinstance(version_id, UUID) else version_id
+        try:
+            resp = (
+                self._client.table(_TABLE_EULA_VERSIONS)
+                .update(payload)
+                .eq("id", vid)
+                .eq("status", "draft")
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_update_eula_draft_failed | id={}", vid)
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        out = data[0] if isinstance(data, list) else data
+        return dict(out) if isinstance(out, dict) else None
+
+    def copy_eula_to_new_draft(
+        self,
+        source_id: UUID | str,
+        new_version_label: str,
+        *,
+        created_by_user_id: UUID | str | None = None,
+    ) -> dict[str, Any]:
+        """Copy full_text and plain_language_summary into a new draft row."""
+        src = self.get_eula_version_by_id(source_id)
+        if src is None:
+            raise ValueError("Source EULA version not found")
+        return self.insert_eula_draft(
+            new_version_label.strip(),
+            str(src["full_text"]),
+            src.get("plain_language_summary") or {},
+            created_by_user_id=created_by_user_id,
+        )
+
+    def publish_eula_version_rpc(self, draft_id: UUID | str) -> None:
+        """Archive current published row and publish the draft (DB transaction)."""
+        did = str(draft_id) if isinstance(draft_id, UUID) else draft_id
+        try:
+            self._client.rpc(
+                "publish_eula_version",
+                {"draft_id": did},
+            ).execute()
+        except Exception:
+            logger.exception("supabase_publish_eula_version_rpc_failed | id={}", did)
+            raise
 
     def get_invitation_by_id(
         self, invitation_id: UUID | str

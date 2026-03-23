@@ -1,5 +1,6 @@
 """Signup orchestration: validate invite before creating auth user, with compensation on failure."""
 
+from datetime import datetime, timezone
 from typing import Any
 
 from loguru import logger
@@ -24,6 +25,9 @@ class SignupOrchestrationService:
         email: str,
         password: str,
         code: str,
+        *,
+        eula_version_id: str,
+        eula_accepted: bool,
     ) -> dict[str, Any]:
         """
         Validate invite, create auth user, claim code, provision profile.
@@ -36,6 +40,8 @@ class SignupOrchestrationService:
             raise ValueError("Email is required")
         if not password or len(password) < 6:
             raise ValueError("Password must be at least 6 characters")
+        if not eula_accepted:
+            raise ValueError("You must accept the EULA to sign up")
 
         # Step 1: validate invite before any user creation
         validation = self._auth_repo.validate_invitation_code(code)
@@ -45,6 +51,16 @@ class SignupOrchestrationService:
             raise ValueError("Invitation code already claimed")
 
         user_type = validation["user_type"]
+
+        published = self._auth_repo.get_published_eula()
+        if published is None:
+            raise ValueError("EULA is not available. Please try again later.")
+        if str(published["id"]) != str(eula_version_id).strip():
+            raise ValueError(
+                "The terms of use have been updated. Please refresh the page and try again."
+            )
+
+        accepted_at = datetime.now(timezone.utc).isoformat()
 
         # Step 2: create auth user via admin API
         try:
@@ -72,7 +88,12 @@ class SignupOrchestrationService:
 
         # Step 3: claim invite and provision profile; compensate on failure
         try:
-            row = self._auth_repo.claim_invitation_code_for_signup(code, user_id)
+            row = self._auth_repo.claim_invitation_code_for_signup(
+                code,
+                user_id,
+                eula_version_id=eula_version_id,
+                eula_accepted_at=accepted_at,
+            )
             if row is None:
                 # Race: code was claimed between validation and now
                 self._delete_auth_user(user_id)

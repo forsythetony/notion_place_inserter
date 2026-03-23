@@ -246,6 +246,19 @@ def test_claim_invitation_code_returns_none_when_already_claimed(repo, mock_clie
     assert result is None
 
 
+def test_upsert_profile_includes_eula_when_provided(repo, mock_client):
+    """upsert_profile passes eula_version_id and eula_accepted_at together."""
+    repo.upsert_profile(
+        "550e8400-e29b-41d4-a716-446655440000",
+        USER_TYPE_STANDARD,
+        eula_version_id="22222222-2222-4222-8222-222222222222",
+        eula_accepted_at="2026-03-23T12:00:00+00:00",
+    )
+    payload = mock_client.table.return_value.upsert.call_args[0][0]
+    assert payload["eula_version_id"] == "22222222-2222-4222-8222-222222222222"
+    assert payload["eula_accepted_at"] == "2026-03-23T12:00:00+00:00"
+
+
 def test_claim_invitation_code_for_signup_claims_and_upserts_profile(repo, mock_client):
     """claim_invitation_code_for_signup claims code and upserts user profile."""
     user_id = "550e8400-e29b-41d4-a716-446655440000"

@@ -46,6 +46,10 @@ def _profile_row_to_item(row: dict) -> dict:
         else None,
         "cohortId": str(row["cohort_id"]) if row.get("cohort_id") else None,
         "cohortKey": row.get("cohort_key"),
+        "eulaVersionId": str(row["eula_version_id"])
+        if row.get("eula_version_id")
+        else None,
+        "eulaAcceptedAt": row.get("eula_accepted_at"),
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
     }

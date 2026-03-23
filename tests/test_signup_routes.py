@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+_EULA_ID = "11111111-1111-4111-8111-111111111111"
+_SIGNUP_EULA = {"eula_version_id": _EULA_ID, "eula_accepted": True}
+
 
 @pytest.fixture
 def client():
@@ -31,6 +34,7 @@ def test_signup_400_invalid_code(client):
             "email": "user@example.com",
             "password": "password123",
             "code": "x" * 20,
+            **_SIGNUP_EULA,
         },
     )
     assert resp.status_code == 400
@@ -39,6 +43,8 @@ def test_signup_400_invalid_code(client):
         email="user@example.com",
         password="password123",
         code="x" * 20,
+        eula_version_id=_EULA_ID,
+        eula_accepted=True,
     )
 
 
@@ -55,6 +61,7 @@ def test_signup_400_already_claimed(client):
             "email": "user@example.com",
             "password": "password123",
             "code": "a" * 20,
+            **_SIGNUP_EULA,
         },
     )
     assert resp.status_code == 400
@@ -75,6 +82,7 @@ def test_signup_200_success(client):
             "email": "newuser@example.com",
             "password": "securepass123",
             "code": "b" * 20,
+            **_SIGNUP_EULA,
         },
     )
     assert resp.status_code == 200
@@ -85,6 +93,8 @@ def test_signup_200_success(client):
         email="newuser@example.com",
         password="securepass123",
         code="b" * 20,
+        eula_version_id=_EULA_ID,
+        eula_accepted=True,
     )
 
 
@@ -111,6 +121,7 @@ def test_signup_400_validation_short_password(client):
             "email": "user@example.com",
             "password": "12345",
             "code": "a" * 20,
+            **_SIGNUP_EULA,
         },
     )
     assert resp.status_code == 422

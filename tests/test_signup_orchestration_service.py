@@ -25,12 +25,15 @@ def service(mock_supabase_client, mock_auth_repo):
 def test_signup_invalid_code_does_not_create_user(service, mock_supabase_client, mock_auth_repo):
     """Invalid code: validate fails, create_user never called."""
     mock_auth_repo.validate_invitation_code.return_value = {"status": "invalid"}
+    mock_auth_repo.get_published_eula.return_value = {"id": "11111111-1111-4111-8111-111111111111"}
 
     with pytest.raises(ValueError, match="Invalid invitation code"):
         service.signup_with_invitation(
             email="user@example.com",
             password="password123",
             code="x" * 20,
+            eula_version_id="11111111-1111-4111-8111-111111111111",
+            eula_accepted=True,
         )
 
     mock_auth_repo.validate_invitation_code.assert_called_once_with("x" * 20)
@@ -40,12 +43,15 @@ def test_signup_invalid_code_does_not_create_user(service, mock_supabase_client,
 def test_signup_already_claimed_does_not_create_user(service, mock_supabase_client, mock_auth_repo):
     """Already-claimed code: validate fails, create_user never called."""
     mock_auth_repo.validate_invitation_code.return_value = {"status": "already_claimed"}
+    mock_auth_repo.get_published_eula.return_value = {"id": "11111111-1111-4111-8111-111111111111"}
 
     with pytest.raises(ValueError, match="already claimed"):
         service.signup_with_invitation(
             email="user@example.com",
             password="password123",
             code="a" * 20,
+            eula_version_id="11111111-1111-4111-8111-111111111111",
+            eula_accepted=True,
         )
 
     mock_supabase_client.auth.admin.create_user.assert_not_called()
@@ -53,6 +59,8 @@ def test_signup_already_claimed_does_not_create_user(service, mock_supabase_clie
 
 def test_signup_success_creates_user_and_claims(service, mock_supabase_client, mock_auth_repo):
     """Valid code: create user, claim, provision profile."""
+    eula_id = "11111111-1111-4111-8111-111111111111"
+    mock_auth_repo.get_published_eula.return_value = {"id": eula_id}
     mock_auth_repo.validate_invitation_code.return_value = {
         "status": "valid",
         "user_type": "STANDARD",
@@ -73,19 +81,23 @@ def test_signup_success_creates_user_and_claims(service, mock_supabase_client, m
         email="newuser@example.com",
         password="securepass123",
         code="b" * 20,
+        eula_version_id=eula_id,
+        eula_accepted=True,
     )
 
     assert result["user_id"] == "880e8400-e29b-41d4-a716-446655440003"
     assert result["user_type"] == "STANDARD"
     mock_supabase_client.auth.admin.create_user.assert_called_once()
-    mock_auth_repo.claim_invitation_code_for_signup.assert_called_once_with(
-        "b" * 20,
-        "880e8400-e29b-41d4-a716-446655440003",
-    )
+    mock_auth_repo.claim_invitation_code_for_signup.assert_called_once()
+    c = mock_auth_repo.claim_invitation_code_for_signup.call_args
+    assert c[0] == ("b" * 20, "880e8400-e29b-41d4-a716-446655440003")
+    assert c.kwargs["eula_version_id"] == eula_id
+    assert "eula_accepted_at" in c.kwargs
 
 
 def test_signup_claim_race_deletes_orphan_user(service, mock_supabase_client, mock_auth_repo):
     """When claim returns None (race), delete the just-created auth user."""
+    mock_auth_repo.get_published_eula.return_value = {"id": "11111111-1111-4111-8111-111111111111"}
     mock_auth_repo.validate_invitation_code.return_value = {
         "status": "valid",
         "user_type": "STANDARD",
@@ -103,6 +115,8 @@ def test_signup_claim_race_deletes_orphan_user(service, mock_supabase_client, mo
             email="race@example.com",
             password="password123",
             code="c" * 20,
+            eula_version_id="11111111-1111-4111-8111-111111111111",
+            eula_accepted=True,
         )
 
     mock_supabase_client.auth.admin.delete_user.assert_called_once_with(
