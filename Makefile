@@ -1,9 +1,11 @@
-.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-locations-clipboard test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo auth-token reprovision-starter invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-migrate supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
+.PHONY: help install run run-local run-dry-run run-debug-run run-worker run-worker-dry-run kill-port clear-logs test test-api test-cors test-icon test-google-places test-random-location test-locations test-locations-clipboard test-remote show-runs show-runs-db notion-pull test-notion-oauth-db patch-local-oauth-from-prod tag env-source env-source-prod env-echo env-compare-template auth-token reprovision-starter invite-issue invite-validate invite-issue-csv invite-issue-csv-help invite-issue-csv-local invite-issue-csv-prod invite-create-users invite-create-users-local invite-create-users-prod supabase-start supabase-stop supabase-status supabase-reset supabase-migrate supabase-dashboard supabase-migration-new supabase-login supabase-link supabase-db-push supabase-deploy
 
 PORT ?= 8000
 SECRET ?= dev-secret
 BASE_URL ?= http://localhost:8000
 KEYWORDS ?= stone arch bridge minneapolis
+# Python venv for scripts/env_template_compare (make env-compare-template)
+ENV_TEMPLATE_COMPARE_VENV ?= scripts/env_template_compare/env
 # Path segment POST /triggers/{user_id}/locations — must be a UUID (Supabase auth user id). The string
 # "bootstrap" is not a valid UUID; Postgres bootstrap provisioning skips it and the trigger will 503.
 TRIGGER_USER_ID ?= 811eb854-89cd-4919-bb1e-a97dcdda5c34
@@ -55,6 +57,7 @@ help:
 	@echo "  make env-source       - Start a shell with envs/local.env sourced (vars available in that shell)"
 	@echo "  make env-source-prod  - Start a shell with envs/prod.env sourced (production vars, no rc files)"
 	@echo "  make env-echo         - Echo relevant env vars from current environment (sensitive values masked)"
+	@echo "  make env-compare-template [TARGET=local|prod] - Compare env.template to local.env or prod.env (fzf if no TARGET)"
 	@echo "  make auth-token       - Get Supabase access token (password from clipboard, for forsythetony@gmail.com)"
 	@echo "  make reprovision-starter - POST /management/bootstrap/reprovision-starter (JWT from clipboard, optional BASE_URL=)"
 	@echo "  make invite-issue     - Issue BETA_TESTER invitation code (token from clipboard)"
@@ -238,6 +241,12 @@ env-source:
 # Uses bash --norc so .zshrc/.bashrc don't override with local.env.
 env-source-prod:
 	@bash -c 'cd "$(CURDIR)" && set -a && [ -f envs/prod.env ] && source envs/prod.env; set +a && exec bash --norc'
+
+# Compare env.template keys to envs/local.env or envs/prod.env (pick with fzf, or TARGET=local|prod).
+env-compare-template:
+	@$(ENV_TEMPLATE_COMPARE_VENV)/bin/pip install -q -r scripts/env_template_compare/requirements.txt && \
+		$(ENV_TEMPLATE_COMPARE_VENV)/bin/python scripts/env_template_compare/compare_env_template.py \
+		$(if $(TARGET),--target $(TARGET),)
 
 # Echo relevant env vars from current environment (sensitive ones masked). No sourcing.
 env-echo:

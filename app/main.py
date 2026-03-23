@@ -3,6 +3,7 @@
 import hmac
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -160,10 +161,21 @@ def _configure_logger() -> None:
     logger.info("logger_configured | level={} file={}", log_level, log_path)
 
 
+def _log_startup_phase(phase: str, t0: float) -> None:
+    """Ordered checkpoints for diagnosing slow or stuck deploy health checks."""
+    logger.info(
+        "startup_phase | phase={} elapsed_ms={:.0f}",
+        phase,
+        (time.perf_counter() - t0) * 1000,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
     _configure_logger()
+    t0 = time.perf_counter()
+    _log_startup_phase("begin", t0)
     log_env_masked()
 
     notion_key = os.environ.get("NOTION_API_KEY")
@@ -179,6 +191,8 @@ async def lifespan(app: FastAPI):
         logger.error("startup_failed | reason=missing_env var=GOOGLE_PLACES_API_KEY")
         raise RuntimeError("GOOGLE_PLACES_API_KEY environment variable is required")
 
+    _log_startup_phase("required_env_ok", t0)
+
     supabase_config = load_supabase_config()
     supabase_client = create_supabase_client(supabase_config)
     app.state.supabase_client = supabase_client
@@ -188,6 +202,8 @@ async def lifespan(app: FastAPI):
     postgres_run_repo = PostgresRunRepository(supabase_client)
     app.state.supabase_run_repository = postgres_run_repo
     app.state.trigger_job_link_repository = PostgresTriggerJobLinkRepository(supabase_client)
+
+    _log_startup_phase("supabase_repos_ready", t0)
 
     enable_bootstrap = os.environ.get("ENABLE_BOOTSTRAP_PROVISIONING", "1").strip().lower() in (
         "1", "true", "yes",
@@ -205,6 +221,11 @@ async def lifespan(app: FastAPI):
             raise
     else:
         app.state.bootstrap_provisioning_service = None
+
+    _log_startup_phase(
+        "bootstrap_done" if enable_bootstrap else "bootstrap_skipped", t0
+    )
+
     app.state.supabase_auth_repository = SupabaseAuthRepository(
         supabase_client, supabase_config
     )
@@ -213,9 +234,12 @@ async def lifespan(app: FastAPI):
         supabase_client, app.state.supabase_auth_repository
     )
 
+    _log_startup_phase("signup_stack_ready", t0)
+
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
     notion_svc = NotionService(api_key=notion_key, dry_run=dry_run)
     notion_svc.initialize()
+    _log_startup_phase("notion_init_done", t0)
 
     freepik_key = os.environ.get("FREEPIK_API_KEY")
     freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
@@ -313,12 +337,16 @@ async def lifespan(app: FastAPI):
     )
     app.state.job_execution_service = job_execution_service
 
+    _log_startup_phase("all_services_wired", t0)
+
     async_enabled = os.environ.get("LOCATIONS_ASYNC_ENABLED", "1").strip().lower() in (
         "1",
         "true",
         "yes",
     )
     app.state.locations_async_enabled = async_enabled
+
+    _log_startup_phase("ready_to_accept_requests", t0)
 
     yield
 
