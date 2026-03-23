@@ -224,6 +224,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 
 Work completed. Add entries at the top, most recent first.
 
+
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
 | 2026-03-23 | startup-phase-logs | `app/main.py` lifespan: `startup_phase` INFO logs with `elapsed_ms` (`begin` → `required_env_ok` → `supabase_repos_ready` → `bootstrap_done`/`bootstrap_skipped` → `signup_stack_ready` → `notion_init_done` → `all_services_wired` → `ready_to_accept_requests`) to pinpoint slow or stuck Render deploy health checks. |
