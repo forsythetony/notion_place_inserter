@@ -27,6 +27,7 @@ def test_load_supabase_config_success():
     assert cfg.table_pipeline_run_events == "pipeline_run_events"
     assert cfg.table_user_profiles == "user_profiles"
     assert cfg.table_invitation_codes == "invitation_codes"
+    assert cfg.table_beta_waitlist_submissions == "beta_waitlist_submissions"
 
 
 def test_load_supabase_config_with_overrides():

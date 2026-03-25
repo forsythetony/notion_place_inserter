@@ -6,7 +6,7 @@
 
 ## Status
 
-- Open
+- **Complete on 2026-03-23** — Signup EULA modal layout and scroll gating fixed in `notion_pipeliner_ui` (`AuthPage.tsx`, `App.css`); `AuthPage.test.tsx` covers short-text auto-enable and long-text scroll gating.
 
 ## Severity
 
@@ -37,9 +37,14 @@
 - User can attest (checkbox or equivalent) and submit; client sends `eulaVersionId` matching `GET /auth/eula/current` with signup attestation per API contract.
 - Signup completes or surfaces a clear validation/API error—not a dead-end UI.
 
-## Why this exists / notes
+## Resolution (2026-03-23)
 
-- **Root cause:** TBD during fix (CSS/layout, modal focus trap, scroll sentinel logic, disabled gating, failed `getCurrentEula`, or mismatched version id).
+- **Root cause:** `.management-modal-body`’s `overflow-y: auto` overrode the EULA body’s intended single scroll region; inner scroll was capped at 240px; `IntersectionObserver` on a sentinel did not reliably pair with that layout; checkbox sat inside the scrolling body.
+- **Fix:** More specific CSS so the EULA modal body is a flex column with `overflow: hidden`; agreement scroll area uses `flex: 1` and `min-height: 200px`; plain-language summary as a compact callout; checkbox moved to footer; scroll-to-end via `scrollTop` / `scrollHeight` (+ `ResizeObserver`); optional read-progress bar and scroll hint.
+
+## Why this existed / notes
+
+- **Root cause (historical):** CSS cascade on modal body, fixed max-height on inner scroll, IO-based end detection, checkbox placement.
 - **Proven vs inferred:** Reported as live blocking behavior; exact browser/OS and network tab details to capture during investigation.
 
 ## Goal

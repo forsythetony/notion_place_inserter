@@ -1,6 +1,6 @@
 # Architecture push: Enhanced user monitoring and cost tracking
 
-**Status:** **In progress** — core operator path shipped; see **Implementation status** below. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
+**Status:** **Complete on 2026-03-24** for Goal 1 (small-group beta): Monitoring UI, rate cards, and estimated USD on admin run APIs are shipped — see **Implementation status** below. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
 
 ## Implementation status
 
@@ -13,7 +13,7 @@
 
 **Remaining (follow-ups)**
 
-* Nightly / materialized **rollups** for large-scale dashboards; **user-level summary** strip (totals for a date window) without N+1 list calls.
+* **Cost rollups / aggregation** — Nightly or materialized rollups for large-scale views; **user-level summary** strip (totals for a date window) without N+1 list calls. Tracked as tech debt: [`td-2026-03-24-monitoring-cost-rollups-aggregation.md`](../../tech-debt/td-2026-03-24-monitoring-cost-rollups-aggregation.md).
 * **Handler audit** (e.g. Notion) for full `usage_records` coverage.
 * **Admin UI** for editing rate cards (today: SQL / migration seed) — **Tech Deck:** [`tech-deck-admin-providers-page.md`](./tech-deck-admin-providers-page.md).
 * **Polish** — CSV export, anomaly hints, account-owner cost (post-beta).

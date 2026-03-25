@@ -18,6 +18,7 @@ class SupabaseConfig:
     table_user_profiles: str
     table_invitation_codes: str
     table_user_cohorts: str
+    table_beta_waitlist_submissions: str
 
 
 def _require_non_empty(value: str, env_var: str) -> str:
@@ -96,4 +97,7 @@ def load_supabase_config() -> SupabaseConfig:
             "invitation_codes", "invitation_codes"
         ),
         table_user_cohorts=_default_table("user_cohorts", "user_cohorts"),
+        table_beta_waitlist_submissions=_default_table(
+            "beta_waitlist_submissions", "beta_waitlist_submissions"
+        ),
     )

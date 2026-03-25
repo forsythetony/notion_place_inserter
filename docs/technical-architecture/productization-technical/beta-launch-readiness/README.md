@@ -11,11 +11,16 @@ See **Goals → Goal 1: Beta user launch** in [`docs/technical-architecture/work
 | Document | Status |
 |----------|--------|
 | [Admin invitation management UI](./admin-invitation-management-ui.md) (invites + **user cohorts**) | **Complete on 2026-03-22** · **Ready for review** |
-| [Public product name and positioning](./public-product-name-and-positioning.md) | **Open** · **Ready for review** |
+| [Public product name and positioning](./public-product-name-and-positioning.md) | **Complete on 2026-03-24** (Oleo chosen) · **Ready for review** |
 | [Global and per-user resource limits](./global-and-per-user-resource-limits.md) | **Open** · **Ready for review** |
-| [Enhanced user monitoring and cost tracking](./enhanced-user-monitoring-and-cost-tracking.md) | **Open** · **Ready for review** |
+| [Enhanced user monitoring and cost tracking](./enhanced-user-monitoring-and-cost-tracking.md) | **Complete on 2026-03-24** · **Ready for review** (cost rollups/aggregation follow-up: [td-2026-03-24-monitoring-cost-rollups-aggregation.md](../../tech-debt/td-2026-03-24-monitoring-cost-rollups-aggregation.md)) |
 | [Worker horizontal scaling and queue coordination](./worker-horizontal-scaling-and-queue-coordination.md) | **Open** · **Ready for review** |
 | [Error handling, observability, and telemetry](./error-handling-observability-and-telemetry.md) | **Open** · **Ready for review** |
+| [Oleo marketing homepage — scrollytelling](./oleo-homepage-scrollytelling-architecture.md) | **In progress (MVP 2026-03-23)** · **Ready for review** |
+| [Landing page — live demo video (“See it in action”)](./landing-page-live-demo-see-it-in-action-architecture.md) | **Complete on 2026-03-24** · **Ready for review** |
+| [Beta example demo video — recording and hosting plan](./beta-example-demo-video-recording-and-hosting-plan.md) | **In progress** · **Ready for review** |
+| [Marketing landing page — mobile-friendly](./landing-page-mobile-friendly-architecture.md) | **Not started** · **Unexpanded** |
+| [Public beta waitlist page and submission security](./public-beta-waitlist-submission-architecture.md) | **Complete on 2026-03-24** · **Ready for review** |
 | [Beta UI general polish](./beta-ui-general-polish.md) | **Open** · **Ready for review** |
 | [Invitations tab readability & accessibility](./invitations-tab-readability-and-accessibility.md) | **Complete on 2026-03-22** · **Ready for review** |
 | [Invitations — create invitation modal](./invitations-create-invitation-modal.md) | **Complete on 2026-03-22** · **Ready for review** |

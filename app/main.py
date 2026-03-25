@@ -48,7 +48,24 @@ from app.services.job_execution import JobExecutionService
 from app.services.notion_oauth_service import NotionOAuthService
 from app.services.supabase_auth_repository import SupabaseAuthRepository
 from app.services.supabase_queue_repository import SupabaseQueueRepository
-from app.routes import auth_admin, auth_context, eula, invitations, locations, management, notion_oauth, signup, test, ui_theme
+from app.repositories.supabase_beta_waitlist_repository import (
+    SupabaseBetaWaitlistRepository,
+)
+from app.routes import (
+    auth_admin,
+    auth_context,
+    eula,
+    invitations,
+    locations,
+    management,
+    notion_oauth,
+    public_waitlist,
+    signup,
+    test,
+    ui_theme,
+)
+from app.services.beta_waitlist_service import BetaWaitlistService
+from app.services.waitlist_rate_limiter import InMemoryWaitlistRateLimiter
 from app.services.signup_orchestration_service import SignupOrchestrationService
 from app.services.ui_theme_service import UiThemeService
 
@@ -234,6 +251,23 @@ async def lifespan(app: FastAPI):
         supabase_client, app.state.supabase_auth_repository
     )
 
+    waitlist_repo = SupabaseBetaWaitlistRepository(supabase_client, supabase_config)
+    ip_salt = (
+        os.environ.get("WAITLIST_IP_HASH_SALT") or os.environ.get("SECRET") or ""
+    ).strip()
+    if not ip_salt:
+        logger.warning(
+            "waitlist_ip_hash_salt_missing | set WAITLIST_IP_HASH_SALT or SECRET"
+        )
+        ip_salt = "waitlist-ip-placeholder-unsafe"
+    app.state.beta_waitlist_service = BetaWaitlistService(
+        waitlist_repo,
+        ip_hash_salt=ip_salt,
+    )
+    rl_max = int(os.environ.get("WAITLIST_RATE_LIMIT_MAX", "10"))
+    rl_window = int(os.environ.get("WAITLIST_RATE_LIMIT_WINDOW_SECONDS", "3600"))
+    app.state.waitlist_rate_limiter = InMemoryWaitlistRateLimiter(rl_max, rl_window)
+
     _log_startup_phase("signup_stack_ready", t0)
 
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
@@ -384,6 +418,7 @@ app.include_router(ui_theme.admin_router)
 app.include_router(management.router)
 app.include_router(notion_oauth.router)
 app.include_router(signup.router)
+app.include_router(public_waitlist.router)
 app.include_router(eula.public_router)
 app.include_router(invitations.router)
 app.include_router(auth_admin.router)

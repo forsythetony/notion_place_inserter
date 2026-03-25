@@ -210,6 +210,11 @@ Use this sequence to validate locally, then deploy with Render Blueprint.
 | `WHATSAPP_STATUS_RECIPIENT_DEFAULT` | No | Unset | `whatsapp:+1XXXXXXXXXX` | Fallback recipient for run-status messages. Required for notifications when Twilio is configured. |
 | `WHATSAPP_STATUS_ENABLED` | No | `1` | `1` or `0` | Set `0` to disable WhatsApp notifications without removing Twilio credentials. |
 | `WHATSAPP_STATUS_MAX_ERROR_CHARS` | No | `300` | `300` | Max characters for error text in failure messages; longer errors are truncated. |
+| `TURNSTILE_ENABLED` | No | `0` / unset (off) | `1` or `true` | When set, `POST /public/waitlist` requires a valid Turnstile token and `TURNSTILE_SECRET_KEY`. When unset/false, waitlist uses honeypot + rate limit only; `captcha_provider` is not set on rows. |
+| `TURNSTILE_SECRET_KEY` | When `TURNSTILE_ENABLED` | Unset | Cloudflare Turnstile **secret** | Server-side verification (see `app/routes/public_waitlist.py`). Ignored when Turnstile is disabled. |
+| `WAITLIST_IP_HASH_SALT` | No | Falls back to `SECRET` | Random string | Salt for hashing client IPs stored on `beta_waitlist_submissions`; set explicitly if `SECRET` is empty. |
+| `WAITLIST_RATE_LIMIT_MAX` | No | `10` | `10` | Max waitlist POSTs per client key per window (in-process; v1 guardrail). |
+| `WAITLIST_RATE_LIMIT_WINDOW_SECONDS` | No | `3600` | `3600` | Rate-limit window in seconds. |
 
 #### .env file loading
 
@@ -233,6 +238,7 @@ The app loads environment variables from a `.env` file at startup. It searches f
 | POST | `/locations` | `Authorization: <secret>`, body `{keywords: ""}` | 400 — keywords required and non-empty |
 | GET | `/test/googlePlacesSearch?query=<QUERY>` | `Authorization: <secret>` | 200 — `{"query": "...", "results": [...]}` |
 | GET | `/test/claude?poem_seed=<SEED>` | `Authorization: <secret>` | 200 — `{"poem": "..."}` |
+| POST | `/public/waitlist` | (none) | 202 — `{"status":"accepted"}` — public beta waitlist intake (Turnstile + validation); 400/429/500 on failure |
 
 ## Project Structure
 

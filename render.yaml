@@ -1,5 +1,6 @@
 # Backend API + worker for Notion Place Inserter (Phase 1).
 # Create env group "notion-pipeliner-backend" in Render with secret file .env and link to both services.
+# For POST /public/waitlist: set TURNSTILE_SECRET_KEY (and optional WAITLIST_RATE_LIMIT_* , WAITLIST_IP_HASH_SALT).
 services:
   - type: web
     name: notion-pipeliner-api

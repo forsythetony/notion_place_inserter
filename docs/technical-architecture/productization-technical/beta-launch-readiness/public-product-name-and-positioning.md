@@ -1,6 +1,6 @@
 # Architecture push: Public product name and positioning
 
-**Status:** Open  
+**Status:** Complete on 2026-03-24 — public name **Oleo** chosen (positioning copy and legal/domain follow-ups remain)  
 **Audience:** Founder, product, and anyone shipping copy, domains, or app chrome before beta  
 **Primary surfaces:** [`notion_pipeliner_ui`](../../../../../notion_pipeliner_ui/) — shell brand (`AppShell`, landing), legal/footer strings, future marketing pages
 
@@ -14,9 +14,9 @@ This doc tracks **what we call the product** and **how we position it** for Goal
 
 ---
 
-## Naming candidate: *Oleo*
+## Public name: *Oleo*
 
-**Working name:** *Oleo* (candidate only until decided).
+**Chosen public name:** *Oleo* (decision recorded 2026-03-24 in [`work-log.md`](../../work-log.md) **Decisions**).
 
 **Etymology / metaphor**
 
@@ -29,7 +29,7 @@ This doc tracks **what we call the product** and **how we position it** for Goal
 - **“Oleo”** is used by several unrelated companies (e.g. industrial rail / energy absorption, cooking-oil recycling, agencies).
 - **Deoleo** is a large olive-oil group — similar spelling and category-adjacent noise in web search.
 - **Domains (candidate check):** `oleo.ai` appears taken; `oleo.so` was available at last check. **Notion** uses `notion.so`, so a `.so` primary domain may read as aligned with the Notion ecosystem (positioning signal only — re-verify before purchase and check email/DNS deliverability for `.so`). **`oleo.sh`** is another TLD to evaluate: `.sh` often reads as developer/shell/tooling (contrast with `.so`’s Notion-adjacent signal); confirm availability and registrar terms separately.
-- **Before beta:** run **domain availability**, **trademark search** in target jurisdictions and classes, and a quick **web/social handle** pass. Record outcomes in **Decisions** in [`work-log.md`](../../work-log.md) when a final name is chosen.
+- **Before beta:** run **domain availability**, **trademark search** in target jurisdictions and classes, and a quick **web/social handle** pass. Record outcomes in **Decisions** or this doc as screening completes.
 
 ---
 
@@ -37,7 +37,7 @@ This doc tracks **what we call the product** and **how we position it** for Goal
 
 | Deliverable | Notes |
 |-------------|--------|
-| **Decision** | Choose public name (keep *Oleo*, modify, or replace); optional link from **Decisions** in `work-log.md`. |
+| **Decision** | **Done:** *Oleo* — see **Decisions** 2026-03-24 in `work-log.md`. |
 | **In-product strings** | Align app shell, landing, and auth with chosen name (replace placeholders / internal codenames where user-visible). |
 | **Legal / marketing** | If name is final, ensure Privacy/Terms and any beta invite copy use the same string; domain and email-from alignment as feasible. |
 
