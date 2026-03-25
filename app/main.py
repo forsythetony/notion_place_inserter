@@ -4,12 +4,14 @@ import hmac
 import os
 import sys
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.services.claude_service import ClaudeService
 from app.services.freepik_service import FreepikService
@@ -398,8 +400,39 @@ if _cors_origins:
         allow_origins=_cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
     )
+
+
+# ── Request-ID + CORS debug logging middleware ──────────────────────
+class RequestIdCorsDebugMiddleware(BaseHTTPMiddleware):
+    """Assigns a request ID and logs CORS-relevant details for debugging."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Use client-supplied ID or generate one
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        origin = request.headers.get("origin", "")
+        logger.info(
+            "cors-debug | rid={} method={} path={} origin={!r} allowed_origins={}",
+            request_id,
+            request.method,
+            request.url.path,
+            origin,
+            _cors_origins,
+        )
+        response: Response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        acao = response.headers.get("access-control-allow-origin", "")
+        logger.info(
+            "cors-debug | rid={} status={} ACAO={!r}",
+            request_id,
+            response.status_code,
+            acao,
+        )
+        return response
+
+
+app.add_middleware(RequestIdCorsDebugMiddleware)
 
 
 @app.get("/health")

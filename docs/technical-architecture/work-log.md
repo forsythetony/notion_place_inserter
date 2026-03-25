@@ -241,6 +241,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 
 ### `tech-debt/`
 
+- [Tech Debt: Admin pages bounce to dashboard on transient API read failures](./tech-debt/td-2026-03-25-admin-pages-bounce-on-transient-api-read-failures.md) — **Open**
 - [Tech Debt Story: Validate Retry Error Propagation Flow](./tech-debt/td-2026-03-13-retry-error-propagation-validation.md) — **Open**
 - [Tech Debt Story: Account-Level Secret Management](./tech-debt/td-2026-03-14-account-level-secret-management.md) — **Open**
 - [Tech Debt Story: Hardcoded Tenant Trigger for Bootstrap Locations](./tech-debt/td-2026-03-14-hardcoded-tenant-trigger-for-bootstrap-locations.md) — **Open**
@@ -267,6 +268,8 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-25 | expand td-2026-03-25 follow-ups | Expanded [td-2026-03-25-admin-pages-bounce-on-transient-api-read-failures.md](./tech-debt/td-2026-03-25-admin-pages-bounce-on-transient-api-read-failures.md) with concrete observability follow-ups: frontend correlation ids and redirect breadcrumbs, API `loguru` fields/stages/exceptions, route metrics and pressure gauges, Render/Supabase/Cloudflare/browser tooling, and short-term synthetic probes / load experiments. |
+| 2026-03-25 | td-2026-03-25-admin-pages-bounce-on-transient-api-read-failures | Logged production admin-route flakiness on `/admin/users`, `/admin/theme`, and `/admin/monitoring`: browser surfaces intermittent `GET /management/account` and `GET /auth/admin/runs` failures as CORS from `https://oleo.sh`, while admin pages redirect to `/dashboard` because route gating treats any `getManagementAccount()` fetch failure as denied. Live preflight checks confirm `https://oleo.sh` is currently allowed by API CORS, so this tracks the user-visible symptom of a deeper backend/API failure. |
 | 2026-03-25 | data-targets source management modal | Shipped [data-targets-source-management-modal.md](./productization-technical/beta-launch-readiness/data-targets-source-management-modal.md): `GET/POST .../data-sources` and `refresh-sources` return `summary` + enriched sources (`source_refreshed_at`, `tracked_target_id`, `tracked_properties`); refresh re-reads `connector_external_sources` after discovery; canonical target pick for schema (`target_places_to_visit`, `target_locations`, then schema-bearing id); `DataSourceManagementModal` + `/data-targets` callout; tests (`test_notion_oauth_routes`, `DataTargetsPage.test.tsx`, `api.test.ts`). |
 | 2026-03-24 | RLS backend-only tables | Migration `20260324130000_enable_rls_backend_only_tables.sql`: `ENABLE ROW LEVEL SECURITY` on platform/auth/theme/usage tables with no policies so only service_role (API/worker `SUPABASE_SECRET_KEY`) can access them via PostgREST; anon direct table access denied. |
 | 2026-03-24 | waitlist Turnstile opt-in | Turnstile disabled by default: `TURNSTILE_ENABLED` / `VITE_TURNSTILE_ENABLED` opt-in; persistence omits `captcha_provider` when off; README + `.env.example` + [cloudflare-turnstile-setup-guide.md](./productization-technical/beta-launch-readiness/cloudflare-turnstile-setup-guide.md) updated; waitlist route tests patch env for deterministic “off.” |
