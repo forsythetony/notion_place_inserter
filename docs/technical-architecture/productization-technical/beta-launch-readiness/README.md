@@ -21,7 +21,9 @@ See **Goals → Goal 1: Beta user launch** in [`docs/technical-architecture/work
 | [Beta example demo video — recording and hosting plan](./beta-example-demo-video-recording-and-hosting-plan.md) | **In progress** · **Ready for review** |
 | [Marketing landing page — mobile-friendly](./landing-page-mobile-friendly-architecture.md) | **Not started** · **Unexpanded** |
 | [Public beta waitlist page and submission security](./public-beta-waitlist-submission-architecture.md) | **Complete on 2026-03-24** · **Ready for review** |
+| [Admin waitlist directory, beta waves, and invite-from-waitlist](./admin-waitlist-waves-and-invitations-architecture.md) | **Not started** · **Ready for review** |
 | [Beta UI general polish](./beta-ui-general-polish.md) | **Open** · **Ready for review** |
+| [Data targets — source management modal](./data-targets-source-management-modal.md) | **Complete on 2026-03-25** · **Ready for review** |
 | [Invitations tab readability & accessibility](./invitations-tab-readability-and-accessibility.md) | **Complete on 2026-03-22** · **Ready for review** |
 | [Invitations — create invitation modal](./invitations-create-invitation-modal.md) | **Complete on 2026-03-22** · **Ready for review** |
 | [Users & cohorts tabs — UI parity with Invitations](./admin-users-and-cohorts-ui-parity-with-invitations.md) | **Complete on 2026-03-22** · **Ready for review** |

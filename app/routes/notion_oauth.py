@@ -1,6 +1,7 @@
 """Notion OAuth and connection lifecycle routes."""
 
 import os
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -10,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
+from app.domain.targets import DataTarget, TargetSchemaSnapshot
 from app.services.notion_oauth_service import (
     is_notion_oauth_configured,
     NotionOAuthService,
@@ -32,51 +34,172 @@ class SelectDataSourcesRequest(BaseModel):
     external_source_ids: list[str] = Field(..., min_length=1)
 
 
-def _enrich_sources_with_tracking(
+# Prefer these bootstrap targets when multiple data_targets share one Notion data_source_id.
+_BOOTSTRAP_CANONICAL_ORDER = ("target_places_to_visit", "target_locations")
+
+
+def _parse_iso_datetime(val: Any) -> datetime | None:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        s = val.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(s)
+        except ValueError:
+            return None
+    return None
+
+
+def _source_row_refresh_time(row: dict[str, Any]) -> datetime | None:
+    """Best timestamp for when this external source row was last refreshed in our DB."""
+    seen = _parse_iso_datetime(row.get("last_seen_at"))
+    updated = _parse_iso_datetime(row.get("updated_at"))
+    if seen and updated:
+        return max(seen, updated)
+    return seen or updated
+
+
+def _dedupe_external_sources_by_id(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per external_source_id; if duplicates exist, keep the most recently refreshed row."""
+    merged: dict[str, dict[str, Any]] = {}
+    for s in sources:
+        eid = s.get("external_source_id") or ""
+        if not eid:
+            continue
+        existing = merged.get(eid)
+        if existing is None:
+            merged[eid] = s
+            continue
+        t_new = _source_row_refresh_time(s)
+        t_old = _source_row_refresh_time(existing)
+        if t_new and (not t_old or t_new > t_old):
+            merged[eid] = s
+    return [merged[k] for k in sorted(merged.keys())]
+
+
+def _pick_canonical_target_for_source(
+    external_source_id: str, targets_for_eid: list[DataTarget]
+) -> DataTarget | None:
+    """
+    Choose one data_target for schema/property display when several share external_target_id.
+    Order: bootstrap ids first, then prefer a target with an active schema snapshot, then by id.
+    """
+    if not targets_for_eid:
+        return None
+    by_id = {t.id: t for t in targets_for_eid}
+    for bid in _BOOTSTRAP_CANONICAL_ORDER:
+        if bid in by_id:
+            return by_id[bid]
+    with_schema = [t for t in targets_for_eid if t.active_schema_snapshot_id]
+    if with_schema:
+        return sorted(with_schema, key=lambda t: t.id)[0]
+    return sorted(targets_for_eid, key=lambda t: t.id)[0]
+
+
+def _serialize_tracked_properties(snapshot: TargetSchemaSnapshot | None) -> list[dict[str, str]]:
+    if not snapshot or not snapshot.properties:
+        return []
+    return [{"name": p.name, "property_type": p.property_type} for p in snapshot.properties]
+
+
+def _build_data_source_management_response(
     sources: list[dict[str, Any]],
     connector_instance_id: str,
     owner_user_id: str,
     target_repo: Any,
     target_schema_repo: Any,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """
-    Enrich source dicts with is_tracked and last_properties_sync_at.
-    Sources must have external_source_id, display_name, is_accessible.
+    Shared payload for GET data-sources and POST refresh-sources: summary + enriched sources.
+    Canonical Notion identity is external_source_id (data_source_id).
     """
+    deduped = _dedupe_external_sources_by_id(sources)
+
     if not target_repo or not target_schema_repo:
-        return [
-            {**s, "is_tracked": False, "last_properties_sync_at": None}
-            for s in sources
-        ]
+        out: list[dict[str, Any]] = []
+        for s in deduped:
+            ts = _source_row_refresh_time(s)
+            out.append({
+                **s,
+                "source_refreshed_at": ts.isoformat() if ts else None,
+                "is_tracked": False,
+                "last_properties_sync_at": None,
+                "tracked_target_id": None,
+                "tracked_properties": [],
+            })
+        return {"summary": _compute_source_summary(out), "sources": out}
+
     targets = target_repo.list_by_connector(connector_instance_id, owner_user_id)
-    ext_to_target = {t.external_target_id: t for t in targets}
+    by_external: dict[str, list[DataTarget]] = defaultdict(list)
+    for t in targets:
+        if t.external_target_id:
+            by_external[t.external_target_id].append(t)
+
     snapshot_ids = [
-        t.active_schema_snapshot_id
-        for t in targets
-        if t.active_schema_snapshot_id
+        t.active_schema_snapshot_id for t in targets if t.active_schema_snapshot_id
     ]
-    snapshot_fetched = (
+    snapshot_fetched: dict[str, datetime] = (
         target_schema_repo.get_fetched_at_for_snapshots(snapshot_ids, owner_user_id)
         if snapshot_ids
         else {}
     )
-    ext_to_fetched: dict[str, datetime] = {}
-    for t in targets:
-        if t.active_schema_snapshot_id and t.external_target_id:
-            fetched = snapshot_fetched.get(t.active_schema_snapshot_id)
-            if fetched:
-                ext_to_fetched[t.external_target_id] = fetched
-    enriched = []
-    for s in sources:
-        eid = s.get("external_source_id", "")
-        is_tracked = eid in ext_to_target
-        last_at = ext_to_fetched.get(eid)
+
+    schema_cache: dict[str, TargetSchemaSnapshot | None] = {}
+
+    def _get_snapshot(snap_id: str) -> TargetSchemaSnapshot | None:
+        if snap_id not in schema_cache:
+            schema_cache[snap_id] = target_schema_repo.get_by_id(snap_id, owner_user_id)
+        return schema_cache[snap_id]
+
+    enriched: list[dict[str, Any]] = []
+    for s in deduped:
+        eid = s.get("external_source_id") or ""
+        row_ts = _source_row_refresh_time(s)
+        match = by_external.get(eid, [])
+        is_tracked = len(match) > 0
+        canonical = _pick_canonical_target_for_source(eid, match) if is_tracked else None
+
+        last_sync: datetime | None = None
+        tracked_props: list[dict[str, str]] = []
+        tracked_tid: str | None = None
+        if canonical:
+            tracked_tid = canonical.id
+            if canonical.active_schema_snapshot_id:
+                last_sync = snapshot_fetched.get(canonical.active_schema_snapshot_id)
+                snap = _get_snapshot(canonical.active_schema_snapshot_id)
+                tracked_props = _serialize_tracked_properties(snap)
+
         enriched.append({
             **s,
+            "source_refreshed_at": row_ts.isoformat() if row_ts else None,
             "is_tracked": is_tracked,
-            "last_properties_sync_at": last_at.isoformat() if last_at else None,
+            "last_properties_sync_at": last_sync.isoformat() if last_sync else None,
+            "tracked_target_id": tracked_tid,
+            "tracked_properties": tracked_props,
         })
-    return enriched
+
+    return {"summary": _compute_source_summary(enriched), "sources": enriched}
+
+
+def _compute_source_summary(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(sources)
+    tracked = sum(1 for s in sources if s.get("is_tracked"))
+    refresh_times: list[datetime] = []
+    for s in sources:
+        ts = _parse_iso_datetime(s.get("source_refreshed_at"))
+        if ts:
+            refresh_times.append(ts)
+    last_ref = max(refresh_times) if refresh_times else None
+    return {
+        "totalSources": total,
+        "trackedSources": tracked,
+        "untrackedSources": max(0, total - tracked),
+        "lastRefreshedAt": last_ref.isoformat() if last_ref else None,
+    }
 
 
 def _map_display_name_to_bootstrap_target(display_name: str) -> str | None:
@@ -181,20 +304,27 @@ def refresh_connection_sources(
     svc = _get_oauth_service(request)
     if not svc:
         raise HTTPException(status_code=500, detail="OAuth service not available")
+    ext_repo = getattr(request.app.state, "connector_external_sources_repository", None)
+    if not ext_repo:
+        raise HTTPException(status_code=500, detail="External sources repository not available")
     try:
-        sources = svc.refresh_sources(owner_user_id=ctx.user_id)
+        svc.refresh_sources(owner_user_id=ctx.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    sources = ext_repo.list_for_instance(
+        connector_instance_id="connector_instance_notion_default",
+        owner_user_id=ctx.user_id,
+        provider="notion",
+    )
     target_repo = getattr(request.app.state, "target_repository", None)
     target_schema_repo = getattr(request.app.state, "target_schema_repository", None)
-    enriched = _enrich_sources_with_tracking(
+    return _build_data_source_management_response(
         sources,
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
         target_repo=target_repo,
         target_schema_repo=target_schema_repo,
     )
-    return {"sources": enriched}
 
 
 @router.get("/management/connections/{connection_id}/data-sources")
@@ -216,14 +346,13 @@ def list_connection_data_sources(
     )
     target_repo = getattr(request.app.state, "target_repository", None)
     target_schema_repo = getattr(request.app.state, "target_schema_repository", None)
-    enriched = _enrich_sources_with_tracking(
+    return _build_data_source_management_response(
         sources,
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
         target_repo=target_repo,
         target_schema_repo=target_schema_repo,
     )
-    return {"sources": enriched}
 
 
 @router.post("/management/connections/{connection_id}/data-sources/select")

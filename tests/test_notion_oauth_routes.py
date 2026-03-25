@@ -126,13 +126,21 @@ def test_disconnect_404_for_unknown_connection(client):
 
 
 def test_refresh_sources_200_returns_sources(client):
-    """POST /management/connections/{id}/refresh-sources returns sources."""
+    """POST /management/connections/{id}/refresh-sources returns summary + sources."""
     user_id = _setup_auth(client)
     mock_svc = MagicMock()
-    mock_svc.refresh_sources.return_value = [
-        {"external_source_id": "abc-123", "display_name": "My Database", "is_accessible": True},
+    mock_ext_repo = MagicMock()
+    mock_ext_repo.list_for_instance.return_value = [
+        {
+            "external_source_id": "abc-123",
+            "display_name": "My Database",
+            "is_accessible": True,
+            "last_seen_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        },
     ]
     app.state.notion_oauth_service = mock_svc
+    app.state.connector_external_sources_repository = mock_ext_repo
 
     resp = client.post(
         f"/management/connections/{NOTION_CONN_ID}/refresh-sources",
@@ -140,11 +148,19 @@ def test_refresh_sources_200_returns_sources(client):
     )
     assert resp.status_code == 200
     data = resp.json()
+    assert "summary" in data
+    assert data["summary"]["totalSources"] == 1
     assert "sources" in data
     assert len(data["sources"]) == 1
     assert data["sources"][0]["external_source_id"] == "abc-123"
     assert data["sources"][0]["display_name"] == "My Database"
+    assert data["sources"][0]["source_refreshed_at"] is not None
     mock_svc.refresh_sources.assert_called_once_with(owner_user_id=user_id)
+    mock_ext_repo.list_for_instance.assert_called_once_with(
+        connector_instance_id=NOTION_CONN_ID,
+        owner_user_id=user_id,
+        provider="notion",
+    )
 
 
 def test_list_data_sources_200_returns_sources(client):
@@ -162,6 +178,7 @@ def test_list_data_sources_200_returns_sources(client):
     )
     assert resp.status_code == 200
     data = resp.json()
+    assert "summary" in data
     assert "sources" in data
     assert len(data["sources"]) == 1
     assert data["sources"][0]["external_source_id"] == "def-456"
