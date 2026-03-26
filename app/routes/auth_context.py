@@ -8,7 +8,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/context")
-def get_auth_context(ctx: AuthContext = Depends(require_managed_auth)):
+async def get_auth_context(ctx: AuthContext = Depends(require_managed_auth)):
     """
     Return authenticated user context for dashboard bootstrap.
     Requires valid Supabase Bearer token and an existing user profile.

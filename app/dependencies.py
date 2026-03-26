@@ -46,7 +46,7 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return parts[1].strip() or None
 
 
-def require_managed_auth(
+async def require_managed_auth(
     request: Request,
     authorization: str | None = Header(default=None),
 ) -> AuthContext:
@@ -66,7 +66,7 @@ def require_managed_auth(
         raise HTTPException(status_code=500, detail="Server misconfiguration")
 
     try:
-        user_response = supabase_client.auth.get_user(jwt=token)
+        user_response = await supabase_client.auth.get_user(jwt=token)
     except Exception:
         logger.warning("managed_auth_rejected | reason=token_validation_failed")
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -82,7 +82,7 @@ def require_managed_auth(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        profile = auth_repo.get_profile(user_id)
+        profile = await auth_repo.get_profile(user_id)
     except Exception:
         logger.exception(
             "managed_auth_error | reason=profile_fetch_failed user_id={}", user_id
@@ -110,7 +110,7 @@ def require_managed_auth(
     return AuthContext(user_id=user_id, email=email, user_type=user_type)
 
 
-def require_admin_managed_auth(
+async def require_admin_managed_auth(
     request: Request,
     authorization: str | None = Header(default=None),
 ) -> AuthContext:
@@ -118,7 +118,7 @@ def require_admin_managed_auth(
     Same as require_managed_auth but enforces user_type == ADMIN.
     Raises 403 with deterministic detail when caller is not an admin.
     """
-    ctx = require_managed_auth(request=request, authorization=authorization)
+    ctx = await require_managed_auth(request=request, authorization=authorization)
     if ctx.user_type != "ADMIN":
         logger.warning(
             "admin_auth_rejected | reason=not_admin user_id={} user_type={}",
@@ -132,7 +132,7 @@ def require_admin_managed_auth(
     return ctx
 
 
-def require_signup_managed_auth(
+async def require_signup_managed_auth(
     request: Request,
     authorization: str | None = Header(default=None),
 ) -> SignupAuthContext:
@@ -151,7 +151,7 @@ def require_signup_managed_auth(
         raise HTTPException(status_code=500, detail="Server misconfiguration")
 
     try:
-        user_response = supabase_client.auth.get_user(jwt=token)
+        user_response = await supabase_client.auth.get_user(jwt=token)
     except Exception:
         logger.warning("signup_auth_rejected | reason=token_validation_failed")
         raise HTTPException(status_code=401, detail="Unauthorized")

@@ -1,7 +1,7 @@
 """Unit tests for POST /triggers/{user_id}/{path} route (sync and async modes)."""
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,22 +50,38 @@ def _mock_link_repo():
     """Mock trigger_job_link_repository for tests (many-to-many linkage)."""
     mock = MagicMock()
     ids = ["job_notion_place_inserter"]
-    mock.list_job_ids_for_trigger.return_value = list(ids)
-    mock.list_dispatchable_job_ids_for_trigger.return_value = list(ids)
+    mock.list_job_ids_for_trigger = AsyncMock(return_value=list(ids))
+    mock.list_dispatchable_job_ids_for_trigger = AsyncMock(return_value=list(ids))
     return mock
 
 
 def _mock_app_config_repo():
     m = MagicMock()
-    m.get_by_owner.return_value = AppLimits(
-        max_stages_per_job=20,
-        max_pipelines_per_stage=20,
-        max_steps_per_pipeline=50,
-        max_jobs_per_owner=50,
-        max_triggers_per_owner=50,
-        max_runs_per_utc_day=500,
-        max_runs_per_utc_month=10000,
+    m.get_by_owner = AsyncMock(
+        return_value=AppLimits(
+            max_stages_per_job=20,
+            max_pipelines_per_stage=20,
+            max_steps_per_pipeline=50,
+            max_jobs_per_owner=50,
+            max_triggers_per_owner=50,
+            max_runs_per_utc_day=500,
+            max_runs_per_utc_month=10000,
+        )
     )
+    return m
+
+
+def _mock_job_execution_service():
+    exec_svc = MagicMock()
+    exec_svc.execute_snapshot_run = AsyncMock(
+        return_value={"id": "page-123", "mode": "create"}
+    )
+    return exec_svc
+
+
+def _mock_run_repo_for_async(**enqueue_kwargs):
+    m = MagicMock()
+    m.enqueue_production_job_run_with_quota = AsyncMock(**enqueue_kwargs)
     return m
 
 
@@ -73,13 +89,15 @@ def test_post_triggers_401_without_auth(client):
     """POST /triggers/{user_id}/locations without Authorization returns 401."""
     mock_trigger = _trigger_mock()
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
     app.state.trigger_service = mock_trigger_service
-    app.state.job_execution_service = MagicMock()
+    app.state.job_execution_service = _mock_job_execution_service()
     app.state.job_definition_service = MagicMock()
-    app.state.job_definition_service.resolve_for_run.return_value = MagicMock(
-        snapshot={"job": {"id": "job_notion_place_inserter"}},
-        snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+    app.state.job_definition_service.resolve_for_run = AsyncMock(
+        return_value=MagicMock(
+            snapshot={"job": {"id": "job_notion_place_inserter"}},
+            snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+        )
     )
     app.state.trigger_job_link_repository = _mock_link_repo()
     resp = client.post(
@@ -94,13 +112,15 @@ def test_post_triggers_401_invalid_auth(client):
     """POST /triggers/{user_id}/locations with invalid Bearer secret returns 401."""
     mock_trigger = _trigger_mock()
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
     app.state.trigger_service = mock_trigger_service
-    app.state.job_execution_service = MagicMock()
+    app.state.job_execution_service = _mock_job_execution_service()
     app.state.job_definition_service = MagicMock()
-    app.state.job_definition_service.resolve_for_run.return_value = MagicMock(
-        snapshot={"job": {"id": "job_notion_place_inserter"}},
-        snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+    app.state.job_definition_service.resolve_for_run = AsyncMock(
+        return_value=MagicMock(
+            snapshot={"job": {"id": "job_notion_place_inserter"}},
+            snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+        )
     )
     app.state.trigger_job_link_repository = _mock_link_repo()
     resp = client.post(
@@ -115,14 +135,16 @@ def test_post_triggers_401_invalid_auth(client):
 def test_post_triggers_400_empty_keywords(client):
     """POST /triggers/{user_id}/locations with empty keywords returns 400."""
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = _trigger_mock()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=_trigger_mock())
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = _mock_link_repo()
-    app.state.job_execution_service = MagicMock()
+    app.state.job_execution_service = _mock_job_execution_service()
     app.state.job_definition_service = MagicMock()
-    app.state.job_definition_service.resolve_for_run.return_value = MagicMock(
-        snapshot={"job": {"id": "job_notion_place_inserter"}},
-        snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+    app.state.job_definition_service.resolve_for_run = AsyncMock(
+        return_value=MagicMock(
+            snapshot={"job": {"id": "job_notion_place_inserter"}},
+            snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+        )
     )
 
     resp = client.post(
@@ -137,14 +159,16 @@ def test_post_triggers_400_empty_keywords(client):
 def test_post_triggers_400_whitespace_keywords(client):
     """POST /triggers/{user_id}/locations with whitespace-only keywords returns 400."""
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = _trigger_mock()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=_trigger_mock())
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = _mock_link_repo()
-    app.state.job_execution_service = MagicMock()
+    app.state.job_execution_service = _mock_job_execution_service()
     app.state.job_definition_service = MagicMock()
-    app.state.job_definition_service.resolve_for_run.return_value = MagicMock(
-        snapshot={"job": {"id": "job_notion_place_inserter"}},
-        snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+    app.state.job_definition_service.resolve_for_run = AsyncMock(
+        return_value=MagicMock(
+            snapshot={"job": {"id": "job_notion_place_inserter"}},
+            snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+        )
     )
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -158,14 +182,16 @@ def test_post_triggers_400_keywords_too_long(client):
     """POST /triggers/{user_id}/locations with keywords exceeding max length returns 400."""
     long_keywords = "x" * 301
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = _trigger_mock()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=_trigger_mock())
     app.state.trigger_service = mock_trigger_service
     app.state.trigger_job_link_repository = _mock_link_repo()
-    app.state.job_execution_service = MagicMock()
+    app.state.job_execution_service = _mock_job_execution_service()
     app.state.job_definition_service = MagicMock()
-    app.state.job_definition_service.resolve_for_run.return_value = MagicMock(
-        snapshot={"job": {"id": "job_notion_place_inserter"}},
-        snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+    app.state.job_definition_service.resolve_for_run = AsyncMock(
+        return_value=MagicMock(
+            snapshot={"job": {"id": "job_notion_place_inserter"}},
+            snapshot_ref="job_snapshot:bootstrap:job_notion_place_inserter:abc123",
+        )
     )
     resp = client.post(
         "/triggers/bootstrap/locations",
@@ -187,14 +213,14 @@ def _mock_snapshot():
 def test_post_triggers_async_returns_accepted(client):
     """POST /triggers/{user_id}/locations with async enabled returns 200 accepted with job_ids and run_ids."""
     mock_queue_repo = MagicMock()
-    mock_run_repo = MagicMock()
+    mock_run_repo = _mock_run_repo_for_async()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_link_repo = _mock_link_repo()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
-    mock_queue_repo.send.return_value = MagicMock(message_id=1)
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
+    mock_queue_repo.send = AsyncMock(return_value=MagicMock(message_id=1))
 
     app.state.locations_async_enabled = True
     app.state.supabase_queue_repository = mock_queue_repo
@@ -217,7 +243,7 @@ def test_post_triggers_async_returns_accepted(client):
     assert len(data["job_ids"]) == 1
     assert data["job_ids"][0].startswith("loc_")
 
-    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_awaited_once()
     call_args = mock_run_repo.enqueue_production_job_run_with_quota.call_args
     call_kw = call_args[1]
     assert call_args[0][0].startswith("loc_")
@@ -230,7 +256,7 @@ def test_post_triggers_async_returns_accepted(client):
     assert call_kw.get("day_cap") == 500
     assert call_kw.get("month_cap") == 10000
 
-    mock_queue_repo.send.assert_called_once()
+    mock_queue_repo.send.assert_awaited_once()
     call_args = mock_queue_repo.send.call_args
     payload = call_args[0][0]
     assert payload["trigger_payload"]["keywords"] == "park"
@@ -247,14 +273,17 @@ def test_post_triggers_async_returns_accepted(client):
 def test_post_triggers_async_422_when_all_linked_jobs_disabled(client):
     """POST /triggers returns 422 when trigger has links but no active (dispatchable) pipelines."""
     mock_queue_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock()
     mock_run_repo = MagicMock()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_link_repo = MagicMock()
-    mock_link_repo.list_job_ids_for_trigger.return_value = ["job_disabled_a", "job_disabled_b"]
-    mock_link_repo.list_dispatchable_job_ids_for_trigger.return_value = []
+    mock_link_repo.list_job_ids_for_trigger = AsyncMock(
+        return_value=["job_disabled_a", "job_disabled_b"]
+    )
+    mock_link_repo.list_dispatchable_job_ids_for_trigger = AsyncMock(return_value=[])
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
 
     app.state.locations_async_enabled = True
     app.state.supabase_queue_repository = mock_queue_repo
@@ -271,7 +300,7 @@ def test_post_triggers_async_422_when_all_linked_jobs_disabled(client):
     )
     assert resp.status_code == 422
     assert "disabled" in resp.json()["detail"].lower()
-    mock_queue_repo.send.assert_not_called()
+    mock_queue_repo.send.assert_not_awaited()
 
 
 def test_post_triggers_async_503_when_job_definition_service_unavailable(client):
@@ -294,10 +323,11 @@ def test_post_triggers_async_503_when_job_definition_service_unavailable(client)
 def test_post_triggers_async_503_when_trigger_unavailable(client):
     """POST /triggers/{user_id}/locations when trigger cannot be resolved returns 503."""
     mock_queue_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock()
     mock_run_repo = MagicMock()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
-    mock_trigger_service.resolve_by_path.return_value = None
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=None)
 
     app.state.locations_async_enabled = True
     app.state.supabase_queue_repository = mock_queue_repo
@@ -314,18 +344,19 @@ def test_post_triggers_async_503_when_trigger_unavailable(client):
     )
     assert resp.status_code == 503
     assert "Trigger" in resp.json()["detail"] or "trigger" in resp.json()["detail"].lower()
-    mock_queue_repo.send.assert_not_called()
+    mock_queue_repo.send.assert_not_awaited()
 
 
 def test_post_triggers_async_503_when_job_unavailable(client):
     """POST /triggers/{user_id}/locations when job resolution returns None returns 503."""
     mock_queue_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock()
     mock_run_repo = MagicMock()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = None
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=None)
 
     app.state.locations_async_enabled = True
     app.state.trigger_job_link_repository = _mock_link_repo()
@@ -342,7 +373,7 @@ def test_post_triggers_async_503_when_job_unavailable(client):
     )
     assert resp.status_code == 503
     assert "Bootstrap" in resp.json()["detail"] or "job" in resp.json()["detail"].lower()
-    mock_queue_repo.send.assert_not_called()
+    mock_queue_repo.send.assert_not_awaited()
 
 
 def test_post_triggers_async_503_when_trigger_service_unavailable(client):
@@ -406,13 +437,13 @@ def test_post_triggers_async_503_when_run_repo_unavailable(client):
 def test_post_triggers_async_503_when_send_raises(client):
     """POST /triggers/{user_id}/locations with async enabled but queue send raises returns 503."""
     mock_queue_repo = MagicMock()
-    mock_queue_repo.send.side_effect = RuntimeError("pgmq unavailable")
-    mock_run_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock(side_effect=RuntimeError("pgmq unavailable"))
+    mock_run_repo = _mock_run_repo_for_async()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
 
     app.state.locations_async_enabled = True
     app.state.trigger_job_link_repository = _mock_link_repo()
@@ -434,13 +465,15 @@ def test_post_triggers_async_503_when_send_raises(client):
 def test_post_triggers_async_503_when_create_job_raises(client):
     """POST /triggers/{user_id}/locations when enqueue quota RPC raises returns 503; send is never called."""
     mock_queue_repo = MagicMock()
-    mock_run_repo = MagicMock()
-    mock_run_repo.enqueue_production_job_run_with_quota.side_effect = RuntimeError("Supabase unavailable")
+    mock_queue_repo.send = AsyncMock()
+    mock_run_repo = _mock_run_repo_for_async(
+        side_effect=RuntimeError("Supabase unavailable")
+    )
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
 
     app.state.locations_async_enabled = True
     app.state.trigger_job_link_repository = _mock_link_repo()
@@ -456,20 +489,22 @@ def test_post_triggers_async_503_when_create_job_raises(client):
         json={"keywords": "park"},
     )
     assert resp.status_code == 503
-    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
-    mock_queue_repo.send.assert_not_called()
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_awaited_once()
+    mock_queue_repo.send.assert_not_awaited()
 
 
 def test_post_triggers_async_503_when_create_run_raises(client):
     """POST /triggers/{user_id}/locations when enqueue quota RPC raises returns 503; send is never called."""
     mock_queue_repo = MagicMock()
-    mock_run_repo = MagicMock()
-    mock_run_repo.enqueue_production_job_run_with_quota.side_effect = RuntimeError("Run persistence unavailable")
+    mock_queue_repo.send = AsyncMock()
+    mock_run_repo = _mock_run_repo_for_async(
+        side_effect=RuntimeError("Run persistence unavailable")
+    )
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
 
     app.state.locations_async_enabled = True
     app.state.trigger_job_link_repository = _mock_link_repo()
@@ -485,8 +520,8 @@ def test_post_triggers_async_503_when_create_run_raises(client):
         json={"keywords": "park"},
     )
     assert resp.status_code == 503
-    mock_run_repo.enqueue_production_job_run_with_quota.assert_called_once()
-    mock_queue_repo.send.assert_not_called()
+    mock_run_repo.enqueue_production_job_run_with_quota.assert_awaited_once()
+    mock_queue_repo.send.assert_not_awaited()
 
 
 @pytest.fixture
@@ -506,13 +541,13 @@ def captured_logs():
 def test_post_triggers_async_logs_correlation_on_success(client, captured_logs):
     """Enqueue success logs include job_id and run_id for correlation."""
     mock_queue_repo = MagicMock()
-    mock_queue_repo.send.return_value = MagicMock(message_id=1)
-    mock_run_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock(return_value=MagicMock(message_id=1))
+    mock_run_repo = _mock_run_repo_for_async()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
 
     app.state.locations_async_enabled = True
     app.state.supabase_queue_repository = mock_queue_repo
@@ -540,13 +575,13 @@ def test_post_triggers_async_logs_correlation_on_success(client, captured_logs):
 def test_post_triggers_async_logs_correlation_on_failure(client, captured_logs):
     """Enqueue failure logs include job_id and run_id for correlation."""
     mock_queue_repo = MagicMock()
-    mock_queue_repo.send.side_effect = RuntimeError("pgmq down")
-    mock_run_repo = MagicMock()
+    mock_queue_repo.send = AsyncMock(side_effect=RuntimeError("pgmq down"))
+    mock_run_repo = _mock_run_repo_for_async()
     mock_job_definition_service = MagicMock()
     mock_trigger_service = MagicMock()
     mock_trigger = _trigger_mock()
-    mock_trigger_service.resolve_by_path.return_value = mock_trigger
-    mock_job_definition_service.resolve_for_run.return_value = _mock_snapshot()
+    mock_trigger_service.resolve_by_path = AsyncMock(return_value=mock_trigger)
+    mock_job_definition_service.resolve_for_run = AsyncMock(return_value=_mock_snapshot())
 
     app.state.locations_async_enabled = True
     app.state.trigger_job_link_repository = _mock_link_repo()

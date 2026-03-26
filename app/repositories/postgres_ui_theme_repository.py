@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 
 def _parse_dt(val: Any) -> datetime | None:
@@ -44,10 +44,10 @@ class PostgresUiThemeRepository:
     TABLE_SETTINGS = "app_ui_theme_settings"
     SETTINGS_PK = 1
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def list_presets_metadata(self) -> list[dict[str, Any]]:
+    async def list_presets_metadata(self) -> list[dict[str, Any]]:
         """List presets with id, name, is_system, updated_at (no config)."""
         r = (
             self._client.table(self.TABLE_PRESETS)
@@ -68,7 +68,7 @@ class PostgresUiThemeRepository:
             )
         return out
 
-    def get_preset_by_id(self, preset_id: str) -> dict[str, Any] | None:
+    async def get_preset_by_id(self, preset_id: str) -> dict[str, Any] | None:
         r = (
             self._client.table(self.TABLE_PRESETS)
             .select("*")
@@ -82,7 +82,7 @@ class PostgresUiThemeRepository:
         row = rows[0]
         return self._row_to_preset(row)
 
-    def _row_to_preset(self, row: dict[str, Any]) -> dict[str, Any]:
+    async def _row_to_preset(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": str(row["id"]),
             "name": row["name"],
@@ -95,7 +95,7 @@ class PostgresUiThemeRepository:
             else None,
         }
 
-    def create_preset(
+    async def create_preset(
         self,
         name: str,
         config: dict[str, Any],
@@ -121,7 +121,7 @@ class PostgresUiThemeRepository:
             raise RuntimeError("ui_theme_preset_insert_failed")
         return loaded
 
-    def update_preset(
+    async def update_preset(
         self,
         preset_id: str,
         *,
@@ -136,12 +136,12 @@ class PostgresUiThemeRepository:
         self._client.table(self.TABLE_PRESETS).update(updates).eq("id", preset_id).execute()
         return self.get_preset_by_id(preset_id)
 
-    def delete_preset(self, preset_id: str) -> bool:
+    async def delete_preset(self, preset_id: str) -> bool:
         r = self._client.table(self.TABLE_PRESETS).delete().eq("id", preset_id).execute()
         rows = r.data or []
         return len(rows) > 0
 
-    def get_preset_is_system(self, preset_id: str) -> bool | None:
+    async def get_preset_is_system(self, preset_id: str) -> bool | None:
         r = (
             self._client.table(self.TABLE_PRESETS)
             .select("is_system")
@@ -154,7 +154,7 @@ class PostgresUiThemeRepository:
             return None
         return bool(rows[0].get("is_system", False))
 
-    def get_active_preset_id(self) -> str | None:
+    async def get_active_preset_id(self) -> str | None:
         r = (
             self._client.table(self.TABLE_SETTINGS)
             .select("active_preset_id")
@@ -168,7 +168,7 @@ class PostgresUiThemeRepository:
         aid = rows[0].get("active_preset_id")
         return str(aid) if aid else None
 
-    def set_active_preset_id(self, preset_id: str | None) -> None:
+    async def set_active_preset_id(self, preset_id: str | None) -> None:
         self._client.table(self.TABLE_SETTINGS).update(
             {
                 "active_preset_id": preset_id,
@@ -176,7 +176,7 @@ class PostgresUiThemeRepository:
             }
         ).eq("id", self.SETTINGS_PK).execute()
 
-    def duplicate_preset(
+    async def duplicate_preset(
         self,
         source_id: str,
         name: str | None,

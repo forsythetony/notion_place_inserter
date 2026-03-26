@@ -42,10 +42,10 @@ def _eula_row_admin(row: dict[str, Any]) -> dict[str, Any]:
 
 
 @public_router.get("/eula/current")
-def get_current_eula(request: Request):
+async def get_current_eula(request: Request):
     """Return the published EULA for signup display (unauthenticated)."""
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    row = auth_repo.get_published_eula()
+    row = await auth_repo.get_published_eula()
     if row is None:
         raise HTTPException(status_code=404, detail="No published EULA")
     return _eula_row_public(row)
@@ -68,24 +68,24 @@ class EulaCopyRequest(BaseModel):
 
 
 @admin_router.get("/eula/versions")
-def list_eula_versions_admin(
+async def list_eula_versions_admin(
     request: Request,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    rows = auth_repo.list_eula_versions_for_admin()
+    rows = await auth_repo.list_eula_versions_for_admin()
     return [_eula_row_admin(r) for r in rows]
 
 
 @admin_router.post("/eula/versions")
-def create_eula_draft_admin(
+async def create_eula_draft_admin(
     request: Request,
     body: EulaDraftCreateRequest,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
     try:
-        row = auth_repo.insert_eula_draft(
+        row = await auth_repo.insert_eula_draft(
             body.version_label,
             body.full_text,
             body.plain_language_summary,
@@ -105,20 +105,20 @@ def create_eula_draft_admin(
 
 
 @admin_router.get("/eula/versions/{version_id}")
-def get_eula_version_admin(
+async def get_eula_version_admin(
     request: Request,
     version_id: UUID,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    row = auth_repo.get_eula_version_by_id(version_id)
+    row = await auth_repo.get_eula_version_by_id(version_id)
     if row is None:
         raise HTTPException(status_code=404, detail="EULA version not found")
     return _eula_row_admin(row)
 
 
 @admin_router.patch("/eula/versions/{version_id}")
-def update_eula_draft_admin(
+async def update_eula_draft_admin(
     request: Request,
     version_id: UUID,
     body: EulaDraftUpdateRequest,
@@ -132,7 +132,7 @@ def update_eula_draft_admin(
     ):
         raise HTTPException(status_code=400, detail="No fields to update")
     try:
-        row = auth_repo.update_eula_draft(
+        row = await auth_repo.update_eula_draft(
             version_id,
             version_label=body.version_label,
             full_text=body.full_text,
@@ -149,7 +149,7 @@ def update_eula_draft_admin(
 
 
 @admin_router.post("/eula/versions/{version_id}/copy")
-def copy_eula_version_admin(
+async def copy_eula_version_admin(
     request: Request,
     version_id: UUID,
     body: EulaCopyRequest,
@@ -157,7 +157,7 @@ def copy_eula_version_admin(
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
     try:
-        row = auth_repo.copy_eula_to_new_draft(
+        row = await auth_repo.copy_eula_to_new_draft(
             version_id,
             body.version_label,
             created_by_user_id=ctx.user_id,
@@ -176,25 +176,25 @@ def copy_eula_version_admin(
 
 
 @admin_router.post("/eula/versions/{version_id}/publish")
-def publish_eula_version_admin(
+async def publish_eula_version_admin(
     request: Request,
     version_id: UUID,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    row = auth_repo.get_eula_version_by_id(version_id)
+    row = await auth_repo.get_eula_version_by_id(version_id)
     if row is None:
         raise HTTPException(status_code=404, detail="EULA version not found")
     if row.get("status") != "draft":
         raise HTTPException(status_code=400, detail="Only a draft can be published")
     try:
-        auth_repo.publish_eula_version_rpc(version_id)
+        await auth_repo.publish_eula_version_rpc(version_id)
     except Exception as e:
         msg = str(e)
         if "not a draft" in msg.lower() or "publish_eula_version" in msg:
             raise HTTPException(status_code=400, detail=msg) from e
         raise
-    out = auth_repo.get_eula_version_by_id(version_id)
+    out = await auth_repo.get_eula_version_by_id(version_id)
     if out is None:
         raise HTTPException(status_code=500, detail="Publish succeeded but row missing")
     return _eula_row_admin(out)

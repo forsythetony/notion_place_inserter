@@ -87,26 +87,26 @@ class InvitationClaimRequest(BaseModel):
 
 
 @router.get("")
-def list_invitations(
+async def list_invitations(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     """List all invitation codes (admin-only). Client filters in v1."""
     auth_repo = request.app.state.supabase_auth_repository
     logger.info("admin_list_invitations | admin_user_id={}", ctx.user_id)
-    rows = auth_repo.list_invitation_codes_for_admin()
+    rows = await auth_repo.list_invitation_codes_for_admin()
     return {"items": [_invitation_row_to_list_item(r) for r in rows]}
 
 
 @router.delete("/{invitation_id}", status_code=204)
-def delete_invitation(
+async def delete_invitation(
     request: Request,
     invitation_id: UUID,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     """Revoke an unclaimed invitation (admin-only)."""
     auth_repo = request.app.state.supabase_auth_repository
-    result = auth_repo.delete_unclaimed_invitation_by_id(invitation_id)
+    result = await auth_repo.delete_unclaimed_invitation_by_id(invitation_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Invitation not found")
     if result == "claimed":
@@ -122,7 +122,7 @@ def delete_invitation(
 
 
 @router.post("")
-def issue_invitation(
+async def issue_invitation(
     request: Request,
     body: InvitationIssueRequest,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -144,7 +144,7 @@ def issue_invitation(
 
     cohort_id_str: str | None = None
     if body.cohort_id is not None:
-        cohort = auth_repo.get_cohort_by_id(body.cohort_id)
+        cohort = await auth_repo.get_cohort_by_id(body.cohort_id)
         if cohort is None:
             raise HTTPException(
                 status_code=400,
@@ -154,12 +154,12 @@ def issue_invitation(
 
     # Idempotent: if issuedTo is non-empty and already exists, return existing row
     if body.issued_to and body.issued_to.strip():
-        existing = auth_repo.get_invitation_by_issued_to(body.issued_to)
+        existing = await auth_repo.get_invitation_by_issued_to(body.issued_to)
         if existing is not None:
             return _issue_response_body(existing)
 
-    code = auth_repo.generate_invitation_code()
-    row = auth_repo.create_invitation_code(
+    code = await auth_repo.generate_invitation_code()
+    row = await auth_repo.create_invitation_code(
         code=code,
         user_type=body.user_type,
         issued_to=body.issued_to,
@@ -170,7 +170,7 @@ def issue_invitation(
 
 
 @router.post("/validate")
-def validate_invitation(
+async def validate_invitation(
     request: Request,
     body: InvitationValidateRequest,
     _ctx: AuthContext = Depends(require_managed_auth),
@@ -186,12 +186,12 @@ def validate_invitation(
         )
         return {"status": "invalid"}
     auth_repo = request.app.state.supabase_auth_repository
-    result = auth_repo.validate_invitation_code(body.code)
+    result = await auth_repo.validate_invitation_code(body.code)
     return result
 
 
 @router.post("/claim")
-def claim_invitation(
+async def claim_invitation(
     request: Request,
     body: InvitationClaimRequest,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -207,7 +207,7 @@ def claim_invitation(
         )
         raise HTTPException(status_code=400, detail="Invalid invitation code")
     auth_repo = request.app.state.supabase_auth_repository
-    validation = auth_repo.validate_invitation_code(body.code)
+    validation = await auth_repo.validate_invitation_code(body.code)
     if validation["status"] == "invalid":
         logger.warning(
             "invite_claim_rejected | reason=invalid_code user_id={}",
@@ -220,7 +220,7 @@ def claim_invitation(
             ctx.user_id,
         )
         raise HTTPException(status_code=400, detail="Invitation code already claimed")
-    row = auth_repo.claim_invitation_code(body.code, ctx.user_id)
+    row = await auth_repo.claim_invitation_code(body.code, ctx.user_id)
     if row is None:
         logger.warning(
             "invite_claim_rejected | reason=claim_race user_id={}",
@@ -243,7 +243,7 @@ class InvitationClaimForSignupRequest(BaseModel):
 
 
 @router.post("/claim-for-signup")
-def claim_invitation_for_signup(
+async def claim_invitation_for_signup(
     request: Request,
     body: InvitationClaimForSignupRequest,
     ctx: SignupAuthContext = Depends(require_signup_managed_auth),
@@ -259,7 +259,7 @@ def claim_invitation_for_signup(
         )
         raise HTTPException(status_code=400, detail="Invalid invitation code")
     auth_repo = request.app.state.supabase_auth_repository
-    validation = auth_repo.validate_invitation_code(body.code)
+    validation = await auth_repo.validate_invitation_code(body.code)
     if validation["status"] == "invalid":
         logger.warning(
             "invite_claim_for_signup_rejected | reason=invalid_code user_id={}",
@@ -272,7 +272,7 @@ def claim_invitation_for_signup(
             ctx.user_id,
         )
         raise HTTPException(status_code=400, detail="Invitation code already claimed")
-    row = auth_repo.claim_invitation_code_for_signup(body.code, ctx.user_id)
+    row = await auth_repo.claim_invitation_code_for_signup(body.code, ctx.user_id)
     if row is None:
         logger.warning(
             "invite_claim_for_signup_rejected | reason=claim_race user_id={}",

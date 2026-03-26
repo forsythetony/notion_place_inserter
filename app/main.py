@@ -22,7 +22,7 @@ from app.services.notion_service import NotionService
 from app.services.places_service import PlacesService
 from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
-from app.integrations.supabase_client import create_supabase_client
+from app.integrations.supabase_client import create_async_supabase_client
 from app.repositories import (
     PostgresAppConfigRepository,
     PostgresConnectorCredentialsRepository,
@@ -214,7 +214,7 @@ async def lifespan(app: FastAPI):
     _log_startup_phase("required_env_ok", t0)
 
     supabase_config = load_supabase_config()
-    supabase_client = create_supabase_client(supabase_config)
+    supabase_client = await create_async_supabase_client(supabase_config)
     app.state.supabase_client = supabase_client
     app.state.supabase_queue_repository = SupabaseQueueRepository(
         supabase_client, supabase_config
@@ -230,11 +230,11 @@ async def lifespan(app: FastAPI):
     )
     if enable_bootstrap:
         try:
-            verify_mapping_consistency(supabase_client)
+            await verify_mapping_consistency(supabase_client)
             bootstrap_svc: BootstrapProvisioningService = PostgresBootstrapProvisioningService(
                 supabase_client, link_repo=app.state.trigger_job_link_repository
             )
-            bootstrap_svc.seed_catalog_if_needed()
+            await bootstrap_svc.seed_catalog_if_needed()
             app.state.bootstrap_provisioning_service = bootstrap_svc
         except Exception as e:
             logger.exception("startup_bootstrap_seed_failed | error={}", e)

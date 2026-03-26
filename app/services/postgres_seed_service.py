@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.domain import (
     ConnectorInstance,
@@ -76,7 +76,7 @@ class PostgresBootstrapProvisioningService:
     No direct bootstrap YAML parsing from routes, worker, or repositories.
     """
 
-    def __init__(self, client: Client, link_repo: TriggerJobLinkRepository) -> None:
+    def __init__(self, client: AsyncClient, link_repo: TriggerJobLinkRepository) -> None:
         self._client = client
         self._link_repo = link_repo
         self._connector_templates = PostgresConnectorTemplateRepository(client)
@@ -88,7 +88,7 @@ class PostgresBootstrapProvisioningService:
         self._jobs = PostgresJobRepository(client)
         self._app_config = PostgresAppConfigRepository(client)
 
-    def seed_catalog_if_needed(self) -> None:
+    async def seed_catalog_if_needed(self) -> None:
         """Idempotently seed connector, target, and step templates from catalog YAML."""
         for tid in _list_catalog_ids(f"{PRODUCT_MODEL_ROOT}/catalog/connector_templates"):
             path = catalog_connector_template_path(tid, PRODUCT_MODEL_ROOT)
@@ -96,7 +96,7 @@ class PostgresBootstrapProvisioningService:
             if data:
                 try:
                     t = parse_connector_template(data)
-                    self._connector_templates.save(t)
+                    await self._connector_templates.save(t)
                     logger.debug("bootstrap_seed_connector_template | id={}", tid)
                 except (KeyError, TypeError) as e:
                     logger.warning("bootstrap_skip_connector_template | id={} error={}", tid, e)
@@ -107,7 +107,7 @@ class PostgresBootstrapProvisioningService:
             if data:
                 try:
                     t = parse_target_template(data)
-                    self._target_templates.save(t)
+                    await self._target_templates.save(t)
                     logger.debug("bootstrap_seed_target_template | id={}", tid)
                 except (KeyError, TypeError) as e:
                     logger.warning("bootstrap_skip_target_template | id={} error={}", tid, e)
@@ -118,16 +118,16 @@ class PostgresBootstrapProvisioningService:
             if data:
                 try:
                     t = parse_step_template(data)
-                    self._step_templates.save(t)
+                    await self._step_templates.save(t)
                     logger.debug("bootstrap_seed_step_template | id={}", tid)
                 except (KeyError, TypeError) as e:
                     logger.warning("bootstrap_skip_step_template | id={} error={}", tid, e)
 
-        self._seed_usage_provider_definitions_from_yaml()
+        await self._seed_usage_provider_definitions_from_yaml()
 
         logger.info("bootstrap_seed_catalog_complete")
 
-    def _seed_usage_provider_definitions_from_yaml(self) -> None:
+    async def _seed_usage_provider_definitions_from_yaml(self) -> None:
         """Upsert built-in usage provider labels from version-controlled YAML."""
         data = load_yaml_file(USAGE_PROVIDERS_CATALOG_YAML)
         if not data:
@@ -152,14 +152,14 @@ class PostgresBootstrapProvisioningService:
                 "notes": p.get("notes") if isinstance(p.get("notes"), str) else None,
             }
             try:
-                self._client.table("usage_provider_definitions").upsert(
+                await self._client.table("usage_provider_definitions").upsert(
                     row, on_conflict="provider_id"
                 ).execute()
                 logger.debug("bootstrap_seed_usage_provider | id={}", pid)
             except Exception as e:
                 logger.warning("bootstrap_skip_usage_provider | id={} error={}", pid, e)
 
-    def _provision_owner_starter_definitions(self, owner_user_id: str, uid: str) -> None:
+    async def _provision_owner_starter_definitions(self, owner_user_id: str, uid: str) -> None:
         """
         Load starter YAML and upsert connector instances, targets, job graph, trigger, and link.
         Caller must ensure starter trigger/job rows are absent or intended to be replaced.
@@ -176,7 +176,7 @@ class PostgresBootstrapProvisioningService:
             ("connector_instance_google_places_default", "google_places_api"),
             ("connector_instance_notion_default", "notion_oauth_workspace"),
         ]:
-            if not self._connector_instances.get_by_id(conn_id, uid):
+            if not await self._connector_instances.get_by_id(conn_id, uid):
                 inst = ConnectorInstance(
                     id=conn_id,
                     owner_user_id=uid,
@@ -187,7 +187,7 @@ class PostgresBootstrapProvisioningService:
                     secret_ref=None,
                     visibility="owner",
                 )
-                self._connector_instances.save(inst)
+                await self._connector_instances.save(inst)
                 logger.info("bootstrap_provision_connector | id={} owner={}", conn_id, owner_user_id)
 
         # 2. Targets (required by job and ai_select_relation)
@@ -195,7 +195,7 @@ class PostgresBootstrapProvisioningService:
             ("target_places_to_visit", "Places to Visit", PLACEHOLDER_EXTERNAL_TARGET_ID),
             ("target_locations", "Locations", PLACEHOLDER_LOCATIONS_EXTERNAL_TARGET_ID),
         ]:
-            if not self._targets.get_by_id(target_id, uid):
+            if not await self._targets.get_by_id(target_id, uid):
                 target = DataTarget(
                     id=target_id,
                     owner_user_id=uid,
@@ -206,7 +206,7 @@ class PostgresBootstrapProvisioningService:
                     status="active",
                     visibility="owner",
                 )
-                self._targets.save(target)
+                await self._targets.save(target)
                 logger.info("bootstrap_provision_target | id={} owner={}", target_id, owner_user_id)
 
         # 3. Parse trigger to get trigger_id for job wiring
@@ -223,7 +223,7 @@ class PostgresBootstrapProvisioningService:
         # Ensure all step templates referenced by the bootstrap graph exist.
         # This protects owner provisioning when catalog seeding is partial.
         for template_id in sorted({step.step_template_id for step in graph.steps}):
-            if self._step_templates.get_by_id(template_id):
+            if await self._step_templates.get_by_id(template_id):
                 continue
             template_data = load_yaml_file(catalog_step_template_path(template_id, PRODUCT_MODEL_ROOT))
             if not template_data:
@@ -234,21 +234,21 @@ class PostgresBootstrapProvisioningService:
                 )
                 continue
             template = parse_step_template(template_data)
-            self._step_templates.save(template)
+            await self._step_templates.save(template)
             logger.info("bootstrap_provision_step_template | id={} owner={}", template_id, owner_user_id)
 
-        self._jobs.save_job_graph(graph, skip_reference_checks=True)
+        await self._jobs.save_job_graph(graph, skip_reference_checks=True)
         logger.info("bootstrap_provision_job | id={} owner={}", graph.job.id, owner_user_id)
 
         # 5. Trigger (after job so link can reference both)
-        self._triggers.save(trigger)
+        await self._triggers.save(trigger)
         logger.info("bootstrap_provision_trigger | id={} owner={}", trigger.id, owner_user_id)
 
         # 6. Link trigger to job (many-to-many)
-        self._link_repo.attach(trigger.id, graph.job.id, uid)
+        await self._link_repo.attach(trigger.id, graph.job.id, uid)
         logger.info("bootstrap_provision_link | trigger_id={} job_id={} owner={}", trigger.id, graph.job.id, owner_user_id)
 
-    def ensure_owner_starter_definitions(self, owner_user_id: str) -> None:
+    async def ensure_owner_starter_definitions(self, owner_user_id: str) -> None:
         """
         Ensure owner has starter definitions. Idempotent.
         Provisions connector instances, target, trigger, job graph from bootstrap YAML if missing.
@@ -259,16 +259,16 @@ class PostgresBootstrapProvisioningService:
             logger.warning("bootstrap_ensure_owner_skipped | invalid_owner={}", owner_user_id)
             return
 
-        self._app_config.seed_user_limits_from_defaults_if_missing(owner_user_id)
+        await self._app_config.seed_user_limits_from_defaults_if_missing(owner_user_id)
 
-        trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
+        trigger = await self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
         if trigger:
             logger.debug("bootstrap_ensure_owner_already_provisioned | owner={}", owner_user_id)
             return
 
-        self._provision_owner_starter_definitions(owner_user_id, uid)
+        await self._provision_owner_starter_definitions(owner_user_id, uid)
 
-    def reprovision_owner_starter_definitions(self, owner_user_id: str) -> None:
+    async def reprovision_owner_starter_definitions(self, owner_user_id: str) -> None:
         """
         Tear down the starter HTTP trigger (path ``/locations``) and starter job graph, then
         re-import from bundled YAML. **Destructive** for the Notion Place Inserter starter job
@@ -283,17 +283,17 @@ class PostgresBootstrapProvisioningService:
             logger.warning("bootstrap_reprovision_skipped | invalid_owner={}", owner_user_id)
             return
 
-        existing_trigger = self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
+        existing_trigger = await self._triggers.get_by_path(STARTER_TRIGGER_PATH, uid)
         if existing_trigger:
-            self._triggers.delete(existing_trigger.id, uid)
+            await self._triggers.delete(existing_trigger.id, uid)
             logger.info(
                 "bootstrap_reprovision_deleted_trigger | id={} owner={}",
                 existing_trigger.id,
                 owner_user_id,
             )
 
-        if self._jobs.get_graph_by_id(STARTER_JOB_ID, uid):
-            self._jobs.delete(STARTER_JOB_ID, uid)
+        if await self._jobs.get_graph_by_id(STARTER_JOB_ID, uid):
+            await self._jobs.delete(STARTER_JOB_ID, uid)
             logger.info("bootstrap_reprovision_deleted_job | id={} owner={}", STARTER_JOB_ID, owner_user_id)
 
-        self._provision_owner_starter_definitions(owner_user_id, uid)
+        await self._provision_owner_starter_definitions(owner_user_id, uid)

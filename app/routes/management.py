@@ -109,12 +109,14 @@ class LiveTestRunRequest(BaseModel):
     test_run_configuration_id: str | None = None
 
 
-def _first_linked_trigger_id(link_repo, job_id: str, owner_user_id: str) -> str | None:
-    ids = link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
+async def _first_linked_trigger_id(
+    link_repo, job_id: str, owner_user_id: str
+) -> str | None:
+    ids = await link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
     return ids[0] if ids else None
 
 
-def _merge_live_test_from_saved(
+async def _merge_live_test_from_saved(
     job_repo,
     pipeline_id: str,
     owner_user_id: str,
@@ -125,7 +127,7 @@ def _merge_live_test_from_saved(
     overlay = body.model_dump(exclude_unset=True, exclude_none=True)
     if not test_run_configuration_id:
         return overlay
-    graph = job_repo.get_graph_by_id(pipeline_id, owner_user_id)
+    graph = await job_repo.get_graph_by_id(pipeline_id, owner_user_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     drs = graph.job.default_run_settings or {}
@@ -175,7 +177,7 @@ def _step_trace_to_api(sr: StepRun) -> dict[str, Any]:
     }
 
 
-def _apply_trigger_links_to_job_payload(
+async def _apply_trigger_links_to_job_payload(
     payload: dict,
     job_id: str,
     owner_user_id: str,
@@ -184,7 +186,7 @@ def _apply_trigger_links_to_job_payload(
     """Merge trigger_job_links into editor payload (``trigger_ids``, ``trigger_id``)."""
     if link_repo is None:
         return payload
-    trigger_ids = link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
+    trigger_ids = await link_repo.list_trigger_ids_for_job(job_id, owner_user_id)
     if len(trigger_ids) > 1:
         logger.warning(
             "management_pipeline_multiple_trigger_links | job_id={} owner={} trigger_ids={}",
@@ -202,7 +204,7 @@ def _apply_trigger_links_to_job_payload(
 
 
 @router.get("/pipelines")
-def list_pipelines(
+async def list_pipelines(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -216,7 +218,7 @@ def list_pipelines(
             status_code=500,
             content={"detail": "Server misconfiguration: job repository not available"},
         )
-    jobs = job_repo.list_by_owner(ctx.user_id)
+    jobs = await job_repo.list_by_owner(ctx.user_id)
     items = [
         {
             "id": j.id,
@@ -230,7 +232,7 @@ def list_pipelines(
 
 
 @router.post("/bootstrap/reprovision-starter")
-def reprovision_starter_job(
+async def reprovision_starter_job(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -251,7 +253,7 @@ def reprovision_starter_job(
     if not hasattr(svc, "reprovision_owner_starter_definitions"):
         raise HTTPException(status_code=501, detail="Reprovision is not supported by this runtime.")
     try:
-        svc.reprovision_owner_starter_definitions(ctx.user_id)
+        await svc.reprovision_owner_starter_definitions(ctx.user_id)
     except Exception as e:
         logger.exception("reprovision_starter_failed | owner={} error={}", ctx.user_id, e)
         raise HTTPException(status_code=500, detail="Reprovision failed") from e
@@ -267,7 +269,7 @@ def reprovision_starter_job(
 
 
 @router.get("/pipelines/{pipeline_id}")
-def get_pipeline(
+async def get_pipeline(
     request: Request,
     pipeline_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -282,16 +284,18 @@ def get_pipeline(
             status_code=500,
             content={"detail": "Server misconfiguration: job repository not available"},
         )
-    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    graph = await job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
     if not graph:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     payload = job_graph_to_yaml_dict(graph)
     link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
-    return _apply_trigger_links_to_job_payload(payload, pipeline_id, ctx.user_id, link_repo)
+    return await _apply_trigger_links_to_job_payload(
+        payload, pipeline_id, ctx.user_id, link_repo
+    )
 
 
 @router.patch("/pipelines/{pipeline_id}/status")
-def patch_pipeline_status(
+async def patch_pipeline_status(
     request: Request,
     pipeline_id: str,
     body: PatchPipelineStatusRequest,
@@ -308,16 +312,16 @@ def patch_pipeline_status(
             status_code=500,
             content={"detail": "Server misconfiguration: job repository not available"},
         )
-    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    graph = await job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
     if not graph:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     # Status-only update: do not save_job_graph (that re-runs binding validation and can fail on valid multi-pipeline jobs).
-    job_repo.update_job_status(pipeline_id, ctx.user_id, body.status)
+    await job_repo.update_job_status(pipeline_id, ctx.user_id, body.status)
     return {"id": pipeline_id, "status": body.status}
 
 
 @router.post("/pipelines/{pipeline_id}/live-test/analyze")
-def analyze_pipeline_live_test(
+async def analyze_pipeline_live_test(
     request: Request,
     pipeline_id: str,
     body: LiveTestAnalyzeRequest,
@@ -335,20 +339,20 @@ def analyze_pipeline_live_test(
             status_code=500,
             content={"detail": "Server misconfiguration"},
         )
-    trigger_id = _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
+    trigger_id = await _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
     if not trigger_id:
         raise HTTPException(
             status_code=422,
             detail="Pipeline has no linked trigger; link a trigger before live testing",
         )
-    snapshot_obj = job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
+    snapshot_obj = await job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
     if snapshot_obj is None:
         raise HTTPException(
             status_code=422,
             detail="Pipeline cannot be resolved (missing target, trigger, or archived)",
         )
     try:
-        merged = _merge_live_test_from_saved(
+        merged = await _merge_live_test_from_saved(
             job_repo,
             pipeline_id,
             ctx.user_id,
@@ -374,7 +378,7 @@ def analyze_pipeline_live_test(
 
 
 @router.post("/pipelines/{pipeline_id}/run")
-def enqueue_pipeline_live_test_run(
+async def enqueue_pipeline_live_test_run(
     request: Request,
     pipeline_id: str,
     body: LiveTestRunRequest,
@@ -396,18 +400,18 @@ def enqueue_pipeline_live_test_run(
             content={"detail": "Server misconfiguration"},
         )
 
-    trigger_id = _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
+    trigger_id = await _first_linked_trigger_id(link_repo, pipeline_id, ctx.user_id)
     if not trigger_id:
         raise HTTPException(
             status_code=422,
             detail="Pipeline has no linked trigger",
         )
-    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    trigger = await trigger_repo.get_by_id(trigger_id, ctx.user_id)
     if not trigger:
         raise HTTPException(status_code=422, detail="Linked trigger not found")
 
     try:
-        merged = _merge_live_test_from_saved(
+        merged = await _merge_live_test_from_saved(
             job_repo,
             pipeline_id,
             ctx.user_id,
@@ -423,7 +427,7 @@ def enqueue_pipeline_live_test_run(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
-    snapshot_obj = job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
+    snapshot_obj = await job_def_svc.resolve_for_run(pipeline_id, ctx.user_id, trigger_id)
     if snapshot_obj is None:
         raise HTTPException(
             status_code=422,
@@ -497,7 +501,7 @@ def enqueue_pipeline_live_test_run(
     }
 
     try:
-        run_repo.create_job(
+        await run_repo.create_job(
             job_id=job_id,
             trigger_payload=trigger_payload,
             status="queued",
@@ -520,7 +524,7 @@ def enqueue_pipeline_live_test_run(
             "owner_user_id": ctx.user_id,
             "keywords": log_preview,
         }
-        send_result = queue_repo.send(live_test_queue_payload, delay_seconds=0)
+        send_result = await queue_repo.send(live_test_queue_payload, delay_seconds=0)
         logger.debug(
             "management_live_test_enqueue_payload_json | run_id={} pipeline_id={} payload_json={}",
             run_id,
@@ -549,7 +553,7 @@ def enqueue_pipeline_live_test_run(
 
 
 @router.get("/runs/{run_id}")
-def get_management_run(
+async def get_management_run(
     request: Request,
     run_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -561,14 +565,14 @@ def get_management_run(
             status_code=500,
             content={"detail": "Server misconfiguration: run repository not available"},
         )
-    row = run_repo.get_job_run(run_id, ctx.user_id)
+    row = await run_repo.get_job_run(run_id, ctx.user_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Run not found")
     step_traces: list[dict[str, Any]] = []
     list_fn = getattr(run_repo, "list_step_runs_for_job_run", None)
     if list_fn is not None:
         try:
-            raw = list_fn(row.id, ctx.user_id)
+            raw = await list_fn(row.id, ctx.user_id)
             if isinstance(raw, list):
                 step_traces = [
                     _step_trace_to_api(sr) for sr in raw if isinstance(sr, StepRun)
@@ -597,7 +601,7 @@ def get_management_run(
 
 
 @router.put("/pipelines/{pipeline_id}")
-def save_pipeline(
+async def save_pipeline(
     request: Request,
     pipeline_id: str,
     body: dict = Body(...),
@@ -631,20 +635,22 @@ def save_pipeline(
     for step in graph.steps:
         step.owner_user_id = ctx.user_id
     try:
-        job_repo.save_job_graph(graph, skip_reference_checks=True)
+        await job_repo.save_job_graph(graph, skip_reference_checks=True)
     except ValidationError as e:
         return JSONResponse(
             status_code=422,
             content={"detail": "Validation failed", "validation_errors": e.errors},
         )
     link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
-    saved = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    saved = await job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
     payload = job_graph_to_yaml_dict(saved) if saved else {"id": pipeline_id}
-    return _apply_trigger_links_to_job_payload(payload, pipeline_id, ctx.user_id, link_repo)
+    return await _apply_trigger_links_to_job_payload(
+        payload, pipeline_id, ctx.user_id, link_repo
+    )
 
 
 @router.post("/pipelines")
-def create_pipeline(
+async def create_pipeline(
     request: Request,
     body: CreatePipelineRequest,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -696,13 +702,13 @@ def create_pipeline(
             },
         )
 
-    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    trigger = await trigger_repo.get_by_id(trigger_id, ctx.user_id)
     if not trigger:
         return JSONResponse(
             status_code=422,
             content={"detail": "Trigger not found or not owned by you", "code": "INVALID_TRIGGER"},
         )
-    target = target_repo.get_by_id(target_id, ctx.user_id)
+    target = await target_repo.get_by_id(target_id, ctx.user_id)
     if not target:
         return JSONResponse(
             status_code=422,
@@ -756,8 +762,8 @@ def create_pipeline(
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
     app_config_repo = getattr(request.app.state, "app_config_repository", None)
     if app_config_repo:
-        eff = app_config_repo.get_by_owner(ctx.user_id)
-        if eff is not None and len(job_repo.list_by_owner(ctx.user_id)) >= eff.max_jobs_per_owner:
+        eff = await app_config_repo.get_by_owner(ctx.user_id)
+        if eff is not None and len(await job_repo.list_by_owner(ctx.user_id)) >= eff.max_jobs_per_owner:
             return JSONResponse(
                 status_code=403,
                 content={
@@ -766,26 +772,28 @@ def create_pipeline(
                 },
             )
     try:
-        job_repo.save_job_graph(graph, skip_reference_checks=True)
+        await job_repo.save_job_graph(graph, skip_reference_checks=True)
     except ValidationError as e:
         return JSONResponse(
             status_code=422,
             content={"detail": "Validation failed", "validation_errors": e.errors},
         )
     try:
-        link_repo.attach(trigger_id, job_id, ctx.user_id)
+        await link_repo.attach(trigger_id, job_id, ctx.user_id)
     except TriggerJobLinkPolicyError as e:
         return JSONResponse(
             status_code=422,
             content={"detail": e.message, "code": e.code},
         )
-    saved = job_repo.get_graph_by_id(job_id, ctx.user_id)
+    saved = await job_repo.get_graph_by_id(job_id, ctx.user_id)
     payload = job_graph_to_yaml_dict(saved) if saved else {"id": job_id}
-    return _apply_trigger_links_to_job_payload(payload, job_id, ctx.user_id, link_repo)
+    return await _apply_trigger_links_to_job_payload(
+        payload, job_id, ctx.user_id, link_repo
+    )
 
 
 @router.delete("/pipelines/{pipeline_id}")
-def delete_pipeline(
+async def delete_pipeline(
     request: Request,
     pipeline_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -801,15 +809,15 @@ def delete_pipeline(
             content={"detail": "Server misconfiguration: job repository not available"},
         )
     # Verify pipeline exists and is owned before archiving
-    graph = job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
+    graph = await job_repo.get_graph_by_id(pipeline_id, ctx.user_id)
     if not graph:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    job_repo.archive(pipeline_id, ctx.user_id)
+    await job_repo.archive(pipeline_id, ctx.user_id)
     return {"status": "archived", "id": pipeline_id}
 
 
 @router.get("/data-targets")
-def list_data_targets(
+async def list_data_targets(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -824,7 +832,7 @@ def list_data_targets(
             status_code=500,
             content={"detail": "Server misconfiguration: target repository not available"},
         )
-    targets = target_repo.list_by_owner(ctx.user_id)
+    targets = await target_repo.list_by_owner(ctx.user_id)
     # Deduplicate by (connector_instance_id, external_target_id): same Notion DB can appear
     # as both a bootstrap target (target_places_to_visit, target_locations) and a
     # per-source target (target_notion_*). Prefer bootstrap IDs for consistency with jobs.
@@ -850,7 +858,7 @@ def list_data_targets(
 
 
 @router.get("/data-targets/{target_id}/schema")
-def get_data_target_schema(
+async def get_data_target_schema(
     request: Request,
     target_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -871,14 +879,14 @@ def get_data_target_schema(
             status_code=500,
             content={"detail": "Server misconfiguration: target schema repository not available"},
         )
-    target = target_repo.get_by_id(target_id, ctx.user_id)
+    target = await target_repo.get_by_id(target_id, ctx.user_id)
     if not target:
         raise HTTPException(status_code=404, detail="Data target not found")
     schema = None
     if target.active_schema_snapshot_id:
-        schema = target_schema_repo.get_by_id(target.active_schema_snapshot_id, ctx.user_id)
+        schema = await target_schema_repo.get_by_id(target.active_schema_snapshot_id, ctx.user_id)
     if not schema:
-        schema = target_schema_repo.get_active_for_target(target_id, ctx.user_id)
+        schema = await target_schema_repo.get_active_for_target(target_id, ctx.user_id)
     properties = []
     if schema:
         for p in schema.properties:
@@ -908,7 +916,7 @@ def get_data_target_schema(
 
 
 @router.get("/step-templates")
-def list_step_templates(
+async def list_step_templates(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -923,7 +931,7 @@ def list_step_templates(
             status_code=500,
             content={"detail": "Server misconfiguration: step template repository not available"},
         )
-    templates = step_template_repo.list_all()
+    templates = await step_template_repo.list_all()
     items = [
         {
             "id": t.id,
@@ -944,7 +952,7 @@ def list_step_templates(
 
 
 @router.get("/step-templates/{template_id}")
-def get_step_template(
+async def get_step_template(
     request: Request,
     template_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -959,7 +967,7 @@ def get_step_template(
             status_code=500,
             content={"detail": "Server misconfiguration: step template repository not available"},
         )
-    template = step_template_repo.get_by_id(template_id)
+    template = await step_template_repo.get_by_id(template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Step template not found")
     return {
@@ -978,7 +986,7 @@ def get_step_template(
 
 
 @router.get("/connections")
-def list_connections(
+async def list_connections(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -994,7 +1002,7 @@ def list_connections(
                 "detail": "Server misconfiguration: connector instance repository not available"
             },
         )
-    instances = conn_repo.list_by_owner(ctx.user_id)
+    instances = await conn_repo.list_by_owner(ctx.user_id)
     items = [
         {
             "id": c.id,
@@ -1012,7 +1020,7 @@ def list_connections(
 
 
 @router.get("/triggers")
-def list_triggers(
+async def list_triggers(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -1030,7 +1038,7 @@ def list_triggers(
                 "detail": "Server misconfiguration: trigger repository not available"
             },
         )
-    triggers = trigger_repo.list_by_owner(ctx.user_id)
+    triggers = await trigger_repo.list_by_owner(ctx.user_id)
     items = [
         {
             "id": t.id,
@@ -1051,7 +1059,7 @@ def list_triggers(
 
 
 @router.post("/triggers")
-def create_trigger(
+async def create_trigger(
     request: Request,
     body: CreateTriggerRequest,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -1093,7 +1101,7 @@ def create_trigger(
         body.path,
         normalized_path,
     )
-    existing = trigger_repo.get_by_path(normalized_path, ctx.user_id)
+    existing = await trigger_repo.get_by_path(normalized_path, ctx.user_id)
     if existing is not None:
         logger.warning(
             "management_create_trigger_conflict | user_id={} path={!r} existing_trigger_id={}",
@@ -1156,7 +1164,7 @@ def create_trigger(
     )
     app_config_repo = getattr(request.app.state, "app_config_repository", None)
     if app_config_repo:
-        eff = app_config_repo.get_by_owner(ctx.user_id)
+        eff = await app_config_repo.get_by_owner(ctx.user_id)
         if eff is not None and len(trigger_repo.list_by_owner(ctx.user_id)) >= eff.max_triggers_per_owner:
             raise HTTPException(
                 status_code=403,
@@ -1165,7 +1173,7 @@ def create_trigger(
                     "code": "trigger_limit_exceeded",
                 },
             )
-    trigger_repo.save(trigger)
+    await trigger_repo.save(trigger)
     schema_summary = (
         list(schema.keys())
         if isinstance(schema, dict)
@@ -1197,7 +1205,7 @@ def create_trigger(
 
 
 @router.patch("/triggers/{trigger_id}")
-def patch_trigger(
+async def patch_trigger(
     request: Request,
     trigger_id: str,
     body: PatchTriggerRequest,
@@ -1210,7 +1218,7 @@ def patch_trigger(
             status_code=500,
             detail="Server misconfiguration: trigger repository not available",
         )
-    trigger = trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    trigger = await trigger_repo.get_by_id(trigger_id, ctx.user_id)
     if trigger is None:
         raise HTTPException(status_code=404, detail="Trigger not found")
     now = datetime.now(timezone.utc)
@@ -1226,7 +1234,7 @@ def patch_trigger(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
     trigger.updated_at = now
-    trigger_repo.save(trigger)
+    await trigger_repo.save(trigger)
     return {
         "id": trigger.id,
         "display_name": trigger.display_name,
@@ -1243,7 +1251,7 @@ def patch_trigger(
 
 
 @router.post("/triggers/{trigger_id}/rotate-secret")
-def rotate_trigger_secret(
+async def rotate_trigger_secret(
     request: Request,
     trigger_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -1264,7 +1272,7 @@ def rotate_trigger_secret(
             detail="Secret rotation not available for this trigger backend",
         )
     try:
-        updated, new_secret = trigger_repo.rotate_secret(trigger_id, ctx.user_id)
+        updated, new_secret = await trigger_repo.rotate_secret(trigger_id, ctx.user_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return {
@@ -1275,7 +1283,7 @@ def rotate_trigger_secret(
 
 
 @router.get("/account")
-def get_account(
+async def get_account(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -1289,7 +1297,7 @@ def get_account(
             status_code=500,
             content={"detail": "Server misconfiguration: auth repository not available"},
         )
-    profile = auth_repo.get_profile(ctx.user_id)
+    profile = await auth_repo.get_profile(ctx.user_id)
     if not profile:
         return JSONResponse(status_code=403, content={"detail": "Profile not found"})
     user_type = profile.get("user_type")
@@ -1306,7 +1314,7 @@ def get_account(
 
     app_config_repo = getattr(request.app.state, "app_config_repository", None)
     if app_config_repo:
-        limits = app_config_repo.get_by_owner(ctx.user_id)
+        limits = await app_config_repo.get_by_owner(ctx.user_id)
         if limits:
             payload["limits"] = {
                 "max_stages_per_job": limits.max_stages_per_job,

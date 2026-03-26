@@ -1,6 +1,6 @@
 """Tests for GET /theme/runtime and /management/ui-theme/*."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,12 +29,16 @@ def _mock_user_response(user):
 
 def _setup_auth(client, *, user_id="550e8400-e29b-41d4-a716-446655440000", user_type=USER_TYPE_STANDARD):
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(_mock_user(user_id))
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id))
+    )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = {
-        "user_id": user_id,
-        "user_type": user_type,
-    }
+    mock_auth_repo.get_profile = AsyncMock(
+        return_value={
+            "user_id": user_id,
+            "user_type": user_type,
+        }
+    )
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo
     return user_id

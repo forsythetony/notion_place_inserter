@@ -1,6 +1,6 @@
 """Unit tests for GET /auth/context (dashboard bootstrap) route."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -58,7 +58,7 @@ def test_auth_context_401_bearer_no_token(client):
 def test_auth_context_401_invalid_token(client):
     """GET /auth/context with invalid/expired token returns 401."""
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.side_effect = Exception("invalid token")
+    mock_supabase.auth.get_user = AsyncMock(side_effect=Exception("invalid token"))
     mock_auth_repo = MagicMock()
 
     app.state.supabase_client = mock_supabase
@@ -77,11 +77,11 @@ def test_auth_context_403_profile_not_found(client):
     """GET /auth/context with valid token but no profile returns 403."""
     user_id = "550e8400-e29b-41d4-a716-446655440000"
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(
-        _mock_user(user_id)
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id))
     )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = None
+    mock_auth_repo.get_profile = AsyncMock(return_value=None)
 
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo
@@ -99,14 +99,16 @@ def test_auth_context_403_profile_missing_user_type(client):
     """GET /auth/context with profile lacking user_type returns 403."""
     user_id = "550e8400-e29b-41d4-a716-446655440000"
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(
-        _mock_user(user_id)
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id))
     )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = {
-        "user_id": user_id,
-        # no user_type
-    }
+    mock_auth_repo.get_profile = AsyncMock(
+        return_value={
+            "user_id": user_id,
+            # no user_type
+        }
+    )
 
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo
@@ -126,14 +128,16 @@ def test_auth_context_200_valid_token_and_profile(client):
     user_type = USER_TYPE_ADMIN
 
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(
-        _mock_user(user_id, email)
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id, email))
     )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = {
-        "user_id": user_id,
-        "user_type": user_type,
-    }
+    mock_auth_repo.get_profile = AsyncMock(
+        return_value={
+            "user_id": user_id,
+            "user_type": user_type,
+        }
+    )
 
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo
@@ -154,14 +158,16 @@ def test_auth_context_200_email_null(client):
     """GET /auth/context returns email null when user has no email."""
     user_id = "660e8400-e29b-41d4-a716-446655440001"
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(
-        _mock_user(user_id, email=None)
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id, email=None))
     )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = {
-        "user_id": user_id,
-        "user_type": USER_TYPE_STANDARD,
-    }
+    mock_auth_repo.get_profile = AsyncMock(
+        return_value={
+            "user_id": user_id,
+            "user_type": USER_TYPE_STANDARD,
+        }
+    )
 
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo

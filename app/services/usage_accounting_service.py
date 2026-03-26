@@ -16,7 +16,7 @@ class UsageAccountingService:
     def __init__(self, run_repository: object) -> None:
         self._run_repo = run_repository
 
-    def record_llm_tokens(
+    async def record_llm_tokens(
         self,
         job_run_id: str,
         owner_user_id: str,
@@ -45,7 +45,7 @@ class UsageAccountingService:
             },
         )
         try:
-            self._run_repo.save_usage_record(record)
+            await self._run_repo.save_usage_record(record)
         except Exception as e:
             logger.exception(
                 "usage_accounting_save_llm_tokens_failed | job_run_id={} provider={} error={}",
@@ -54,7 +54,7 @@ class UsageAccountingService:
                 e,
             )
 
-    def record_external_api_call(
+    async def record_external_api_call(
         self,
         job_run_id: str,
         owner_user_id: str,
@@ -77,7 +77,7 @@ class UsageAccountingService:
             metadata=metadata,
         )
         try:
-            self._run_repo.save_usage_record(record)
+            await self._run_repo.save_usage_record(record)
         except Exception as e:
             logger.exception(
                 "usage_accounting_save_external_api_failed | job_run_id={} provider={} operation={} error={}",

@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.integrations.supabase_config import SupabaseConfig
 from app.services.eula_validation import (
@@ -33,11 +33,11 @@ class SupabaseAuthRepository:
     Thin persistence layer; easy to fake in unit tests.
     """
 
-    def __init__(self, client: Client, config: SupabaseConfig) -> None:
+    def __init__(self, client: AsyncClient, config: SupabaseConfig) -> None:
         self._client = client
         self._config = config
 
-    def upsert_profile(
+    async def upsert_profile(
         self,
         user_id: UUID | str,
         user_type: str,
@@ -84,7 +84,7 @@ class SupabaseAuthRepository:
                 )
 
         try:
-            self._client.table(self._config.table_user_profiles).upsert(
+            await self._client.table(self._config.table_user_profiles).upsert(
                 payload,
                 on_conflict="user_id",
             ).execute()
@@ -96,11 +96,11 @@ class SupabaseAuthRepository:
             )
             raise
 
-    def get_profile(self, user_id: UUID | str) -> dict[str, Any] | None:
+    async def get_profile(self, user_id: UUID | str) -> dict[str, Any] | None:
         """Fetch user profile by user_id. Returns None if not found."""
         uid = str(user_id) if isinstance(user_id, UUID) else user_id
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_profiles)
                 .select("*")
                 .eq("user_id", uid)
@@ -117,7 +117,7 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def create_invitation_code(
+    async def create_invitation_code(
         self,
         code: str,
         user_type: str,
@@ -149,7 +149,7 @@ class SupabaseAuthRepository:
             )
 
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .insert(payload)
                 .execute()
@@ -168,12 +168,12 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else {}
 
-    def get_invitation_code_by_code(
+    async def get_invitation_code_by_code(
         self, code: str
     ) -> dict[str, Any] | None:
         """Fetch invitation code by code. Returns None if not found."""
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .select("*")
                 .eq("code", code)
@@ -193,7 +193,7 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def get_invitation_by_issued_to(self, issued_to: str) -> dict[str, Any] | None:
+    async def get_invitation_by_issued_to(self, issued_to: str) -> dict[str, Any] | None:
         """
         Fetch invitation by exact issued_to. Returns first match by created_at ascending.
         Use for idempotent issuance: non-empty issued_to must be unique.
@@ -201,7 +201,7 @@ class SupabaseAuthRepository:
         if not issued_to or not issued_to.strip():
             return None
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .select("*")
                 .eq("issued_to", issued_to.strip())
@@ -222,13 +222,13 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def generate_invitation_code(self) -> str:
+    async def generate_invitation_code(self) -> str:
         """Generate a unique 20-character invitation code. Retries on collision."""
         for _ in range(MAX_ISSUE_RETRIES):
             code = secrets.token_hex(INVITATION_CODE_LENGTH // 2)
             if len(code) != INVITATION_CODE_LENGTH:
                 code = (code + secrets.token_hex(1))[:INVITATION_CODE_LENGTH]
-            existing = self.get_invitation_code_by_code(code)
+            existing = await self.get_invitation_code_by_code(code)
             if existing is None:
                 return code
             logger.warning(
@@ -239,14 +239,14 @@ class SupabaseAuthRepository:
             f"Failed to generate unique invitation code after {MAX_ISSUE_RETRIES} attempts"
         )
 
-    def validate_invitation_code(self, code: str) -> dict[str, Any]:
+    async def validate_invitation_code(self, code: str) -> dict[str, Any]:
         """
         Validate invitation code. Returns deterministic status dict:
         - {"status": "valid", "user_type": str, "id": str} when claimable
         - {"status": "already_claimed"} when code exists but claimed
         - {"status": "invalid"} when code not found
         """
-        row = self.get_invitation_code_by_code(code)
+        row = await self.get_invitation_code_by_code(code)
         if row is None:
             return {"status": "invalid"}
         if row.get("claimed") is True:
@@ -257,7 +257,7 @@ class SupabaseAuthRepository:
             "id": str(row["id"]),
         }
 
-    def claim_invitation_code(
+    async def claim_invitation_code(
         self,
         code: str,
         claimed_by_user_id: UUID | str,
@@ -279,7 +279,7 @@ class SupabaseAuthRepository:
             "claimed_by_user_id": uid,
         }
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .update(payload)
                 .eq("code", code)
@@ -299,7 +299,7 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def claim_invitation_code_for_signup(
+    async def claim_invitation_code_for_signup(
         self,
         code: str,
         user_id: UUID | str,
@@ -317,14 +317,14 @@ class SupabaseAuthRepository:
             raise ValueError(
                 "eula_version_id and eula_accepted_at must both be set or both omitted"
             )
-        row = self.claim_invitation_code(code, user_id)
+        row = await self.claim_invitation_code(code, user_id)
         if row is None:
             return None
         kw: dict[str, Any] = {}
         if eula_version_id is not None:
             kw["eula_version_id"] = eula_version_id
             kw["eula_accepted_at"] = eula_accepted_at
-        self.upsert_profile(
+        await self.upsert_profile(
             user_id,
             row["user_type"],
             invitation_code_id=row["id"],
@@ -333,10 +333,10 @@ class SupabaseAuthRepository:
         )
         return row
 
-    def get_published_eula(self) -> dict[str, Any] | None:
+    async def get_published_eula(self) -> dict[str, Any] | None:
         """Return the single published eula_versions row, or None."""
         try:
-            resp = (
+            resp = await (
                 self._client.table(_TABLE_EULA_VERSIONS)
                 .select("*")
                 .eq("status", "published")
@@ -352,10 +352,10 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def get_eula_version_by_id(self, version_id: UUID | str) -> dict[str, Any] | None:
+    async def get_eula_version_by_id(self, version_id: UUID | str) -> dict[str, Any] | None:
         vid = str(version_id) if isinstance(version_id, UUID) else version_id
         try:
-            resp = (
+            resp = await (
                 self._client.table(_TABLE_EULA_VERSIONS)
                 .select("*")
                 .eq("id", vid)
@@ -371,10 +371,10 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def list_eula_versions_for_admin(self) -> list[dict[str, Any]]:
+    async def list_eula_versions_for_admin(self) -> list[dict[str, Any]]:
         """All EULA versions, newest first."""
         try:
-            resp = (
+            resp = await (
                 self._client.table(_TABLE_EULA_VERSIONS)
                 .select("*")
                 .order("created_at", desc=True)
@@ -385,7 +385,7 @@ class SupabaseAuthRepository:
             raise
         return [dict(r) for r in (resp.data or []) if isinstance(r, dict)]
 
-    def insert_eula_draft(
+    async def insert_eula_draft(
         self,
         version_label: str,
         full_text: str,
@@ -411,7 +411,7 @@ class SupabaseAuthRepository:
                 else created_by_user_id
             )
         try:
-            resp = self._client.table(_TABLE_EULA_VERSIONS).insert(payload).execute()
+            resp = await self._client.table(_TABLE_EULA_VERSIONS).insert(payload).execute()
         except Exception:
             logger.exception("supabase_insert_eula_draft_failed")
             raise
@@ -421,7 +421,7 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else {}
 
-    def update_eula_draft(
+    async def update_eula_draft(
         self,
         version_id: UUID | str,
         *,
@@ -430,7 +430,7 @@ class SupabaseAuthRepository:
         plain_language_summary: Any | None = None,
     ) -> dict[str, Any] | None:
         """Update a draft EULA only. Recomputes hash when full_text changes."""
-        row = self.get_eula_version_by_id(version_id)
+        row = await self.get_eula_version_by_id(version_id)
         if row is None:
             return None
         if row.get("status") != "draft":
@@ -451,7 +451,7 @@ class SupabaseAuthRepository:
             return row
         vid = str(version_id) if isinstance(version_id, UUID) else version_id
         try:
-            resp = (
+            resp = await (
                 self._client.table(_TABLE_EULA_VERSIONS)
                 .update(payload)
                 .eq("id", vid)
@@ -467,7 +467,7 @@ class SupabaseAuthRepository:
         out = data[0] if isinstance(data, list) else data
         return dict(out) if isinstance(out, dict) else None
 
-    def copy_eula_to_new_draft(
+    async def copy_eula_to_new_draft(
         self,
         source_id: UUID | str,
         new_version_label: str,
@@ -475,21 +475,21 @@ class SupabaseAuthRepository:
         created_by_user_id: UUID | str | None = None,
     ) -> dict[str, Any]:
         """Copy full_text and plain_language_summary into a new draft row."""
-        src = self.get_eula_version_by_id(source_id)
+        src = await self.get_eula_version_by_id(source_id)
         if src is None:
             raise ValueError("Source EULA version not found")
-        return self.insert_eula_draft(
+        return await self.insert_eula_draft(
             new_version_label.strip(),
             str(src["full_text"]),
             src.get("plain_language_summary") or {},
             created_by_user_id=created_by_user_id,
         )
 
-    def publish_eula_version_rpc(self, draft_id: UUID | str) -> None:
+    async def publish_eula_version_rpc(self, draft_id: UUID | str) -> None:
         """Archive current published row and publish the draft (DB transaction)."""
         did = str(draft_id) if isinstance(draft_id, UUID) else draft_id
         try:
-            self._client.rpc(
+            await self._client.rpc(
                 "publish_eula_version",
                 {"draft_id": did},
             ).execute()
@@ -497,13 +497,13 @@ class SupabaseAuthRepository:
             logger.exception("supabase_publish_eula_version_rpc_failed | id={}", did)
             raise
 
-    def get_invitation_by_id(
+    async def get_invitation_by_id(
         self, invitation_id: UUID | str
     ) -> dict[str, Any] | None:
         """Fetch invitation by primary key."""
         iid = str(invitation_id) if isinstance(invitation_id, UUID) else invitation_id
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .select("*")
                 .eq("id", iid)
@@ -519,10 +519,10 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def list_invitation_codes_for_admin(self) -> list[dict[str, Any]]:
+    async def list_invitation_codes_for_admin(self) -> list[dict[str, Any]]:
         """All invitation rows, newest first, with cohort_key merged."""
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_invitation_codes)
                 .select("*")
                 .order("created_at", desc=True)
@@ -533,10 +533,10 @@ class SupabaseAuthRepository:
             raise
         rows = list(resp.data or [])
         cohort_ids = {r.get("cohort_id") for r in rows if r.get("cohort_id")}
-        key_by_id = self._cohort_keys_by_id(
+        key_by_id = await self._cohort_keys_by_id(
             [str(x) for x in cohort_ids if x is not None]
         )
-        email_map = self._auth_user_id_to_email_map()
+        email_map = await self._auth_user_id_to_email_map()
         out: list[dict[str, Any]] = []
         for r in rows:
             d = dict(r)
@@ -550,21 +550,21 @@ class SupabaseAuthRepository:
             out.append(d)
         return out
 
-    def delete_unclaimed_invitation_by_id(
+    async def delete_unclaimed_invitation_by_id(
         self, invitation_id: UUID | str
     ) -> str:
         """
         Delete invitation by id when unclaimed.
         Returns 'not_found' | 'claimed' | 'deleted'.
         """
-        row = self.get_invitation_by_id(invitation_id)
+        row = await self.get_invitation_by_id(invitation_id)
         if row is None:
             return "not_found"
         if row.get("claimed") is True:
             return "claimed"
         iid = str(invitation_id) if isinstance(invitation_id, UUID) else invitation_id
         try:
-            self._client.table(self._config.table_invitation_codes).delete().eq(
+            await self._client.table(self._config.table_invitation_codes).delete().eq(
                 "id", iid
             ).eq("claimed", False).execute()
         except Exception:
@@ -572,10 +572,10 @@ class SupabaseAuthRepository:
             raise
         return "deleted"
 
-    def list_user_profiles_for_admin(self) -> list[dict[str, Any]]:
+    async def list_user_profiles_for_admin(self) -> list[dict[str, Any]]:
         """All user_profiles rows, newest first, with cohort_key merged."""
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_profiles)
                 .select("*")
                 .order("created_at", desc=True)
@@ -586,10 +586,10 @@ class SupabaseAuthRepository:
             raise
         rows = list(resp.data or [])
         cohort_ids = {r.get("cohort_id") for r in rows if r.get("cohort_id")}
-        key_by_id = self._cohort_keys_by_id(
+        key_by_id = await self._cohort_keys_by_id(
             [str(x) for x in cohort_ids if x is not None]
         )
-        email_map = self._auth_user_id_to_email_map()
+        email_map = await self._auth_user_id_to_email_map()
         out: list[dict[str, Any]] = []
         for r in rows:
             d = dict(r)
@@ -600,7 +600,7 @@ class SupabaseAuthRepository:
             out.append(d)
         return out
 
-    def _auth_user_id_to_email_map(self) -> dict[str, str]:
+    async def _auth_user_id_to_email_map(self) -> dict[str, str]:
         """
         Map Supabase Auth user id -> email via Admin API (paginated).
         Returns empty dict on failure so callers can still return DB rows.
@@ -613,7 +613,7 @@ class SupabaseAuthRepository:
         per_page = 1000
         try:
             while True:
-                raw = self._client.auth.admin.list_users(
+                raw = await self._client.auth.admin.list_users(
                     page=page, per_page=per_page
                 )
                 if isinstance(raw, list):
@@ -636,11 +636,11 @@ class SupabaseAuthRepository:
             return {}
         return out
 
-    def _cohort_keys_by_id(self, cohort_ids: list[str]) -> dict[str, str]:
+    async def _cohort_keys_by_id(self, cohort_ids: list[str]) -> dict[str, str]:
         if not cohort_ids:
             return {}
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .select("id, key")
                 .in_("id", cohort_ids)
@@ -655,10 +655,10 @@ class SupabaseAuthRepository:
                 out[str(c["id"])] = str(c["key"])
         return out
 
-    def get_cohort_by_id(self, cohort_id: UUID | str) -> dict[str, Any] | None:
+    async def get_cohort_by_id(self, cohort_id: UUID | str) -> dict[str, Any] | None:
         cid = str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .select("*")
                 .eq("id", cid)
@@ -674,11 +674,11 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def get_cohort_by_key(self, key: str) -> dict[str, Any] | None:
+    async def get_cohort_by_key(self, key: str) -> dict[str, Any] | None:
         if not key or not key.strip():
             return None
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .select("*")
                 .eq("key", key.strip())
@@ -694,9 +694,9 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def list_cohorts(self) -> list[dict[str, Any]]:
+    async def list_cohorts(self) -> list[dict[str, Any]]:
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .select("*")
                 .order("created_at", desc=True)
@@ -707,7 +707,7 @@ class SupabaseAuthRepository:
             raise
         return [dict(r) for r in (resp.data or []) if isinstance(r, dict)]
 
-    def create_cohort(self, key: str, description: str | None) -> dict[str, Any]:
+    async def create_cohort(self, key: str, description: str | None) -> dict[str, Any]:
         k = key.strip()
         if not k:
             raise ValueError("cohort key must be non-empty")
@@ -716,7 +716,7 @@ class SupabaseAuthRepository:
             payload["description"] = description
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .insert(payload)
                 .execute()
@@ -730,7 +730,7 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else {}
 
-    def update_cohort_description(
+    async def update_cohort_description(
         self, cohort_id: UUID | str, description: str | None
     ) -> dict[str, Any] | None:
         cid = str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id
@@ -739,7 +739,7 @@ class SupabaseAuthRepository:
             "description": description,
         }
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._config.table_user_cohorts)
                 .update(payload)
                 .eq("id", cid)
@@ -754,9 +754,9 @@ class SupabaseAuthRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def cohort_has_references(self, cohort_id: str) -> bool:
+    async def cohort_has_references(self, cohort_id: str) -> bool:
         try:
-            inv = (
+            inv = await (
                 self._client.table(self._config.table_invitation_codes)
                 .select("id")
                 .eq("cohort_id", cohort_id)
@@ -765,7 +765,7 @@ class SupabaseAuthRepository:
             )
             if inv.data:
                 return True
-            prof = (
+            prof = await (
                 self._client.table(self._config.table_user_profiles)
                 .select("user_id")
                 .eq("cohort_id", cohort_id)
@@ -777,16 +777,16 @@ class SupabaseAuthRepository:
             logger.exception("supabase_cohort_references_check_failed | id={}", cohort_id)
             raise
 
-    def delete_cohort_if_unused(self, cohort_id: UUID | str) -> str:
+    async def delete_cohort_if_unused(self, cohort_id: UUID | str) -> str:
         """Returns 'not_found' | 'in_use' | 'deleted'."""
         cid = str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id
-        row = self.get_cohort_by_id(cid)
+        row = await self.get_cohort_by_id(cid)
         if row is None:
             return "not_found"
-        if self.cohort_has_references(cid):
+        if await self.cohort_has_references(cid):
             return "in_use"
         try:
-            self._client.table(self._config.table_user_cohorts).delete().eq(
+            await self._client.table(self._config.table_user_cohorts).delete().eq(
                 "id", cid
             ).execute()
         except Exception:

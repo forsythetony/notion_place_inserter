@@ -11,7 +11,7 @@ from app.services.job_execution.step_runtime_base import StepRuntime
 class CacheSetHandler(StepRuntime):
     """Store value into run-scoped shared cache."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

@@ -132,10 +132,10 @@ def test_parse_step_template():
     assert t.step_kind == "optimize"
 
 
-def test_yaml_connector_template_repository_list_all():
+async def test_yaml_connector_template_repository_list_all():
     """YamlConnectorTemplateRepository lists catalog connector templates."""
     repo = YamlConnectorTemplateRepository()
-    templates = repo.list_all()
+    templates = await repo.list_all()
     assert len(templates) >= 3
     ids = {t.id for t in templates}
     assert "notion_oauth_workspace" in ids
@@ -143,60 +143,60 @@ def test_yaml_connector_template_repository_list_all():
     assert "claude_api" in ids
 
 
-def test_yaml_connector_template_repository_get_by_id():
+async def test_yaml_connector_template_repository_get_by_id():
     """YamlConnectorTemplateRepository get_by_id returns template."""
     repo = YamlConnectorTemplateRepository()
-    t = repo.get_by_id("notion_oauth_workspace")
+    t = await repo.get_by_id("notion_oauth_workspace")
     assert t is not None
     assert t.id == "notion_oauth_workspace"
     assert t.provider == "notion"
 
 
-def test_yaml_target_template_repository_list_all():
+async def test_yaml_target_template_repository_list_all():
     """YamlTargetTemplateRepository lists catalog target templates."""
     repo = YamlTargetTemplateRepository()
-    templates = repo.list_all()
+    templates = await repo.list_all()
     assert len(templates) >= 1
     assert any(t.id == "notion_database" for t in templates)
 
 
-def test_yaml_target_template_repository_get_by_id():
+async def test_yaml_target_template_repository_get_by_id():
     """YamlTargetTemplateRepository get_by_id returns template."""
     repo = YamlTargetTemplateRepository()
-    t = repo.get_by_id("notion_database")
+    t = await repo.get_by_id("notion_database")
     assert t is not None
     assert t.target_kind == "notion_database"
 
 
-def test_yaml_step_template_repository_list_all():
+async def test_yaml_step_template_repository_list_all():
     """YamlStepTemplateRepository lists catalog step templates."""
     repo = YamlStepTemplateRepository()
-    templates = repo.list_all()
+    templates = await repo.list_all()
     assert len(templates) >= 7
 
 
-def test_yaml_step_template_repository_get_by_id():
+async def test_yaml_step_template_repository_get_by_id():
     """YamlStepTemplateRepository get_by_id returns template."""
     repo = YamlStepTemplateRepository()
-    t = repo.get_by_id("step_template_optimize_input_claude")
+    t = await repo.get_by_id("step_template_optimize_input_claude")
     assert t is not None
     assert t.step_kind == "optimize_input"
 
 
-def test_yaml_job_repository_get_bootstrap_job():
+async def test_yaml_job_repository_get_bootstrap_job():
     """YamlJobRepository get_bootstrap_job returns Notion Place Inserter."""
     repo = YamlJobRepository()
-    job = repo.get_bootstrap_job("notion_place_inserter")
+    job = await repo.get_bootstrap_job("notion_place_inserter")
     assert job is not None
     assert job.id == "job_notion_place_inserter"
     assert job.display_name == "Notion Place Inserter"
     assert len(job.stage_ids) >= 2
 
 
-def test_yaml_job_repository_get_bootstrap_job_missing_returns_none():
+async def test_yaml_job_repository_get_bootstrap_job_missing_returns_none():
     """YamlJobRepository get_bootstrap_job returns None for missing slug."""
     repo = YamlJobRepository()
-    job = repo.get_bootstrap_job("nonexistent")
+    job = await repo.get_bootstrap_job("nonexistent")
     assert job is None
 
 
@@ -223,10 +223,10 @@ def test_parse_job_graph_produces_full_graph():
         )
 
 
-def test_yaml_job_repository_get_graph_by_id():
+async def test_yaml_job_repository_get_graph_by_id():
     """YamlJobRepository get_graph_by_id returns full JobGraph for bootstrap job."""
     repo = YamlJobRepository()
-    graph = repo.get_graph_by_id("job_notion_place_inserter", "user_1")
+    graph = await repo.get_graph_by_id("job_notion_place_inserter", "user_1")
     assert graph is not None
     assert graph.job.id == "job_notion_place_inserter"
     assert len(graph.stages) >= 2
@@ -234,14 +234,14 @@ def test_yaml_job_repository_get_graph_by_id():
     assert len(graph.steps) >= 6
 
 
-def test_yaml_job_repository_get_graph_by_id_missing_returns_none():
+async def test_yaml_job_repository_get_graph_by_id_missing_returns_none():
     """YamlJobRepository get_graph_by_id returns None for unknown job."""
     repo = YamlJobRepository()
-    graph = repo.get_graph_by_id("job_nonexistent", "user_1")
+    graph = await repo.get_graph_by_id("job_nonexistent", "user_1")
     assert graph is None
 
 
-def test_yaml_job_repository_save_job_graph_rejects_invalid_job():
+async def test_yaml_job_repository_save_job_graph_rejects_invalid_job():
     """save_job_graph with validation rejects invalid job before persisting."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -260,14 +260,14 @@ def test_yaml_job_repository_save_job_graph_rejects_invalid_job():
         )
         graph = JobGraph(job=job, stages=[], pipelines=[], steps=[])
         with pytest.raises(ValidationError) as exc_info:
-            job_repo.save_job_graph(graph)
+            await job_repo.save_job_graph(graph)
         assert "at least one stage" in str(exc_info.value).lower()
         # File should not be created
         job_path = Path(base) / "tenants" / "u1" / "jobs" / "j_invalid.yaml"
         assert not job_path.exists()
 
 
-def test_yaml_job_repository_save_job_graph_accepts_valid_job():
+async def test_yaml_job_repository_save_job_graph_accepts_valid_job():
     """save_job_graph with validation accepts valid job and persists."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -279,12 +279,12 @@ def test_yaml_job_repository_save_job_graph_accepts_valid_job():
         data = load_yaml_file("product_model/bootstrap/jobs/notion_place_inserter.yaml")
         assert data is not None
         graph = parse_job_graph(data, owner_user_id_override="u1")
-        job_repo.save_job_graph(graph, skip_reference_checks=True)
+        await job_repo.save_job_graph(graph, skip_reference_checks=True)
         job_path = Path(base) / "tenants" / "u1" / "jobs" / "job_notion_place_inserter.yaml"
         assert job_path.exists()
 
 
-def test_yaml_trigger_repository_save_rejects_invalid_trigger():
+async def test_yaml_trigger_repository_save_rejects_invalid_trigger():
     """YamlTriggerRepository.save with validation rejects invalid trigger."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -304,13 +304,13 @@ def test_yaml_trigger_repository_save_rejects_invalid_trigger():
             secret_value="placeholder",
         )
         with pytest.raises(ValidationError) as exc_info:
-            trigger_repo.save(trigger)
+            await trigger_repo.save(trigger)
         assert "path" in str(exc_info.value).lower()
         trigger_path = Path(base) / "tenants" / "u1" / "triggers" / "t1.yaml"
         assert not trigger_path.exists()
 
 
-def test_yaml_trigger_repository_save_accepts_valid_trigger():
+async def test_yaml_trigger_repository_save_accepts_valid_trigger():
     """YamlTriggerRepository.save persists valid trigger."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -328,8 +328,8 @@ def test_yaml_trigger_repository_save_accepts_valid_trigger():
             auth_mode="bearer",
             secret_value="yaml_test_secret",
         )
-        trigger_repo.save(trigger)
-        loaded = trigger_repo.get_by_id("t1", "u1")
+        await trigger_repo.save(trigger)
+        loaded = await trigger_repo.get_by_id("t1", "u1")
         assert loaded is not None
         assert loaded.path == "/test"
-        trigger_repo.delete("t1", "u1")
+        await trigger_repo.delete("t1", "u1")

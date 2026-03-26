@@ -1,6 +1,6 @@
 """Unit tests for Supabase queue repository (with mocks)."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -39,93 +39,103 @@ def repo(mock_client, config):
     return SupabaseQueueRepository(mock_client, config)
 
 
-def test_send_returns_message_id(repo, mock_client):
+async def test_send_returns_message_id(repo, mock_client):
     """Send calls public.pgmq_send RPC and returns normalized QueueSendResult."""
-    mock_client.schema.return_value.rpc.return_value.execute.return_value = MagicMock(
-        data=[42]
+    mock_client.rpc.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[42])
     )
-    result = repo.send({"job_id": "loc_abc", "keywords": "coffee"})
+    result = await repo.send({"job_id": "loc_abc", "keywords": "coffee"})
     assert result == QueueSendResult(message_id=42)
-    mock_client.schema.assert_called_once_with("public")
-    mock_client.schema.return_value.rpc.assert_called_once_with(
+    mock_client.rpc.assert_called_once_with(
         "pgmq_send",
-        {"queue_name": "locations_jobs", "msg": {"job_id": "loc_abc", "keywords": "coffee"}, "delay": 0},
+        {
+            "queue_name": "locations_jobs",
+            "msg": {"job_id": "loc_abc", "keywords": "coffee"},
+            "delay": 0,
+        },
     )
 
 
-def test_read_returns_normalized_messages(repo, mock_client):
+async def test_read_returns_normalized_messages(repo, mock_client):
     """Read calls public.pgmq_read RPC and returns list of QueueMessage."""
-    mock_client.schema.return_value.rpc.return_value.execute.return_value = MagicMock(
-        data=[
-            {
-                "msg_id": 1,
-                "read_ct": 1,
-                "enqueued_at": "2024-01-15T10:00:00Z",
-                "message": {"job_id": "loc_1", "keywords": "park"},
-            }
-        ]
+    mock_client.rpc.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "msg_id": 1,
+                    "read_ct": 1,
+                    "enqueued_at": "2024-01-15T10:00:00Z",
+                    "message": {"job_id": "loc_1", "keywords": "park"},
+                }
+            ]
+        )
     )
-    messages = repo.read(batch_size=1, vt_seconds=30)
+    messages = await repo.read(batch_size=1, vt_seconds=30)
     assert len(messages) == 1
     assert messages[0].message_id == 1
     assert messages[0].read_count == 1
     assert messages[0].payload == {"job_id": "loc_1", "keywords": "park"}
-    mock_client.schema.assert_called_once_with("public")
-    mock_client.schema.return_value.rpc.assert_called_once_with(
+    mock_client.rpc.assert_called_once_with(
         "pgmq_read",
         {"queue_name": "locations_jobs", "vt": 30, "qty": 1},
     )
 
 
-def test_read_empty_returns_empty_list(repo, mock_client):
+async def test_read_empty_returns_empty_list(repo, mock_client):
     """Read with no messages returns empty list."""
-    mock_client.schema.return_value.rpc.return_value.execute.return_value = MagicMock(
-        data=[]
+    mock_client.rpc.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[])
     )
-    messages = repo.read(batch_size=5, vt_seconds=10)
+    messages = await repo.read(batch_size=5, vt_seconds=10)
     assert messages == []
 
 
-def test_archive_calls_rpc_and_returns_result(repo, mock_client):
+async def test_archive_calls_rpc_and_returns_result(repo, mock_client):
     """Archive calls public.pgmq_archive RPC and returns QueueAckResult."""
-    mock_client.schema.return_value.rpc.return_value.execute.return_value = MagicMock(
-        data=True
+    mock_client.rpc.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=True)
     )
-    result = repo.archive(message_id=99)
+    result = await repo.archive(message_id=99)
     assert result == QueueAckResult(archived=True)
-    mock_client.schema.assert_called_once_with("public")
-    mock_client.schema.return_value.rpc.assert_called_once_with(
+    mock_client.rpc.assert_called_once_with(
         "pgmq_archive",
         {"queue_name": "locations_jobs", "msg_id": 99},
     )
 
 
-def test_close_invokes_session_close(repo, mock_client):
-    """close() calls session.close() when schema client has a session."""
-    mock_session = MagicMock()
-    mock_client.schema.return_value.session = mock_session
+async def test_aclose_invokes_postgrest_aclose(repo, mock_client):
+    """aclose() awaits PostgREST session shutdown when present."""
+    mock_pg = MagicMock()
+    mock_pg.aclose = AsyncMock()
+    mock_client._postgrest = mock_pg
+    await repo.aclose()
+    mock_pg.aclose.assert_awaited_once()
+
+
+async def test_aclose_idempotent(repo, mock_client):
+    """aclose() is safe to call multiple times."""
+    mock_pg = MagicMock()
+    mock_pg.aclose = AsyncMock()
+    mock_client._postgrest = mock_pg
+    await repo.aclose()
+    await repo.aclose()
+    assert mock_pg.aclose.await_count == 2
+
+
+async def test_aclose_no_postgrest_does_not_raise(repo, mock_client):
+    """aclose() does not raise when client has no _postgrest."""
+    mock_client._postgrest = None
+    await repo.aclose()
+
+
+async def test_aclose_postgrest_error_logged_does_not_raise(repo, mock_client):
+    """aclose() logs but does not raise when aclose() raises."""
+    mock_pg = MagicMock()
+    mock_pg.aclose = AsyncMock(side_effect=RuntimeError("connection reset"))
+    mock_client._postgrest = mock_pg
+    await repo.aclose()
+
+
+def test_sync_close_is_noop(repo, mock_client):
+    """Sync close() is a no-op and must not raise (prefer ``await aclose()``)."""
     repo.close()
-    mock_session.close.assert_called_once()
-
-
-def test_close_idempotent(repo, mock_client):
-    """close() is safe to call multiple times."""
-    mock_session = MagicMock()
-    mock_client.schema.return_value.session = mock_session
-    repo.close()
-    repo.close()
-    mock_session.close.assert_called()
-
-
-def test_close_no_session_does_not_raise(repo, mock_client):
-    """close() does not raise when schema client has no session."""
-    mock_client.schema.return_value.session = None
-    repo.close()  # no raise
-
-
-def test_close_session_error_logged_does_not_raise(repo, mock_client):
-    """close() logs but does not raise when session.close() raises."""
-    mock_session = MagicMock()
-    mock_session.close.side_effect = RuntimeError("connection reset")
-    mock_client.schema.return_value.session = mock_session
-    repo.close()  # no raise

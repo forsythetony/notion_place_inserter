@@ -12,7 +12,7 @@ from app.services.pipeline_live_test.api_overrides import consume_manual_api_res
 class SearchIconsHandler(StepRuntime):
     """Search icons by term (Freepik) and return first result URL."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],
@@ -48,7 +48,7 @@ class SearchIconsHandler(StepRuntime):
 
         usage_svc = ctx.get_service("usage_accounting")
         if usage_svc and ctx.owner_user_id:
-            usage_svc.record_external_api_call(
+            await usage_svc.record_external_api_call(
                 job_run_id=ctx.run_id,
                 owner_user_id=ctx.owner_user_id,
                 provider="freepik",

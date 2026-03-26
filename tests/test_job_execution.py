@@ -1,6 +1,6 @@
 """Unit tests for snapshot-driven job execution (p3_pr06)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ def _make_step_handle(step_run_id: str = "sr_test") -> StepExecutionHandle:
     return StepExecutionHandle(step_run_id=step_run_id, pipeline_log=pl)
 
 
-def test_step_execution_handle_isolates_processing_lines():
+async def test_step_execution_handle_isolates_processing_lines():
     """Parallel pipelines: each handle appends only to its own StepPipelineLog."""
     la = StepPipelineLog(
         run_id="r1",
@@ -64,7 +64,7 @@ def test_step_execution_handle_isolates_processing_lines():
     assert not any("line-a" in x for x in lb.processing_lines)
 
 
-def test_resolve_signal_ref_trigger_payload():
+async def test_resolve_signal_ref_trigger_payload():
     """signal_ref trigger.payload.raw_input resolves from trigger_payload."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -80,7 +80,7 @@ def test_resolve_signal_ref_trigger_payload():
     assert result == "coffee shop"
 
 
-def test_resolve_signal_ref_trigger_payload_keywords():
+async def test_resolve_signal_ref_trigger_payload_keywords():
     """signal_ref trigger.payload.keywords resolves from trigger_payload."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -94,7 +94,7 @@ def test_resolve_signal_ref_trigger_payload_keywords():
     )
 
 
-def test_resolve_signal_ref_trigger_payload_keywords_falls_back_to_raw_input():
+async def test_resolve_signal_ref_trigger_payload_keywords_falls_back_to_raw_input():
     """When schema has no keywords, legacy bindings still work via raw_input duplicate."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -112,7 +112,7 @@ def test_resolve_signal_ref_trigger_payload_keywords_falls_back_to_raw_input():
     )
 
 
-def test_resolve_signal_ref_step_output():
+async def test_resolve_signal_ref_step_output():
     """signal_ref step.step_id.output_name resolves from step_outputs."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -129,7 +129,7 @@ def test_resolve_signal_ref_step_output():
     assert result == "Stone Arch Bridge Minneapolis"
 
 
-def test_resolve_signal_ref_step_output_nested_path():
+async def test_resolve_signal_ref_step_output_nested_path():
     """signal_ref supports nested paths under a step output dict/list."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -159,7 +159,7 @@ def test_resolve_signal_ref_step_output_nested_path():
     assert result_street == "East Houston Street"
 
 
-def test_resolve_cache_key():
+async def test_resolve_cache_key():
     """cache_key in binding reads from run_cache."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -176,7 +176,7 @@ def test_resolve_cache_key():
     assert result == {"places": []}
 
 
-def test_resolve_cache_key_ref_with_path():
+async def test_resolve_cache_key_ref_with_path():
     """cache_key_ref with optional path traverses nested cached value."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.run_cache["google_places_selected_place"] = {
@@ -201,14 +201,14 @@ def test_resolve_cache_key_ref_with_path():
     )
 
 
-def test_resolve_static_value():
+async def test_resolve_static_value():
     """static_value returns literal."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     result = resolve_binding({"static_value": "literal"}, ctx, {})
     assert result == "literal"
 
 
-def test_resolve_target_schema_ref_options():
+async def test_resolve_target_schema_ref_options():
     """target_schema_ref resolves schema property options."""
     snapshot = {
         "active_schema": {
@@ -238,7 +238,7 @@ def test_resolve_target_schema_ref_options():
     assert result == [{"id": "opt1", "name": "History"}, {"id": "opt2", "name": "Landmark"}]
 
 
-def test_resolve_input_bindings_multiple():
+async def test_resolve_input_bindings_multiple():
     """resolve_input_bindings resolves all bindings."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -256,11 +256,11 @@ def test_resolve_input_bindings_multiple():
     assert result["other"] == "resolved"
 
 
-def test_cache_set_handler_stores_in_run_cache():
+async def test_cache_set_handler_stores_in_run_cache():
     """CacheSetHandler stores value in run_cache."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = CacheSetHandler()
-    handler.execute(
+    await handler.execute(
         step_id="step_cache",
         config={"cache_key": "my_key"},
         input_bindings={"value": {"signal_ref": "trigger.payload.raw_input"}},
@@ -272,12 +272,12 @@ def test_cache_set_handler_stores_in_run_cache():
     assert ctx.run_cache.get("my_key") == "stored_value"
 
 
-def test_cache_get_handler_returns_cached_value():
+async def test_cache_get_handler_returns_cached_value():
     """CacheGetHandler returns value from run_cache."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.run_cache["my_key"] = "cached"
     handler = CacheGetHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_get",
         config={"cache_key": "my_key"},
         input_bindings={},
@@ -289,11 +289,11 @@ def test_cache_get_handler_returns_cached_value():
     assert result == {"value": "cached"}
 
 
-def test_property_set_handler_stores_in_properties():
+async def test_property_set_handler_stores_in_properties():
     """PropertySetHandler stores value in ctx.properties."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = PropertySetHandler()
-    handler.execute(
+    await handler.execute(
         step_id="step_prop",
         config={"schema_property_id": "prop_tags"},
         input_bindings={"value": {}},
@@ -305,12 +305,12 @@ def test_property_set_handler_stores_in_properties():
     assert ctx.properties.get("prop_tags") == ["History", "Landmark"]
 
 
-def test_property_set_handler_stores_in_page_metadata_cover():
+async def test_property_set_handler_stores_in_page_metadata_cover():
     """PropertySetHandler with target_kind=page_metadata sets ctx.cover."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = PropertySetHandler()
     payload = {"type": "external", "external": {"url": "https://example.com/cover.jpg"}}
-    handler.execute(
+    await handler.execute(
         step_id="step_cover",
         config={"target_kind": "page_metadata", "target_field": "cover_image"},
         input_bindings={"value": {}},
@@ -322,12 +322,12 @@ def test_property_set_handler_stores_in_page_metadata_cover():
     assert ctx.cover == payload
 
 
-def test_property_set_handler_stores_in_page_metadata_icon():
+async def test_property_set_handler_stores_in_page_metadata_icon():
     """PropertySetHandler with target_kind=page_metadata sets ctx.icon."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = PropertySetHandler()
     payload = {"type": "file_upload", "file_upload": {"id": "fu-123"}}
-    handler.execute(
+    await handler.execute(
         step_id="step_icon",
         config={"target_kind": "page_metadata", "target_field": "icon_image"},
         input_bindings={"value": {}},
@@ -339,11 +339,11 @@ def test_property_set_handler_stores_in_page_metadata_icon():
     assert ctx.icon == payload
 
 
-def test_property_set_handler_page_metadata_converts_url_string():
+async def test_property_set_handler_page_metadata_converts_url_string():
     """PropertySetHandler converts URL string to external payload for page_metadata."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = PropertySetHandler()
-    handler.execute(
+    await handler.execute(
         step_id="step_cover",
         config={"target_kind": "page_metadata", "target_field": "cover_image"},
         input_bindings={"value": {}},
@@ -355,12 +355,12 @@ def test_property_set_handler_page_metadata_converts_url_string():
     assert ctx.cover == {"type": "external", "external": {"url": "https://example.com/img.png"}}
 
 
-def test_data_transform_handler_extract_key():
+async def test_data_transform_handler_extract_key():
     """DataTransformHandler extracts value at source_path."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = DataTransformHandler()
     value = {"photos": [{"name": "places/abc/photos/xyz"}, {"name": "places/def/photos/uvw"}]}
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_transform",
         config={"operation": "extract_key", "source_path": "photos[0].name"},
         input_bindings={"value": {}},
@@ -372,11 +372,11 @@ def test_data_transform_handler_extract_key():
     assert result["transformed_value"] == "places/abc/photos/xyz"
 
 
-def test_data_transform_handler_returns_fallback_when_path_missing():
+async def test_data_transform_handler_returns_fallback_when_path_missing():
     """DataTransformHandler returns fallback_value when path missing."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = DataTransformHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_transform",
         config={
             "operation": "extract_key",
@@ -392,11 +392,11 @@ def test_data_transform_handler_returns_fallback_when_path_missing():
     assert result["transformed_value"] == "default.jpg"
 
 
-def test_templater_handler_renders_template():
+async def test_templater_handler_renders_template():
     """TemplaterHandler replaces {{key}} placeholders with values."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = TemplaterHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_templater",
         config={
             "template": "{{latitude}}, {{longitude}}",
@@ -414,7 +414,7 @@ def test_templater_handler_renders_template():
     assert result["rendered_value"] == "44.9778, -93.265"  # float str() drops trailing zero
 
 
-def test_templater_handler_signal_ref_resolution():
+async def test_templater_handler_signal_ref_resolution():
     """TemplaterHandler resolves signal_ref in values (e.g. from step output or cache_get)."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.set_step_output(
@@ -423,7 +423,7 @@ def test_templater_handler_signal_ref_resolution():
         {"latitude": 19.43, "longitude": -99.16},
     )
     handler = TemplaterHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_templater",
         config={
             "template": "{{latitude}}, {{longitude}}",
@@ -441,13 +441,13 @@ def test_templater_handler_signal_ref_resolution():
     assert result["rendered_value"] == "19.43, -99.16"
 
 
-def test_templater_handler_cache_key_ref_resolution():
+async def test_templater_handler_cache_key_ref_resolution():
     """TemplaterHandler resolves cache_key in values (flat cached value)."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.run_cache["lat"] = 44.9778
     ctx.run_cache["lng"] = -93.2650
     handler = TemplaterHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_templater",
         config={
             "template": "{{latitude}}, {{longitude}}",
@@ -465,11 +465,11 @@ def test_templater_handler_cache_key_ref_resolution():
     assert result["rendered_value"] == "44.9778, -93.265"  # float str() drops trailing zero
 
 
-def test_templater_handler_missing_key_renders_empty():
+async def test_templater_handler_missing_key_renders_empty():
     """TemplaterHandler renders empty string for missing placeholder keys."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = TemplaterHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_templater",
         config={
             "template": "{{a}}-{{b}}-{{c}}",
@@ -484,11 +484,11 @@ def test_templater_handler_missing_key_renders_empty():
     assert result["rendered_value"] == "x--z"
 
 
-def test_templater_handler_non_string_values_stringify():
+async def test_templater_handler_non_string_values_stringify():
     """TemplaterHandler stringifies non-string values (int, float, dict)."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = TemplaterHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_templater",
         config={
             "template": "{{n}} {{f}}",
@@ -506,7 +506,7 @@ def test_templater_handler_non_string_values_stringify():
     assert result["rendered_value"] == "42 3.14"
 
 
-def test_step_runtime_registry_get_returns_templater_handler():
+async def test_step_runtime_registry_get_returns_templater_handler():
     """StepRuntimeRegistry returns TemplaterHandler for step_template_templater."""
     reg = StepRuntimeRegistry()
     reg.register("step_template_templater", TemplaterHandler)
@@ -515,16 +515,17 @@ def test_step_runtime_registry_get_returns_templater_handler():
     assert isinstance(handler, TemplaterHandler)
 
 
-def test_search_icons_handler_returns_url_when_freepik_available():
+async def test_search_icons_handler_returns_url_when_freepik_available():
     """SearchIconsHandler returns image_url from Freepik when service available."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
     ctx._services["freepik"] = MagicMock()
     ctx._services["freepik"].get_first_icon_url.return_value = "https://cdn.freepik.com/icon.png"
     usage = MagicMock()
+    usage.record_external_api_call = AsyncMock()
     ctx._services["usage_accounting"] = usage
     handler = SearchIconsHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_search",
         config={},
         input_bindings={"query": {}},
@@ -534,7 +535,7 @@ def test_search_icons_handler_returns_url_when_freepik_available():
         snapshot={},
     )
     assert result["image_url"] == "https://cdn.freepik.com/icon.png"
-    usage.record_external_api_call.assert_called_once()
+    usage.record_external_api_call.assert_awaited_once()
     call_kw = usage.record_external_api_call.call_args.kwargs
     assert call_kw["provider"] == "freepik"
     assert call_kw["operation"] == "search_icons"
@@ -543,11 +544,11 @@ def test_search_icons_handler_returns_url_when_freepik_available():
     assert call_kw["step_run_id"] == "step_run_1"
 
 
-def test_search_icons_handler_returns_none_when_no_freepik():
+async def test_search_icons_handler_returns_none_when_no_freepik():
     """SearchIconsHandler returns None when Freepik service not configured."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = SearchIconsHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_search",
         config={},
         input_bindings={"query": {}},
@@ -559,7 +560,7 @@ def test_search_icons_handler_returns_none_when_no_freepik():
     assert result["image_url"] is None
 
 
-def test_search_icons_handler_skips_usage_when_query_empty():
+async def test_search_icons_handler_skips_usage_when_query_empty():
     """SearchIconsHandler does not call Freepik or record usage for an empty query."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
@@ -568,7 +569,7 @@ def test_search_icons_handler_skips_usage_when_query_empty():
     usage = MagicMock()
     ctx._services["usage_accounting"] = usage
     handler = SearchIconsHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_search",
         config={},
         input_bindings={"query": {}},
@@ -582,7 +583,7 @@ def test_search_icons_handler_skips_usage_when_query_empty():
     usage.record_external_api_call.assert_not_called()
 
 
-def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
+async def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
     """UploadImageToNotionHandler returns external payload in dry-run for URL input."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.dry_run = True
@@ -593,7 +594,7 @@ def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
         "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
         return_value=None,
     ):
-        result = handler.execute(
+        result = await handler.execute(
             step_id="step_upload",
             config={},
             input_bindings={"value": {}},
@@ -608,7 +609,7 @@ def test_upload_image_to_notion_handler_dry_run_passthrough_external_url():
     }
 
 
-def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_available():
+async def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_available():
     """Dry-run mode never uploads image bytes to Notion."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.dry_run = True
@@ -620,7 +621,7 @@ def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_availab
         "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
         return_value=b"fake-image-bytes",
     ) as fetch_mock:
-        result = handler.execute(
+        result = await handler.execute(
             step_id="step_upload",
             config={},
             input_bindings={"value": {}},
@@ -637,7 +638,7 @@ def test_upload_image_to_notion_handler_dry_run_never_uploads_when_bytes_availab
     notion.upload_cover_from_bytes.assert_not_called()
 
 
-def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_only():
+async def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_only():
     """Dry-run Google photo path returns external URL and skips byte upload."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx.dry_run = True
@@ -649,7 +650,7 @@ def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_o
     ctx._services["google_places"] = google
     handler = UploadImageToNotionHandler()
 
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_upload",
         config={},
         input_bindings={"value": {}},
@@ -668,7 +669,7 @@ def test_upload_image_to_notion_handler_dry_run_google_photo_uses_external_url_o
     notion.upload_cover_from_bytes.assert_not_called()
 
 
-def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_available():
+async def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_available():
     """UploadImageToNotionHandler passes owner OAuth token to Notion upload."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -688,7 +689,7 @@ def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_availab
         "app.services.job_execution.handlers.upload_image_to_notion._fetch_image_bytes",
         return_value=b"fake-image-bytes",
     ):
-        result = handler.execute(
+        result = await handler.execute(
             step_id="step_upload",
             config={},
             input_bindings={"value": {}},
@@ -707,7 +708,7 @@ def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_availab
     )
 
 
-def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
+async def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
     """UploadImageToNotionHandler logs fallback when owner_user_id set but token_getter returns None."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -728,7 +729,7 @@ def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
         return_value=b"fake-image-bytes",
     ):
         with patch("app.services.job_execution.handlers.upload_image_to_notion.logger") as mock_logger:
-            result = handler.execute(
+            result = await handler.execute(
                 step_id="step_upload",
                 config={},
                 input_bindings={"value": {}},
@@ -749,7 +750,7 @@ def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailable():
     assert "oauth_token_unavailable" in call_str
 
 
-def test_optimize_input_claude_handler_returns_optimized_query():
+async def test_optimize_input_claude_handler_returns_optimized_query():
     """OptimizeInputClaudeHandler returns optimized_query (or passthrough when no Claude)."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -758,7 +759,7 @@ def test_optimize_input_claude_handler_returns_optimized_query():
         trigger_payload={},
     )
     handler = OptimizeInputClaudeHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_opt",
         config={"prompt": "Rewrite"},
         input_bindings={"query": {}},
@@ -771,7 +772,7 @@ def test_optimize_input_claude_handler_returns_optimized_query():
     assert result["optimized_query"] == "coffee shop"  # no Claude, passthrough
 
 
-def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_output():
+async def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_output():
     """When optimized_query is wired to a step with query_schema, uses rewrite_query_for_target."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -816,7 +817,7 @@ def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_out
     }
 
     handler = OptimizeInputClaudeHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_opt",
         config={},
         input_bindings={"query": {}},
@@ -832,7 +833,7 @@ def test_optimize_input_claude_handler_uses_schema_when_linked_step_consumes_out
     claude.rewrite_place_query.assert_not_called()
 
 
-def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no_schema():
+async def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no_schema():
     """When no linked step or no query_schema, uses rewrite_place_query."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -846,7 +847,7 @@ def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no
     ctx._services["claude"] = claude
 
     handler = OptimizeInputClaudeHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_opt",
         config={},
         input_bindings={"query": {}},
@@ -860,7 +861,7 @@ def test_optimize_input_claude_handler_falls_back_to_rewrite_place_query_when_no
     claude.rewrite_query_for_target.assert_not_called()
 
 
-def test_optimize_input_claude_handler_include_target_query_schema_false_skips_schema():
+async def test_optimize_input_claude_handler_include_target_query_schema_false_skips_schema():
     """When include_target_query_schema is false, uses rewrite_place_query even if linked step exists."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -902,7 +903,7 @@ def test_optimize_input_claude_handler_include_target_query_schema_false_skips_s
     }
 
     handler = OptimizeInputClaudeHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_opt",
         config={"include_target_query_schema": False},
         input_bindings={"query": {}},
@@ -916,7 +917,7 @@ def test_optimize_input_claude_handler_include_target_query_schema_false_skips_s
     claude.rewrite_query_for_target.assert_not_called()
 
 
-def test_optimize_input_claude_handler_linked_step_id_override():
+async def test_optimize_input_claude_handler_linked_step_id_override():
     """When linked_step_id is set in config, uses that step for schema lookup."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -961,7 +962,7 @@ def test_optimize_input_claude_handler_linked_step_id_override():
     }
 
     handler = OptimizeInputClaudeHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_opt",
         config={"linked_step_id": "step_icon_search"},
         input_bindings={"query": {}},
@@ -976,7 +977,7 @@ def test_optimize_input_claude_handler_linked_step_id_override():
     assert call_kw["query_schema"]["description"] == "Short Freepik icon keyword"
 
 
-def test_ai_prompt_handler_returns_value_when_claude_available():
+async def test_ai_prompt_handler_returns_value_when_claude_available():
     """AiPromptHandler returns value from Claude prompt_completion when service available."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -988,7 +989,7 @@ def test_ai_prompt_handler_returns_value_when_claude_available():
     claude.prompt_completion.return_value = "A charming café in downtown."
     ctx._services["claude"] = claude
     handler = AiPromptHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_prompt",
         config={"prompt": "Rewrite into a travel note."},
         input_bindings={"value": {}},
@@ -1005,7 +1006,7 @@ def test_ai_prompt_handler_returns_value_when_claude_available():
     )
 
 
-def test_ai_prompt_handler_returns_empty_when_no_claude():
+async def test_ai_prompt_handler_returns_empty_when_no_claude():
     """AiPromptHandler returns empty string when Claude service not configured."""
     ctx = ExecutionContext(
         run_id="r1",
@@ -1014,7 +1015,7 @@ def test_ai_prompt_handler_returns_empty_when_no_claude():
         trigger_payload={},
     )
     handler = AiPromptHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_prompt",
         config={"prompt": "Rewrite."},
         input_bindings={"value": {}},
@@ -1026,7 +1027,7 @@ def test_ai_prompt_handler_returns_empty_when_no_claude():
     assert result["value"] == ""
 
 
-def test_step_runtime_registry_get_returns_handler():
+async def test_step_runtime_registry_get_returns_handler():
     """StepRuntimeRegistry returns handler for registered step_template_id."""
     from app.services.job_execution.handlers import CacheSetHandler
 
@@ -1037,13 +1038,13 @@ def test_step_runtime_registry_get_returns_handler():
     assert isinstance(handler, CacheSetHandler)
 
 
-def test_step_runtime_registry_get_unknown_returns_none():
+async def test_step_runtime_registry_get_unknown_returns_none():
     """StepRuntimeRegistry returns None for unknown step_template_id."""
     reg = StepRuntimeRegistry()
     assert reg.get("step_template_unknown") is None
 
 
-def test_build_notion_properties_payload_multi_select():
+async def test_build_notion_properties_payload_multi_select():
     """build_notion_properties_payload formats multi_select from list."""
     ctx_properties = {"prop_tags": ["History", "Landmark"]}
     active_schema = {
@@ -1061,7 +1062,7 @@ def test_build_notion_properties_payload_multi_select():
     assert result["tags"]["multi_select"] == [{"name": "History"}, {"name": "Landmark"}]
 
 
-def test_build_notion_properties_payload_relation():
+async def test_build_notion_properties_payload_relation():
     """build_notion_properties_payload formats relation from list of page IDs."""
     ctx_properties = {"prop_location": [{"id": "page-uuid-123"}]}
     active_schema = {
@@ -1078,7 +1079,7 @@ def test_build_notion_properties_payload_relation():
     assert result["Location"]["relation"] == [{"id": "page-uuid-123"}]
 
 
-def test_ai_select_relation_handler_no_match_returns_empty():
+async def test_ai_select_relation_handler_no_match_returns_empty():
     """AiSelectRelationHandler returns empty relation when no Claude or no match."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx._services["notion"] = MagicMock()
@@ -1090,7 +1091,7 @@ def test_ai_select_relation_handler_no_match_returns_empty():
         "has_more": False,
     }
     handler = AiSelectRelationHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1103,7 +1104,7 @@ def test_ai_select_relation_handler_no_match_returns_empty():
     assert "selected_relation" in result
 
 
-def test_ai_select_relation_handler_selects_match_when_claude_returns_id():
+async def test_ai_select_relation_handler_selects_match_when_claude_returns_id():
     """AiSelectRelationHandler returns selected_relation when Claude picks a match."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     ctx._services["notion"] = MagicMock()
@@ -1118,7 +1119,7 @@ def test_ai_select_relation_handler_selects_match_when_claude_returns_id():
     claude.choose_best_relation_from_candidates.return_value = "loc-1"
     ctx._services["claude"] = claude
     handler = AiSelectRelationHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1131,7 +1132,7 @@ def test_ai_select_relation_handler_selects_match_when_claude_returns_id():
     assert result["selected_page_pointer"] == {"id": "loc-1"}
 
 
-def test_ai_select_relation_prefers_get_data_source_id_over_external_target_id():
+async def test_ai_select_relation_prefers_get_data_source_id_over_external_target_id():
     """AiSelectRelationHandler prefers NotionService.get_data_source_id(display_name) when available."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     notion = MagicMock()
@@ -1148,7 +1149,7 @@ def test_ai_select_relation_prefers_get_data_source_id_over_external_target_id()
     claude.choose_best_relation_from_candidates.return_value = "loc-1"
     ctx._services["claude"] = claude
     handler = AiSelectRelationHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1171,7 +1172,7 @@ def test_ai_select_relation_prefers_get_data_source_id_over_external_target_id()
     assert call_kwargs["data_source_id"] == "ds-from-display-name"
 
 
-def test_ai_select_relation_returns_empty_on_query_failure():
+async def test_ai_select_relation_returns_empty_on_query_failure():
     """AiSelectRelationHandler returns empty relation when Notion query fails."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     notion = MagicMock()
@@ -1180,7 +1181,7 @@ def test_ai_select_relation_returns_empty_on_query_failure():
     notion.client.data_sources.query.side_effect = Exception("Could not find database with ID")
     ctx._services["notion"] = notion
     handler = AiSelectRelationHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1193,7 +1194,7 @@ def test_ai_select_relation_returns_empty_on_query_failure():
     assert result["selected_page_pointer"] is None
 
 
-def test_ai_select_relation_accepts_address_only_input():
+async def test_ai_select_relation_accepts_address_only_input():
     """AiSelectRelationHandler accepts address string (e.g. from DataTransform) and passes to Claude."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     notion = MagicMock()
@@ -1210,7 +1211,7 @@ def test_ai_select_relation_accepts_address_only_input():
     claude.choose_best_relation_from_candidates.return_value = "loc-twin"
     ctx._services["claude"] = claude
     handler = AiSelectRelationHandler()
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1225,7 +1226,7 @@ def test_ai_select_relation_accepts_address_only_input():
     assert call_kwargs["source_context"] == {"value": "1401 West River Rd N, Minneapolis, MN 55411, USA"}
 
 
-def test_ai_select_relation_uses_valid_filter_properties_from_data_source_schema():
+async def test_ai_select_relation_uses_valid_filter_properties_from_data_source_schema():
     """AiSelectRelationHandler uses only schema-valid filter_properties."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     notion = MagicMock()
@@ -1249,7 +1250,7 @@ def test_ai_select_relation_uses_valid_filter_properties_from_data_source_schema
     ctx._services["claude"] = claude
     handler = AiSelectRelationHandler()
 
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1265,7 +1266,7 @@ def test_ai_select_relation_uses_valid_filter_properties_from_data_source_schema
     assert call_kwargs["filter_properties"] == ["title", "Name"]
 
 
-def test_ai_select_relation_retries_without_filter_properties_on_validation_error():
+async def test_ai_select_relation_retries_without_filter_properties_on_validation_error():
     """AiSelectRelationHandler retries unfiltered query when filter_properties is rejected."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     notion = MagicMock()
@@ -1293,7 +1294,7 @@ def test_ai_select_relation_retries_without_filter_properties_on_validation_erro
     ctx._services["claude"] = claude
     handler = AiSelectRelationHandler()
 
-    result = handler.execute(
+    result = await handler.execute(
         step_id="step_ai_select",
         config={"related_db": "target_locations", "key_lookup": "title"},
         input_bindings={"source_value": {}},
@@ -1311,7 +1312,7 @@ def test_ai_select_relation_retries_without_filter_properties_on_validation_erro
     assert "filter_properties" not in second_kwargs
 
 
-def test_execute_snapshot_run_synthesizes_schema_when_missing():
+async def test_execute_snapshot_run_synthesizes_schema_when_missing():
     """When active_schema is missing, runtime synthesizes schema from Notion and writes props."""
     notion = MagicMock()
     notion.get_raw_schema_for_sync.return_value = (
@@ -1368,7 +1369,7 @@ def test_execute_snapshot_run_synthesizes_schema_when_missing():
         "active_schema": None,
     }
 
-    result = svc.execute_snapshot_run(
+    result = await svc.execute_snapshot_run(
         snapshot=snapshot,
         run_id="run-1",
         job_id="job-1",
@@ -1386,7 +1387,7 @@ def test_execute_snapshot_run_synthesizes_schema_when_missing():
     ]
 
 
-def test_execute_snapshot_run_dry_run_delegates_to_notion_service():
+async def test_execute_snapshot_run_dry_run_delegates_to_notion_service():
     """Dry-run mode still calls NotionService.create_page (service handles dry-run behavior)."""
     notion = MagicMock()
     notion.create_page.return_value = {"mode": "dry_run", "id": None, "page_id": None}
@@ -1440,7 +1441,7 @@ def test_execute_snapshot_run_dry_run_delegates_to_notion_service():
         },
     }
 
-    result = svc.execute_snapshot_run(
+    result = await svc.execute_snapshot_run(
         snapshot=snapshot,
         run_id="run-1",
         job_id="job-1",
@@ -1457,7 +1458,7 @@ def test_execute_snapshot_run_dry_run_delegates_to_notion_service():
     ]
 
 
-def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
+async def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
     """When pipelines set page_metadata, create_page receives icon and cover."""
     notion = MagicMock()
     notion.create_page.return_value = {"id": "page-1", "object": "page"}
@@ -1528,7 +1529,7 @@ def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
         "active_schema": {"properties": []},
     }
 
-    svc.execute_snapshot_run(
+    await svc.execute_snapshot_run(
         snapshot=snapshot,
         run_id="run-1",
         job_id="job-1",
@@ -1544,9 +1545,9 @@ def test_execute_snapshot_run_sends_icon_and_cover_to_notion():
     assert call_kwargs["icon"] == {"type": "file_upload", "file_upload": {"id": "fu-123"}}
 
 
-def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
+async def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
     """When create_page_with_token raises, job_execution_notion_create_failed is logged and error is re-raised."""
-    get_token = MagicMock(return_value="oauth-token")
+    get_token = AsyncMock(return_value="oauth-token")
     svc = JobExecutionService(
         notion_service=MagicMock(),
         dry_run=False,
@@ -1598,7 +1599,7 @@ def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
 
         with patch("app.services.job_execution.job_execution_service.logger") as mock_logger:
             with pytest.raises(ValueError, match="Could not find data_source"):
-                svc.execute_snapshot_run(
+                await svc.execute_snapshot_run(
                     snapshot=snapshot,
                     run_id="run-1",
                     job_id="job-1",
@@ -1615,11 +1616,11 @@ def test_execute_snapshot_run_logs_notion_create_failed_on_exception():
     assert "token_source=oauth" in str(call_args) or "oauth" in str(call_args)
 
 
-def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
+async def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
     """When owner_user_id is set but OAuth token is unavailable, logs fallback to global token."""
     notion = MagicMock()
     notion.create_page.return_value = {"id": "page-1", "object": "page"}
-    get_token = MagicMock(return_value=None)
+    get_token = AsyncMock(return_value=None)
     svc = JobExecutionService(
         notion_service=notion,
         dry_run=False,
@@ -1667,7 +1668,7 @@ def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
     }
 
     with patch("app.services.job_execution.job_execution_service.logger") as mock_logger:
-        svc.execute_snapshot_run(
+        await svc.execute_snapshot_run(
             snapshot=snapshot,
             run_id="run-1",
             job_id="job-1",

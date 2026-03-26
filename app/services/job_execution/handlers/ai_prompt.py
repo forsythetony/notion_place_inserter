@@ -14,7 +14,7 @@ from app.services.pipeline_live_test.api_overrides import consume_manual_api_res
 class AiPromptHandler(StepRuntime):
     """Run a configurable AI prompt on an input value; output is the model's text response."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],
@@ -54,7 +54,7 @@ class AiPromptHandler(StepRuntime):
         if usage_svc and ctx.owner_user_id:
             usage = claude.get_last_usage()
             if usage:
-                usage_svc.record_llm_tokens(
+                await usage_svc.record_llm_tokens(
                     job_run_id=ctx.run_id,
                     owner_user_id=ctx.owner_user_id,
                     provider="anthropic",

@@ -55,7 +55,7 @@ class NotionOAuthService:
         self._external_sources = external_sources_repo
         self._connector_instances = connector_instance_repo
 
-    def start_oauth(self, owner_user_id: str, success_redirect: str) -> str:
+    async def start_oauth(self, owner_user_id: str, success_redirect: str) -> str:
         """
         Create OAuth state, return authorization URL for Notion.
         success_redirect: where to send user after callback (e.g. /connections?connected=notion).
@@ -67,7 +67,7 @@ class NotionOAuthService:
         state = secrets.token_urlsafe(32)
         state_hash = _state_hash(state)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-        self._oauth_state.create(
+        await self._oauth_state.create(
             owner_user_id=owner_user_id,
             provider="notion",
             state_token_hash=state_hash,
@@ -84,13 +84,13 @@ class NotionOAuthService:
         url = f"{NOTION_OAUTH_AUTHORIZE}?{urlencode(params)}"
         return url
 
-    def exchange_code_and_connect(self, code: str, state: str) -> tuple[ConnectorInstance, str]:
+    async def exchange_code_and_connect(self, code: str, state: str) -> tuple[ConnectorInstance, str]:
         """
         Validate state, exchange code for tokens, upsert connector + credentials.
         Returns (connector_instance, success_redirect_path).
         """
         state_hash = _state_hash(state)
-        state_row = self._oauth_state.consume_by_state_hash(state_hash)
+        state_row = await self._oauth_state.consume_by_state_hash(state_hash)
         if not state_row:
             raise ValueError("Invalid or expired state")
         owner_user_id = str(state_row.get("owner_user_id", ""))
@@ -139,7 +139,7 @@ class NotionOAuthService:
             "workspace_name": workspace_name,
         }
         secret_ref = f"notion_oauth:{owner_user_id}:{NOTION_CONNECTOR_INSTANCE_ID}"
-        self._credentials.upsert(
+        await self._credentials.upsert(
             connector_instance_id=NOTION_CONNECTOR_INSTANCE_ID,
             owner_user_id=owner_user_id,
             provider="notion",
@@ -147,7 +147,9 @@ class NotionOAuthService:
             token_payload=token_payload,
         )
 
-        existing = self._connector_instances.get_by_id(NOTION_CONNECTOR_INSTANCE_ID, owner_user_id)
+        existing = await self._connector_instances.get_by_id(
+            NOTION_CONNECTOR_INSTANCE_ID, owner_user_id
+        )
         now = datetime.now(timezone.utc)
         if existing:
             updated = ConnectorInstance(
@@ -189,7 +191,7 @@ class NotionOAuthService:
                 last_synced_at=now,
                 metadata={},
             )
-        self._connector_instances.save(updated)
+        await self._connector_instances.save(updated)
         logger.info(
             "notion_oauth_connected | owner={} workspace={}",
             owner_user_id,
@@ -197,12 +199,14 @@ class NotionOAuthService:
         )
         return updated, "/connections?connected=notion"
 
-    def disconnect(self, owner_user_id: str) -> ConnectorInstance | None:
+    async def disconnect(self, owner_user_id: str) -> ConnectorInstance | None:
         """Mark connection disconnected, revoke credentials."""
-        inst = self._connector_instances.get_by_id(NOTION_CONNECTOR_INSTANCE_ID, owner_user_id)
+        inst = await self._connector_instances.get_by_id(
+            NOTION_CONNECTOR_INSTANCE_ID, owner_user_id
+        )
         if not inst:
             return None
-        self._credentials.revoke(
+        await self._credentials.revoke(
             connector_instance_id=NOTION_CONNECTOR_INSTANCE_ID,
             owner_user_id=owner_user_id,
             provider="notion",
@@ -227,13 +231,13 @@ class NotionOAuthService:
             last_synced_at=inst.last_synced_at,
             metadata=inst.metadata or {},
         )
-        self._connector_instances.save(updated)
+        await self._connector_instances.save(updated)
         logger.info("notion_oauth_disconnected | owner={}", owner_user_id)
         return updated
 
-    def get_access_token(self, owner_user_id: str) -> str | None:
+    async def get_access_token(self, owner_user_id: str) -> str | None:
         """Return access token for the owner's Notion connection, or None."""
-        cred = self._credentials.get_for_instance(
+        cred = await self._credentials.get_for_instance(
             NOTION_CONNECTOR_INSTANCE_ID, owner_user_id, "notion"
         )
         if not cred:
@@ -295,13 +299,13 @@ class NotionOAuthService:
             return None
         return ds_id
 
-    def refresh_sources(self, owner_user_id: str) -> list[dict[str, Any]]:
+    async def refresh_sources(self, owner_user_id: str) -> list[dict[str, Any]]:
         """
         Call Notion search to discover databases, upsert into connector_external_sources.
         Stores data source IDs (not database IDs) so pages.create works correctly.
         Returns list of {external_source_id, display_name, is_accessible}.
         """
-        token = self.get_access_token(owner_user_id)
+        token = await self.get_access_token(owner_user_id)
         if not token:
             raise ValueError("Not connected to Notion")
 
@@ -351,13 +355,15 @@ class NotionOAuthService:
                 "is_accessible": True,
                 "external_parent_id": parent.get("database_id") or parent.get("data_source_id"),
             })
-        self._external_sources.upsert_batch(
+        await self._external_sources.upsert_batch(
             connector_instance_id=NOTION_CONNECTOR_INSTANCE_ID,
             owner_user_id=owner_user_id,
             provider="notion",
             sources=sources,
         )
-        inst = self._connector_instances.get_by_id(NOTION_CONNECTOR_INSTANCE_ID, owner_user_id)
+        inst = await self._connector_instances.get_by_id(
+            NOTION_CONNECTOR_INSTANCE_ID, owner_user_id
+        )
         if inst:
             now = datetime.now(timezone.utc)
             updated = ConnectorInstance(
@@ -379,5 +385,5 @@ class NotionOAuthService:
                 last_synced_at=now,
                 metadata=inst.metadata or {},
             )
-            self._connector_instances.save(updated)
+            await self._connector_instances.save(updated)
         return sources

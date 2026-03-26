@@ -40,7 +40,7 @@ def _validation_422(errors: list[str]) -> JSONResponse:
 
 
 @runtime_router.get("/runtime")
-def get_theme_runtime(
+async def get_theme_runtime(
     request: Request,
     _ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -82,7 +82,7 @@ class PreviewDerivedBody(BaseModel):
 
 
 @admin_router.get("/presets")
-def list_presets(
+async def list_presets(
     request: Request,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -102,7 +102,7 @@ def list_presets(
 
 
 @admin_router.post("/presets")
-def create_preset(
+async def create_preset(
     request: Request,
     body: CreatePresetBody,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -129,7 +129,7 @@ def create_preset(
 
 
 @admin_router.get("/presets/{preset_id}")
-def get_preset(
+async def get_preset(
     request: Request,
     preset_id: str,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -141,7 +141,7 @@ def get_preset(
 
 
 @admin_router.put("/presets/{preset_id}")
-def update_preset(
+async def update_preset(
     request: Request,
     preset_id: str,
     body: UpdatePresetBody,
@@ -177,7 +177,7 @@ def update_preset(
 
 
 @admin_router.delete("/presets/{preset_id}")
-def delete_preset(
+async def delete_preset(
     request: Request,
     preset_id: str,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -195,7 +195,7 @@ def delete_preset(
 
 
 @admin_router.post("/presets/{preset_id}/duplicate")
-def duplicate_preset(
+async def duplicate_preset(
     request: Request,
     preset_id: str,
     body: DuplicatePresetBody,
@@ -213,7 +213,7 @@ def duplicate_preset(
 
 
 @admin_router.get("/active")
-def get_active(
+async def get_active(
     request: Request,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -221,7 +221,7 @@ def get_active(
 
 
 @admin_router.put("/active")
-def set_active(
+async def set_active(
     request: Request,
     body: SetActiveBody,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -236,7 +236,7 @@ def set_active(
 
 
 @admin_router.post("/actions/preview-derived")
-def preview_derived(
+async def preview_derived(
     request: Request,
     body: PreviewDerivedBody,
     _ctx: AuthContext = Depends(require_admin_managed_auth),

@@ -95,12 +95,12 @@ def _job_run_admin_dict(run: JobRun) -> dict:
     }
 
 
-def _load_rate_card_rows(request: Request) -> list[RateCardRow]:
+async def _load_rate_card_rows(request: Request) -> list[RateCardRow]:
     client = getattr(request.app.state, "supabase_client", None)
     if client is None:
         return []
     try:
-        r = client.table("usage_rate_cards").select("*").execute()
+        r = await client.table("usage_rate_cards").select("*").execute()
         return parse_rate_card_rows(r.data or [])
     except Exception as e:
         logger.warning("usage_rate_cards_load_failed | error={}", e)
@@ -243,7 +243,7 @@ def _app_config_repo_or_501(request: Request):
 
 
 @router.get("/user-profiles")
-def list_user_profiles_admin(
+async def list_user_profiles_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -252,7 +252,7 @@ def list_user_profiles_admin(
         "admin_list_user_profiles | admin_user_id={}",
         ctx.user_id,
     )
-    rows = auth_repo.list_user_profiles_for_admin()
+    rows = await auth_repo.list_user_profiles_for_admin()
     return {"items": [_profile_row_to_item(r) for r in rows]}
 
 
@@ -270,18 +270,18 @@ class CohortPatchRequest(BaseModel):
 
 
 @router.get("/cohorts")
-def list_cohorts_admin(
+async def list_cohorts_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
     logger.info("admin_list_cohorts | admin_user_id={}", ctx.user_id)
-    rows = auth_repo.list_cohorts()
+    rows = await auth_repo.list_cohorts()
     return {"items": [_cohort_row_to_item(r) for r in rows]}
 
 
 @router.post("/cohorts", status_code=201)
-def create_cohort_admin(
+async def create_cohort_admin(
     request: Request,
     body: CohortCreateRequest,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -293,7 +293,7 @@ def create_cohort_admin(
             detail="A cohort with this key already exists",
         )
     try:
-        row = auth_repo.create_cohort(body.key, body.description)
+        row = await auth_repo.create_cohort(body.key, body.description)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     logger.info(
@@ -306,14 +306,14 @@ def create_cohort_admin(
 
 
 @router.patch("/cohorts/{cohort_id}")
-def patch_cohort_admin(
+async def patch_cohort_admin(
     request: Request,
     cohort_id: UUID,
     body: CohortPatchRequest,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    updated = auth_repo.update_cohort_description(cohort_id, body.description)
+    updated = await auth_repo.update_cohort_description(cohort_id, body.description)
     if updated is None:
         raise HTTPException(status_code=404, detail="Cohort not found")
     logger.info(
@@ -325,13 +325,13 @@ def patch_cohort_admin(
 
 
 @router.delete("/cohorts/{cohort_id}", status_code=204)
-def delete_cohort_admin(
+async def delete_cohort_admin(
     request: Request,
     cohort_id: UUID,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
-    result = auth_repo.delete_cohort_if_unused(cohort_id)
+    result = await auth_repo.delete_cohort_if_unused(cohort_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Cohort not found")
     if result == "in_use":
@@ -347,7 +347,7 @@ def delete_cohort_admin(
 
 
 @router.get("/usage-providers")
-def list_usage_providers_admin(
+async def list_usage_providers_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -357,7 +357,7 @@ def list_usage_providers_admin(
         raise HTTPException(status_code=501, detail="Supabase client not configured")
     logger.info("admin_list_usage_providers | admin_user_id={}", ctx.user_id)
     try:
-        r = client.table("usage_provider_definitions").select("*").order("provider_id").execute()
+        r = await client.table("usage_provider_definitions").select("*").order("provider_id").execute()
     except Exception as e:
         logger.exception("admin_list_usage_providers_failed | error={}", e)
         raise HTTPException(
@@ -381,7 +381,7 @@ def list_usage_providers_admin(
 
 
 @router.get("/runs")
-def list_recent_runs_admin(
+async def list_recent_runs_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
     limit: int = Query(50, ge=1, le=200),
@@ -402,19 +402,19 @@ def list_recent_runs_admin(
         limit,
         offset,
     )
-    runs = run_repo.list_recent_job_runs(
+    runs = await run_repo.list_recent_job_runs(
         limit=limit,
         offset=offset,
         from_iso=from_ts,
         to_iso=to_ts,
         owner_user_ids=owner_filter,
     )
-    rate_rows = _load_rate_card_rows(request)
+    rate_rows = await _load_rate_card_rows(request)
     items = []
     for jr in runs:
         uid = jr.owner_user_id
-        counts = run_repo.count_run_structure_for_job_run(jr.id, uid)
-        usage_rows = run_repo.list_usage_records_for_job_run(jr.id, uid)
+        counts = await run_repo.count_run_structure_for_job_run(jr.id, uid)
+        usage_rows = await run_repo.list_usage_records_for_job_run(jr.id, uid)
         items.append(
             {
                 "userId": uid,
@@ -437,7 +437,7 @@ def list_recent_runs_admin(
 
 
 @router.get("/users/{user_id}/runs")
-def list_user_runs_admin(
+async def list_user_runs_admin(
     request: Request,
     user_id: UUID,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -456,18 +456,18 @@ def list_user_runs_admin(
         limit,
         offset,
     )
-    runs = run_repo.list_job_runs_by_owner(
+    runs = await run_repo.list_job_runs_by_owner(
         uid,
         limit=limit,
         offset=offset,
         from_iso=from_ts,
         to_iso=to_ts,
     )
-    rate_rows = _load_rate_card_rows(request)
+    rate_rows = await _load_rate_card_rows(request)
     items = []
     for jr in runs:
-        counts = run_repo.count_run_structure_for_job_run(jr.id, uid)
-        usage_rows = run_repo.list_usage_records_for_job_run(jr.id, uid)
+        counts = await run_repo.count_run_structure_for_job_run(jr.id, uid)
+        usage_rows = await run_repo.list_usage_records_for_job_run(jr.id, uid)
         items.append(
             {
                 "jobRun": _job_run_admin_dict(jr),
@@ -490,7 +490,7 @@ def list_user_runs_admin(
 
 
 @router.get("/users/{user_id}/runs/{job_run_id}")
-def get_user_run_detail_admin(
+async def get_user_run_detail_admin(
     request: Request,
     user_id: UUID,
     job_run_id: UUID,
@@ -506,15 +506,15 @@ def get_user_run_detail_admin(
         uid,
         jrid,
     )
-    jr = run_repo.get_job_run(jrid, uid)
+    jr = await run_repo.get_job_run(jrid, uid)
     if jr is None:
         raise HTTPException(status_code=404, detail="Job run not found for this user")
-    counts = run_repo.count_run_structure_for_job_run(jrid, uid)
-    usage_rows = run_repo.list_usage_records_for_job_run(jrid, uid)
-    stages = run_repo.list_stage_runs_for_job_run(jrid, uid)
-    pipelines = run_repo.list_pipeline_run_executions_for_job_run(jrid, uid)
-    steps = run_repo.list_step_runs_for_job_run(jrid, uid)
-    rate_rows = _load_rate_card_rows(request)
+    counts = await run_repo.count_run_structure_for_job_run(jrid, uid)
+    usage_rows = await run_repo.list_usage_records_for_job_run(jrid, uid)
+    stages = await run_repo.list_stage_runs_for_job_run(jrid, uid)
+    pipelines = await run_repo.list_pipeline_run_executions_for_job_run(jrid, uid)
+    steps = await run_repo.list_step_runs_for_job_run(jrid, uid)
+    rate_rows = await _load_rate_card_rows(request)
     return {
         "userId": uid,
         "jobRun": _job_run_admin_dict(jr),
@@ -541,7 +541,7 @@ def get_user_run_detail_admin(
 
 
 @router.get("/limits/global")
-def get_limits_global_admin(
+async def get_limits_global_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -554,7 +554,7 @@ def get_limits_global_admin(
 
 
 @router.put("/limits/global")
-def put_limits_global_admin(
+async def put_limits_global_admin(
     request: Request,
     body: AppLimitsPayload,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -567,7 +567,7 @@ def put_limits_global_admin(
 
 
 @router.get("/limits/new-user-defaults")
-def get_limits_new_user_defaults_admin(
+async def get_limits_new_user_defaults_admin(
     request: Request,
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
@@ -590,7 +590,7 @@ def get_limits_new_user_defaults_admin(
 
 
 @router.put("/limits/new-user-defaults")
-def put_limits_new_user_defaults_admin(
+async def put_limits_new_user_defaults_admin(
     request: Request,
     body: AppLimitsPayload,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -616,7 +616,7 @@ def put_limits_new_user_defaults_admin(
 
 
 @router.get("/limits/users/{user_id}")
-def get_user_limits_detail_admin(
+async def get_user_limits_detail_admin(
     request: Request,
     user_id: UUID,
     ctx: AuthContext = Depends(require_admin_managed_auth),
@@ -635,8 +635,8 @@ def get_user_limits_detail_admin(
     job_repo = getattr(request.app.state, "job_repository", None)
     trigger_repo = getattr(request.app.state, "trigger_repository", None)
     run_repo = getattr(request.app.state, "supabase_run_repository", None)
-    n_jobs = len(job_repo.list_by_owner(uid)) if job_repo else 0
-    n_triggers = len(trigger_repo.list_by_owner(uid)) if trigger_repo else 0
+    n_jobs = len(await job_repo.list_by_owner(uid)) if job_repo else 0
+    n_triggers = len(await trigger_repo.list_by_owner(uid)) if trigger_repo else 0
 
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -644,8 +644,8 @@ def get_user_limits_detail_admin(
     runs_day = 0
     runs_month = 0
     if run_repo is not None and hasattr(run_repo, "count_job_runs_owner_since_utc"):
-        runs_day = run_repo.count_job_runs_owner_since_utc(uid, day_start.isoformat())
-        runs_month = run_repo.count_job_runs_owner_since_utc(uid, month_start.isoformat())
+        runs_day = await run_repo.count_job_runs_owner_since_utc(uid, day_start.isoformat())
+        runs_month = await run_repo.count_job_runs_owner_since_utc(uid, month_start.isoformat())
 
     summary = limits_resolution_summary(g, u, eff)
     logger.info("admin_get_user_limits_detail | admin_user_id={} target_user_id={}", ctx.user_id, uid)
@@ -677,7 +677,7 @@ def get_user_limits_detail_admin(
 
 
 @router.put("/limits/users/{user_id}")
-def put_user_limits_admin(
+async def put_user_limits_admin(
     request: Request,
     user_id: UUID,
     body: AppLimitsPayload,

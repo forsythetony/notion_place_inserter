@@ -11,7 +11,7 @@ from loguru import logger
 
 from app.env_bootstrap import bootstrap_env, log_env_masked
 from app.integrations.supabase_config import load_supabase_config
-from app.integrations.supabase_client import create_supabase_client
+from app.integrations.supabase_client import create_async_supabase_client
 from app.queue.events import EventBus, subscribe_to_success
 from app.queue.memory_diagnostics import (
     parse_diagnostics_enabled,
@@ -123,22 +123,8 @@ def _configure_logger() -> None:
     )
 
 
-def _cleanup_queue_repo(queue_repo: object) -> None:
-    """Best-effort close of queue repository session. Logs errors, does not raise."""
-    close_fn = getattr(queue_repo, "close", None)
-    if callable(close_fn):
-        try:
-            close_fn()
-        except Exception:
-            logger.exception("worker_queue_repo_close_failed")
-
-
-def main() -> None:
-    """Bootstrap services and run worker loop until shutdown."""
-    bootstrap_env()
-    _configure_logger()
-    log_env_masked()
-
+async def _async_worker_main() -> None:
+    """Bootstrap async Supabase client and run worker until cancelled; close queue client."""
     notion_key = os.environ.get("NOTION_API_KEY")
     if not notion_key:
         raise RuntimeError("NOTION_API_KEY environment variable is required")
@@ -150,7 +136,7 @@ def main() -> None:
         raise RuntimeError("GOOGLE_PLACES_API_KEY environment variable is required")
 
     supabase_config = load_supabase_config()
-    supabase_client = create_supabase_client(supabase_config)
+    supabase_client = await create_async_supabase_client(supabase_config)
     queue_repo = SupabaseQueueRepository(supabase_client, supabase_config)
     run_repo = PostgresRunRepository(supabase_client)
 
@@ -272,9 +258,8 @@ def main() -> None:
         supabase_host,
     )
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    worker_task = loop.create_task(
+    loop = asyncio.get_running_loop()
+    worker_task = asyncio.create_task(
         run_worker_loop(
             queue_repo,
             run_repo,
@@ -302,12 +287,30 @@ def main() -> None:
         pass  # Windows does not support add_signal_handler
 
     try:
-        loop.run_until_complete(worker_task)
+        await worker_task
     except asyncio.CancelledError:
         logger.info("worker_stopped")
     finally:
-        _cleanup_queue_repo(queue_repo)
-        loop.close()
+        await _aclose_queue_repo_best_effort(queue_repo)
+
+
+async def _aclose_queue_repo_best_effort(queue_repo: object) -> None:
+    """Best-effort ``await queue_repo.aclose()`` for async HTTP cleanup."""
+    aclose_fn = getattr(queue_repo, "aclose", None)
+    if not callable(aclose_fn):
+        return
+    try:
+        await aclose_fn()
+    except Exception:
+        logger.exception("worker_queue_repo_close_failed")
+
+
+def main() -> None:
+    """Bootstrap services and run worker loop until shutdown."""
+    bootstrap_env()
+    _configure_logger()
+    log_env_masked()
+    asyncio.run(_async_worker_main())
 
 
 if __name__ == "__main__":

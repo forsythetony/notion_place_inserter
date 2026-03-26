@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,14 +14,20 @@ from app.services.supabase_queue_repository import QueueMessage
 @pytest.fixture
 def mock_queue_repo():
     repo = MagicMock()
+    repo.read = AsyncMock(return_value=[])
+    repo.archive = AsyncMock()
     return repo
 
 
 @pytest.fixture
 def mock_run_repo():
     repo = MagicMock()
-    repo.get_run_status.return_value = None  # not terminal
-    repo.get_job_retry_count.return_value = 0
+    repo.get_run_status = AsyncMock(return_value=None)  # not terminal
+    repo.get_job_retry_count = AsyncMock(return_value=0)
+    repo.update_job_status = AsyncMock()
+    repo.update_run = AsyncMock()
+    repo.insert_event = AsyncMock()
+    repo.increment_job_retry_count = AsyncMock(return_value=None)
     return repo
 
 
@@ -31,14 +37,16 @@ def mock_job_definition_service():
     snapshot = MagicMock()
     snapshot.snapshot = {"job": {}, "target": {"external_target_id": "ds-123"}, "active_schema": {}}
     snapshot.snapshot_ref = "job_snapshot:user1:job1:abc"
-    svc.resolve_for_run.return_value = snapshot
+    svc.resolve_for_run = AsyncMock(return_value=snapshot)
     return svc
 
 
 @pytest.fixture
 def mock_job_execution_service():
     svc = MagicMock()
-    svc.execute_snapshot_run.return_value = {"id": "page-123", "mode": "create"}
+    svc.execute_snapshot_run = AsyncMock(
+        return_value={"id": "page-123", "mode": "create"}
+    )
     return svc
 
 

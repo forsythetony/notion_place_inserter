@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.domain import (
     AppLimits,
@@ -262,12 +262,12 @@ class PostgresConnectorTemplateRepository:
 
     TABLE = "connector_templates"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_by_id(self, id: str) -> ConnectorTemplate | None:
+    async def get_by_id(self, id: str) -> ConnectorTemplate | None:
         try:
-            r = self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
         except Exception as e:
             logger.exception("postgres_connector_template_get_failed | id={} error={}", id, e)
             raise
@@ -276,15 +276,15 @@ class PostgresConnectorTemplateRepository:
             return None
         return _row_to_connector_template(rows[0])
 
-    def list_all(self) -> list[ConnectorTemplate]:
+    async def list_all(self) -> list[ConnectorTemplate]:
         try:
-            r = self._client.table(self.TABLE).select("*").execute()
+            r = await self._client.table(self.TABLE).select("*").execute()
         except Exception as e:
             logger.exception("postgres_connector_template_list_failed | error={}", e)
             raise
         return [_row_to_connector_template(row) for row in (r.data or [])]
 
-    def save(self, template: ConnectorTemplate) -> None:
+    async def save(self, template: ConnectorTemplate) -> None:
         row = {
             "id": template.id,
             "slug": template.slug,
@@ -299,14 +299,14 @@ class PostgresConnectorTemplateRepository:
             "visibility": template.visibility,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_connector_template_save_failed | id={} error={}", template.id, e)
             raise
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         try:
-            self._client.table(self.TABLE).delete().eq("id", id).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).execute()
         except Exception as e:
             logger.exception("postgres_connector_template_delete_failed | id={} error={}", id, e)
             raise
@@ -317,12 +317,12 @@ class PostgresTargetTemplateRepository:
 
     TABLE = "target_templates"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_by_id(self, id: str) -> TargetTemplate | None:
+    async def get_by_id(self, id: str) -> TargetTemplate | None:
         try:
-            r = self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
         except Exception as e:
             logger.exception("postgres_target_template_get_failed | id={} error={}", id, e)
             raise
@@ -331,15 +331,15 @@ class PostgresTargetTemplateRepository:
             return None
         return _row_to_target_template(rows[0])
 
-    def list_all(self) -> list[TargetTemplate]:
+    async def list_all(self) -> list[TargetTemplate]:
         try:
-            r = self._client.table(self.TABLE).select("*").execute()
+            r = await self._client.table(self.TABLE).select("*").execute()
         except Exception as e:
             logger.exception("postgres_target_template_list_failed | error={}", e)
             raise
         return [_row_to_target_template(row) for row in (r.data or [])]
 
-    def save(self, template: TargetTemplate) -> None:
+    async def save(self, template: TargetTemplate) -> None:
         row = {
             "id": template.id,
             "slug": template.slug,
@@ -352,14 +352,14 @@ class PostgresTargetTemplateRepository:
             "visibility": template.visibility,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_target_template_save_failed | id={} error={}", template.id, e)
             raise
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         try:
-            self._client.table(self.TABLE).delete().eq("id", id).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).execute()
         except Exception as e:
             logger.exception("postgres_target_template_delete_failed | id={} error={}", id, e)
             raise
@@ -370,12 +370,12 @@ class PostgresStepTemplateRepository:
 
     TABLE = "step_templates"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_by_id(self, id: str) -> StepTemplate | None:
+    async def get_by_id(self, id: str) -> StepTemplate | None:
         try:
-            r = self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).limit(1).execute()
         except Exception as e:
             logger.exception("postgres_step_template_get_failed | id={} error={}", id, e)
             raise
@@ -384,15 +384,15 @@ class PostgresStepTemplateRepository:
             return None
         return _row_to_step_template(rows[0])
 
-    def list_all(self) -> list[StepTemplate]:
+    async def list_all(self) -> list[StepTemplate]:
         try:
-            r = self._client.table(self.TABLE).select("*").execute()
+            r = await self._client.table(self.TABLE).select("*").execute()
         except Exception as e:
             logger.exception("postgres_step_template_list_failed | error={}", e)
             raise
         return [_row_to_step_template(row) for row in (r.data or [])]
 
-    def save(self, template: StepTemplate) -> None:
+    async def save(self, template: StepTemplate) -> None:
         row = {
             "id": template.id,
             "slug": template.slug,
@@ -409,14 +409,14 @@ class PostgresStepTemplateRepository:
             "query_schema": template.query_schema,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_step_template_save_failed | id={} error={}", template.id, e)
             raise
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         try:
-            self._client.table(self.TABLE).delete().eq("id", id).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).execute()
         except Exception as e:
             logger.exception("postgres_step_template_delete_failed | id={} error={}", id, e)
             raise
@@ -427,13 +427,13 @@ class PostgresConnectorInstanceRepository:
 
     TABLE = "connector_instances"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_by_id(self, id: str, owner_user_id: str) -> ConnectorInstance | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> ConnectorInstance | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -444,10 +444,10 @@ class PostgresConnectorInstanceRepository:
             return None
         return _row_to_connector_instance(rows[0], owner_user_id)
 
-    def list_by_owner(self, owner_user_id: str) -> list[ConnectorInstance]:
+    async def list_by_owner(self, owner_user_id: str) -> list[ConnectorInstance]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
         except ValueError:
             return []
         except Exception as e:
@@ -455,7 +455,7 @@ class PostgresConnectorInstanceRepository:
             raise
         return [_row_to_connector_instance(row, owner_user_id) for row in (r.data or [])]
 
-    def save(self, instance: ConnectorInstance) -> None:
+    async def save(self, instance: ConnectorInstance) -> None:
         uid = str(_ensure_uuid(instance.owner_user_id))
         row = {
             "id": instance.id,
@@ -477,15 +477,15 @@ class PostgresConnectorInstanceRepository:
             "metadata": instance.metadata or {},
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_connector_instance_save_failed | id={} error={}", instance.id, e)
             raise
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_connector_instance_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
@@ -498,7 +498,7 @@ class PostgresTargetRepository:
 
     def __init__(
         self,
-        client: Client,
+        client: AsyncClient,
         validation_service: ValidationService | None = None,
     ) -> None:
         self._client = client
@@ -507,10 +507,10 @@ class PostgresTargetRepository:
     def set_validation_service(self, validation_service: ValidationService | None) -> None:
         self._validation_service = validation_service
 
-    def get_by_id(self, id: str, owner_user_id: str) -> DataTarget | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> DataTarget | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -521,10 +521,10 @@ class PostgresTargetRepository:
             return None
         return _row_to_data_target(rows[0], owner_user_id)
 
-    def list_by_owner(self, owner_user_id: str) -> list[DataTarget]:
+    async def list_by_owner(self, owner_user_id: str) -> list[DataTarget]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
         except ValueError:
             return []
         except Exception as e:
@@ -532,13 +532,13 @@ class PostgresTargetRepository:
             raise
         return [_row_to_data_target(row, owner_user_id) for row in (r.data or [])]
 
-    def list_by_connector(
+    async def list_by_connector(
         self, connector_instance_id: str, owner_user_id: str
     ) -> list[DataTarget]:
         """List data targets for a connector instance (e.g. Notion)."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.TABLE)
                 .select("*")
                 .eq("owner_user_id", uid)
@@ -557,9 +557,9 @@ class PostgresTargetRepository:
             raise
         return [_row_to_data_target(row, owner_user_id) for row in (r.data or [])]
 
-    def save(self, target: DataTarget) -> None:
+    async def save(self, target: DataTarget) -> None:
         if self._validation_service:
-            self._validation_service.validate_data_target(target)
+            await self._validation_service.validate_data_target(target)
         uid = str(_ensure_uuid(target.owner_user_id))
         row = {
             "id": target.id,
@@ -575,15 +575,15 @@ class PostgresTargetRepository:
             "visibility": target.visibility,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_target_save_failed | id={} error={}", target.id, e)
             raise
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_target_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
@@ -594,13 +594,13 @@ class PostgresTargetSchemaRepository:
 
     TABLE = "target_schema_snapshots"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_by_id(self, id: str, owner_user_id: str) -> TargetSchemaSnapshot | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> TargetSchemaSnapshot | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -611,10 +611,10 @@ class PostgresTargetSchemaRepository:
             return None
         return _row_to_target_schema_snapshot(rows[0], owner_user_id)
 
-    def list_by_owner(self, owner_user_id: str) -> list[TargetSchemaSnapshot]:
+    async def list_by_owner(self, owner_user_id: str) -> list[TargetSchemaSnapshot]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
         except ValueError:
             return []
         except Exception as e:
@@ -622,15 +622,16 @@ class PostgresTargetSchemaRepository:
             raise
         return [_row_to_target_schema_snapshot(row, owner_user_id) for row in (r.data or [])]
 
-    def get_active_for_target(
+    async def get_active_for_target(
         self, data_target_id: str, owner_user_id: str
     ) -> TargetSchemaSnapshot | None:
-        for snap in self.list_by_owner(owner_user_id):
+        snaps = await self.list_by_owner(owner_user_id)
+        for snap in snaps:
             if snap.data_target_id == data_target_id and snap.is_active:
                 return snap
         return None
 
-    def get_fetched_at_for_snapshots(
+    async def get_fetched_at_for_snapshots(
         self, snapshot_ids: list[str], owner_user_id: str
     ) -> dict[str, datetime]:
         """Batch fetch fetched_at for given snapshot ids. Returns {id: fetched_at}."""
@@ -638,7 +639,7 @@ class PostgresTargetSchemaRepository:
             return {}
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.TABLE)
                 .select("id, fetched_at")
                 .eq("owner_user_id", uid)
@@ -663,7 +664,7 @@ class PostgresTargetSchemaRepository:
                     result[row["id"]] = parsed
         return result
 
-    def save(self, snapshot: TargetSchemaSnapshot) -> None:
+    async def save(self, snapshot: TargetSchemaSnapshot) -> None:
         uid = str(_ensure_uuid(snapshot.owner_user_id))
         props = [
             {
@@ -694,15 +695,15 @@ class PostgresTargetSchemaRepository:
             "raw_source_payload": snapshot.raw_source_payload,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_target_schema_save_failed | id={} error={}", snapshot.id, e)
             raise
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_target_schema_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
@@ -715,7 +716,7 @@ class PostgresTriggerRepository:
 
     def __init__(
         self,
-        client: Client,
+        client: AsyncClient,
         validation_service: ValidationService | None = None,
     ) -> None:
         self._client = client
@@ -724,10 +725,10 @@ class PostgresTriggerRepository:
     def set_validation_service(self, validation_service: ValidationService | None) -> None:
         self._validation_service = validation_service
 
-    def get_by_id(self, id: str, owner_user_id: str) -> TriggerDefinition | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> TriggerDefinition | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -738,10 +739,10 @@ class PostgresTriggerRepository:
             return None
         return _row_to_trigger(rows[0], owner_user_id)
 
-    def get_by_path(self, path: str, owner_user_id: str) -> TriggerDefinition | None:
+    async def get_by_path(self, path: str, owner_user_id: str) -> TriggerDefinition | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).eq("path", path).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).eq("path", path).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -752,10 +753,10 @@ class PostgresTriggerRepository:
             return None
         return _row_to_trigger(rows[0], owner_user_id)
 
-    def list_by_owner(self, owner_user_id: str) -> list[TriggerDefinition]:
+    async def list_by_owner(self, owner_user_id: str) -> list[TriggerDefinition]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).execute()
         except ValueError:
             return []
         except Exception as e:
@@ -763,9 +764,9 @@ class PostgresTriggerRepository:
             raise
         return [_row_to_trigger(row, owner_user_id) for row in (r.data or [])]
 
-    def save(self, trigger: TriggerDefinition) -> None:
+    async def save(self, trigger: TriggerDefinition) -> None:
         if self._validation_service:
-            self._validation_service.validate_trigger(trigger)
+            await self._validation_service.validate_trigger(trigger)
         uid = str(_ensure_uuid(trigger.owner_user_id))
         secret_rotated = trigger.secret_last_rotated_at
         if hasattr(secret_rotated, "isoformat"):
@@ -785,24 +786,24 @@ class PostgresTriggerRepository:
             "visibility": trigger.visibility,
         }
         try:
-            self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_trigger_save_failed | id={} error={}", trigger.id, e)
             raise
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
+            await self._client.table(self.TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_trigger_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
 
-    def rotate_secret(self, id: str, owner_user_id: str) -> tuple[TriggerDefinition, str]:
+    async def rotate_secret(self, id: str, owner_user_id: str) -> tuple[TriggerDefinition, str]:
         """
         Generate a new secret for the trigger, persist it, and return (updated trigger, new_plaintext_secret).
         """
-        trigger = self.get_by_id(id, owner_user_id)
+        trigger = await self.get_by_id(id, owner_user_id)
         if not trigger:
             raise ValueError(f"Trigger not found: id={id} owner={owner_user_id}")
         new_secret = secrets.token_hex(15)  # ~30 chars
@@ -823,7 +824,7 @@ class PostgresTriggerRepository:
             created_at=trigger.created_at,
             updated_at=now,
         )
-        self.save(updated)
+        await self.save(updated)
         return updated, new_secret
 
 
@@ -832,15 +833,15 @@ class PostgresTriggerJobLinkRepository:
 
     TABLE = "trigger_job_links"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def list_job_ids_for_trigger(
+    async def list_job_ids_for_trigger(
         self, trigger_id: str, owner_user_id: str
     ) -> list[str]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.TABLE)
                 .select("job_id")
                 .eq("trigger_id", trigger_id)
@@ -859,16 +860,16 @@ class PostgresTriggerJobLinkRepository:
             raise
         return [row["job_id"] for row in (r.data or [])]
 
-    def list_dispatchable_job_ids_for_trigger(
+    async def list_dispatchable_job_ids_for_trigger(
         self, trigger_id: str, owner_user_id: str
     ) -> list[str]:
         """Linked job IDs with status ``active``, same order as link rows."""
-        linked = self.list_job_ids_for_trigger(trigger_id, owner_user_id)
+        linked = await self.list_job_ids_for_trigger(trigger_id, owner_user_id)
         if not linked:
             return []
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table("job_definitions")
                 .select("id")
                 .eq("owner_user_id", uid)
@@ -889,12 +890,12 @@ class PostgresTriggerJobLinkRepository:
         active_ids = {row["id"] for row in (r.data or [])}
         return [jid for jid in linked if jid in active_ids]
 
-    def list_trigger_ids_for_job(
+    async def list_trigger_ids_for_job(
         self, job_id: str, owner_user_id: str
     ) -> list[str]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.TABLE)
                 .select("trigger_id")
                 .eq("job_id", job_id)
@@ -914,8 +915,8 @@ class PostgresTriggerJobLinkRepository:
         ids = [row["trigger_id"] for row in (r.data or [])]
         return sorted(ids)
 
-    def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
-        existing = self.list_trigger_ids_for_job(job_id, owner_user_id)
+    async def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
+        existing = await self.list_trigger_ids_for_job(job_id, owner_user_id)
         validate_one_trigger_per_job_attach(existing, trigger_id)
 
         uid = str(_ensure_uuid(owner_user_id))
@@ -925,7 +926,7 @@ class PostgresTriggerJobLinkRepository:
             "owner_user_id": uid,
         }
         try:
-            self._client.table(self.TABLE).upsert(
+            await self._client.table(self.TABLE).upsert(
                 row, on_conflict="trigger_id,job_id,owner_user_id"
             ).execute()
         except Exception as e:
@@ -937,10 +938,10 @@ class PostgresTriggerJobLinkRepository:
             )
             raise
 
-    def detach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
+    async def detach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            self._client.table(self.TABLE).delete().eq(
+            await self._client.table(self.TABLE).delete().eq(
                 "trigger_id", trigger_id
             ).eq("job_id", job_id).eq("owner_user_id", uid).execute()
         except Exception as e:
@@ -964,7 +965,7 @@ class PostgresJobRepository:
 
     def __init__(
         self,
-        client: Client,
+        client: AsyncClient,
         validation_service: ValidationService | None = None,
     ) -> None:
         self._client = client
@@ -973,21 +974,21 @@ class PostgresJobRepository:
     def set_validation_service(self, validation_service: ValidationService | None) -> None:
         self._validation_service = validation_service
 
-    def get_bootstrap_job(self, job_slug: str) -> JobDefinition | None:
+    async def get_bootstrap_job(self, job_slug: str) -> JobDefinition | None:
         # In Postgres mode, bootstrap is provisioned per-owner; no global bootstrap row.
         return None
 
-    def get_by_id(self, id: str, owner_user_id: str) -> JobDefinition | None:
-        graph = self.get_graph_by_id(id, owner_user_id)
+    async def get_by_id(self, id: str, owner_user_id: str) -> JobDefinition | None:
+        graph = await self.get_graph_by_id(id, owner_user_id)
         return graph.job if graph else None
 
-    def get_graph_by_id(self, id: str, owner_user_id: str) -> JobGraph | None:
+    async def get_graph_by_id(self, id: str, owner_user_id: str) -> JobGraph | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
         except ValueError:
             return None
         try:
-            r = self._client.table(self.JOB_TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.JOB_TABLE).select("*").eq("id", id).eq("owner_user_id", uid).limit(1).execute()
         except Exception as e:
             logger.exception("postgres_job_get_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
@@ -1000,7 +1001,7 @@ class PostgresJobRepository:
         job = _row_to_job(job_row, owner_user_id)
 
         # Load stages
-        r_stages = (
+        r_stages = await (
             self._client.table(self.STAGE_TABLE)
             .select("*")
             .eq("job_id", id)
@@ -1018,7 +1019,7 @@ class PostgresJobRepository:
             stages.append(stage)
 
             # Load pipelines for this stage
-            r_pipes = (
+            r_pipes = await (
                 self._client.table(self.PIPELINE_TABLE)
                 .select("*")
                 .eq("stage_id", stage.id)
@@ -1032,7 +1033,7 @@ class PostgresJobRepository:
                 pipelines.append(pipe)
 
                 # Load steps for this pipeline
-                r_steps = (
+                r_steps = await (
                     self._client.table(self.STEP_TABLE)
                     .select("*")
                     .eq("pipeline_id", pipe.id)
@@ -1046,10 +1047,10 @@ class PostgresJobRepository:
 
         return JobGraph(job=job, stages=stages, pipelines=pipelines, steps=steps)
 
-    def list_by_owner(self, owner_user_id: str) -> list[JobDefinition]:
+    async def list_by_owner(self, owner_user_id: str) -> list[JobDefinition]:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.JOB_TABLE)
                 .select("*")
                 .eq("owner_user_id", uid)
@@ -1063,7 +1064,7 @@ class PostgresJobRepository:
             raise
         return [_row_to_job(row, owner_user_id) for row in (r.data or [])]
 
-    def save(self, job: JobDefinition) -> None:
+    async def save(self, job: JobDefinition) -> None:
         uid = str(_ensure_uuid(job.owner_user_id))
         row = {
             "id": job.id,
@@ -1078,17 +1079,17 @@ class PostgresJobRepository:
         if job.updated_at is not None:
             row["updated_at"] = job.updated_at.isoformat()
         try:
-            self._client.table(self.JOB_TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.JOB_TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_job_save_failed | id={} error={}", job.id, e)
             raise
 
-    def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
+    async def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
         """Update job row status and updated_at only (no graph validation or child rows)."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
             now = datetime.now(timezone.utc).isoformat()
-            self._client.table(self.JOB_TABLE).update({"status": status, "updated_at": now}).eq(
+            await self._client.table(self.JOB_TABLE).update({"status": status, "updated_at": now}).eq(
                 "id", id
             ).eq("owner_user_id", uid).execute()
         except ValueError:
@@ -1097,19 +1098,21 @@ class PostgresJobRepository:
             logger.exception("postgres_job_update_status_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
 
-    def save_job_graph(
+    async def save_job_graph(
         self,
         graph: JobGraph,
         *,
         skip_reference_checks: bool = False,
     ) -> None:
         if self._validation_service:
-            self._validation_service.validate_job_graph(graph, skip_reference_checks=skip_reference_checks)
+            await self._validation_service.validate_job_graph(
+                graph, skip_reference_checks=skip_reference_checks
+            )
         job = graph.job
         uid = str(_ensure_uuid(job.owner_user_id))
 
         # Upsert job
-        self.save(job)
+        await self.save(job)
 
         # Upsert stages
         for stage in graph.stages:
@@ -1122,7 +1125,7 @@ class PostgresJobRepository:
                 "pipeline_ids": stage.pipeline_ids,
                 "pipeline_run_mode": stage.pipeline_run_mode,
             }
-            self._client.table(self.STAGE_TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.STAGE_TABLE).upsert(row, on_conflict="id,owner_user_id").execute()
 
         # Upsert pipelines and steps
         for pipeline in graph.pipelines:
@@ -1135,7 +1138,7 @@ class PostgresJobRepository:
                 "step_ids": pipeline.step_ids,
                 "purpose": pipeline.purpose,
             }
-            self._client.table(self.PIPELINE_TABLE).upsert(prow, on_conflict="id,owner_user_id").execute()
+            await self._client.table(self.PIPELINE_TABLE).upsert(prow, on_conflict="id,owner_user_id").execute()
 
             for step in graph.steps:
                 if step.pipeline_id != pipeline.id:
@@ -1151,25 +1154,25 @@ class PostgresJobRepository:
                     "config": step.config,
                     "failure_policy": step.failure_policy,
                 }
-                self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
+                await self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
 
-    def archive(self, id: str, owner_user_id: str) -> None:
+    async def archive(self, id: str, owner_user_id: str) -> None:
         """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
             now = datetime.now(timezone.utc).isoformat()
-            self._client.table(self.JOB_TABLE).update(
+            await self._client.table(self.JOB_TABLE).update(
                 {"status": "archived", "updated_at": now}
             ).eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_job_archive_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
             # Cascade will remove stages, pipelines, steps
-            self._client.table(self.JOB_TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
+            await self._client.table(self.JOB_TABLE).delete().eq("id", id).eq("owner_user_id", uid).execute()
         except Exception as e:
             logger.exception("postgres_job_delete_failed | id={} owner={} error={}", id, owner_user_id, e)
             raise
@@ -1181,24 +1184,24 @@ class PostgresAppConfigRepository:
     TABLE = "app_limits"
     NEW_USER_DEFAULTS_TABLE = "app_limits_new_user_defaults"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_global_row(self) -> dict[str, Any] | None:
+    async def get_global_row(self) -> dict[str, Any] | None:
         """Return the platform global limits row (``owner_user_id`` IS NULL), or None."""
         try:
-            r = self._client.table(self.TABLE).select("*").is_("owner_user_id", "null").limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").is_("owner_user_id", "null").limit(1).execute()
         except Exception as e:
             logger.exception("postgres_app_config_get_global_failed | error={}", e)
             raise
         rows = r.data or []
         return rows[0] if rows else None
 
-    def get_user_row(self, owner_user_id: str) -> dict[str, Any] | None:
+    async def get_user_row(self, owner_user_id: str) -> dict[str, Any] | None:
         """Return the per-owner ``app_limits`` row if present."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).limit(1).execute()
+            r = await self._client.table(self.TABLE).select("*").eq("owner_user_id", uid).limit(1).execute()
         except ValueError:
             return None
         except Exception as e:
@@ -1207,13 +1210,13 @@ class PostgresAppConfigRepository:
         rows = r.data or []
         return rows[0] if rows else None
 
-    def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
+    async def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
         from app.services.effective_limits import LimitsResolutionError, resolve_effective_app_limits
 
-        g = self.get_global_row()
+        g = await self.get_global_row()
         if not g:
             return None
-        u = self.get_user_row(owner_user_id)
+        u = await self.get_user_row(owner_user_id)
         try:
             return resolve_effective_app_limits(
                 g,
@@ -1229,7 +1232,7 @@ class PostgresAppConfigRepository:
             )
             return None
 
-    def save(self, owner_user_id: str, limits: AppLimits) -> None:
+    async def save(self, owner_user_id: str, limits: AppLimits) -> None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
             row = {
@@ -1242,12 +1245,12 @@ class PostgresAppConfigRepository:
                 "max_runs_per_utc_day": limits.max_runs_per_utc_day,
                 "max_runs_per_utc_month": limits.max_runs_per_utc_month,
             }
-            self._client.table(self.TABLE).upsert(row, on_conflict="owner_user_id").execute()
+            await self._client.table(self.TABLE).upsert(row, on_conflict="owner_user_id").execute()
         except Exception as e:
             logger.exception("postgres_app_config_save_failed | owner={} error={}", owner_user_id, e)
             raise
 
-    def upsert_global_row(self, limits: AppLimits) -> None:
+    async def upsert_global_row(self, limits: AppLimits) -> None:
         """Replace platform global row (service role / admin only)."""
         try:
             payload = {
@@ -1259,27 +1262,27 @@ class PostgresAppConfigRepository:
                 "max_runs_per_utc_day": limits.max_runs_per_utc_day,
                 "max_runs_per_utc_month": limits.max_runs_per_utc_month,
             }
-            ex = self.get_global_row()
+            ex = await self.get_global_row()
             if ex:
-                self._client.table(self.TABLE).update(payload).eq("id", ex["id"]).execute()
+                await self._client.table(self.TABLE).update(payload).eq("id", ex["id"]).execute()
             else:
                 row = {"owner_user_id": None, **payload}
-                self._client.table(self.TABLE).insert(row).execute()
+                await self._client.table(self.TABLE).insert(row).execute()
         except Exception as e:
             logger.exception("postgres_app_config_upsert_global_failed | error={}", e)
             raise
 
-    def get_new_user_defaults_row(self) -> dict[str, Any] | None:
+    async def get_new_user_defaults_row(self) -> dict[str, Any] | None:
         """Single-row template copied to new owners at provisioning (not used in runtime merge)."""
         try:
-            r = self._client.table(self.NEW_USER_DEFAULTS_TABLE).select("*").eq("id", 1).limit(1).execute()
+            r = await self._client.table(self.NEW_USER_DEFAULTS_TABLE).select("*").eq("id", 1).limit(1).execute()
         except Exception as e:
             logger.exception("postgres_app_limits_new_user_defaults_get_failed | error={}", e)
             raise
         rows = r.data or []
         return rows[0] if rows else None
 
-    def upsert_new_user_defaults(self, limits: AppLimits) -> None:
+    async def upsert_new_user_defaults(self, limits: AppLimits) -> None:
         """Admin: replace id=1 row in ``app_limits_new_user_defaults``."""
         try:
             row = {
@@ -1292,16 +1295,16 @@ class PostgresAppConfigRepository:
                 "max_runs_per_utc_day": limits.max_runs_per_utc_day,
                 "max_runs_per_utc_month": limits.max_runs_per_utc_month,
             }
-            self._client.table(self.NEW_USER_DEFAULTS_TABLE).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.NEW_USER_DEFAULTS_TABLE).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_app_limits_new_user_defaults_upsert_failed | error={}", e)
             raise
 
-    def seed_user_limits_from_defaults_if_missing(self, owner_user_id: str) -> None:
+    async def seed_user_limits_from_defaults_if_missing(self, owner_user_id: str) -> None:
         """Insert per-owner ``app_limits`` from ``app_limits_new_user_defaults`` when no user row exists."""
-        if self.get_user_row(owner_user_id) is not None:
+        if await self.get_user_row(owner_user_id) is not None:
             return
-        d = self.get_new_user_defaults_row()
+        d = await self.get_new_user_defaults_row()
         if not d:
             return
         try:
@@ -1314,7 +1317,7 @@ class PostgresAppConfigRepository:
                 max_runs_per_utc_day=int(d["max_runs_per_utc_day"]),
                 max_runs_per_utc_month=int(d["max_runs_per_utc_month"]),
             )
-            self.save(owner_user_id, limits)
+            await self.save(owner_user_id, limits)
             logger.info("app_limits_seeded_from_new_user_defaults | owner={}", owner_user_id)
         except Exception as e:
             logger.warning(
@@ -1329,10 +1332,10 @@ class PostgresOAuthConnectionStateRepository:
 
     TABLE = "oauth_connection_states"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def create(
+    async def create(
         self,
         owner_user_id: str,
         provider: str,
@@ -1350,16 +1353,16 @@ class PostgresOAuthConnectionStateRepository:
             "redirect_uri": redirect_uri,
             "expires_at": expires_at.isoformat() if hasattr(expires_at, "isoformat") else expires_at,
         }
-        r = self._client.table(self.TABLE).insert(row).execute()
+        r = await self._client.table(self.TABLE).insert(row).execute()
         rows = r.data or []
         if not rows:
             raise RuntimeError("oauth_state_insert_failed")
         return str(rows[0]["id"])
 
-    def consume_by_state_hash(self, state_token_hash: str) -> dict[str, Any] | None:
+    async def consume_by_state_hash(self, state_token_hash: str) -> dict[str, Any] | None:
         """Find and consume state by hash. Returns row with owner_user_id; None if invalid/expired."""
         now = datetime.now(timezone.utc).isoformat()
-        r = (
+        r = await (
             self._client.table(self.TABLE)
             .select("*")
             .eq("state_token_hash", state_token_hash)
@@ -1375,7 +1378,7 @@ class PostgresOAuthConnectionStateRepository:
             exp_str = exp.isoformat() if hasattr(exp, "isoformat") else str(exp)
             if exp_str < now:
                 return None
-        self._client.table(self.TABLE).update({"consumed_at": now}).eq("id", row["id"]).execute()
+        await self._client.table(self.TABLE).update({"consumed_at": now}).eq("id", row["id"]).execute()
         return row
 
 
@@ -1384,14 +1387,14 @@ class PostgresConnectorCredentialsRepository:
 
     TABLE = "connector_credentials"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def get_for_instance(
+    async def get_for_instance(
         self, connector_instance_id: str, owner_user_id: str, provider: str = "notion"
     ) -> dict[str, Any] | None:
         uid = str(_ensure_uuid(owner_user_id))
-        r = (
+        r = await (
             self._client.table(self.TABLE)
             .select("*")
             .eq("connector_instance_id", connector_instance_id)
@@ -1404,7 +1407,7 @@ class PostgresConnectorCredentialsRepository:
         rows = r.data or []
         return rows[0] if rows else None
 
-    def upsert(
+    async def upsert(
         self,
         connector_instance_id: str,
         owner_user_id: str,
@@ -1428,14 +1431,14 @@ class PostgresConnectorCredentialsRepository:
             # Re-connecting should reactivate credentials that were previously revoked.
             "revoked_at": None,
         }
-        self._client.table(self.TABLE).upsert(
+        await self._client.table(self.TABLE).upsert(
             row, on_conflict="owner_user_id,connector_instance_id,provider,credential_type"
         ).execute()
 
-    def revoke(self, connector_instance_id: str, owner_user_id: str, provider: str = "notion") -> None:
+    async def revoke(self, connector_instance_id: str, owner_user_id: str, provider: str = "notion") -> None:
         uid = str(_ensure_uuid(owner_user_id))
         now = datetime.now(timezone.utc).isoformat()
-        self._client.table(self.TABLE).update({"revoked_at": now}).eq(
+        await self._client.table(self.TABLE).update({"revoked_at": now}).eq(
             "connector_instance_id", connector_instance_id
         ).eq("owner_user_id", uid).eq("provider", provider).execute()
 
@@ -1445,14 +1448,14 @@ class PostgresConnectorExternalSourcesRepository:
 
     TABLE = "connector_external_sources"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
-    def list_for_instance(
+    async def list_for_instance(
         self, connector_instance_id: str, owner_user_id: str, provider: str = "notion"
     ) -> list[dict[str, Any]]:
         uid = str(_ensure_uuid(owner_user_id))
-        r = (
+        r = await (
             self._client.table(self.TABLE)
             .select("*")
             .eq("connector_instance_id", connector_instance_id)
@@ -1462,7 +1465,7 @@ class PostgresConnectorExternalSourcesRepository:
         )
         return r.data or []
 
-    def upsert_batch(
+    async def upsert_batch(
         self,
         connector_instance_id: str,
         owner_user_id: str,
@@ -1484,6 +1487,6 @@ class PostgresConnectorExternalSourcesRepository:
                 "last_sync_error": s.get("last_sync_error"),
                 "updated_at": now,
             }
-            self._client.table(self.TABLE).upsert(
+            await self._client.table(self.TABLE).upsert(
                 row, on_conflict="owner_user_id,connector_instance_id,external_source_id"
             ).execute()

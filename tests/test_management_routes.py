@@ -1,7 +1,7 @@
 """Unit tests for GET /management/* (dashboard list) routes."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,14 +37,16 @@ def _mock_user_response(user):
 def _setup_auth(client, user_id="550e8400-e29b-41d4-a716-446655440000"):
     """Set app.state so require_managed_auth passes."""
     mock_supabase = MagicMock()
-    mock_supabase.auth.get_user.return_value = _mock_user_response(
-        _mock_user(user_id, "user@example.com")
+    mock_supabase.auth.get_user = AsyncMock(
+        return_value=_mock_user_response(_mock_user(user_id, "user@example.com"))
     )
     mock_auth_repo = MagicMock()
-    mock_auth_repo.get_profile.return_value = {
-        "user_id": user_id,
-        "user_type": USER_TYPE_STANDARD,
-    }
+    mock_auth_repo.get_profile = AsyncMock(
+        return_value={
+            "user_id": user_id,
+            "user_type": USER_TYPE_STANDARD,
+        }
+    )
     app.state.supabase_client = mock_supabase
     app.state.supabase_auth_repository = mock_auth_repo
     return user_id
@@ -70,7 +72,7 @@ def test_management_pipelines_200_list_shape(client):
     """GET /management/pipelines with valid auth returns items list."""
     user_id = _setup_auth(client)
     mock_job_repo = MagicMock()
-    mock_job_repo.list_by_owner.return_value = [
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[
         JobDefinition(
             id="job-1",
             owner_user_id=user_id,
@@ -80,7 +82,7 @@ def test_management_pipelines_200_list_shape(client):
             stage_ids=["s1"],
             updated_at=datetime(2026, 3, 15, 12, 0, 0),
         ),
-    ]
+    ])
     app.state.job_repository = mock_job_repo
 
     resp = client.get(
@@ -96,7 +98,7 @@ def test_management_pipelines_200_list_shape(client):
     assert item["display_name"] == "Notion Place Inserter"
     assert item["status"] == "active"
     assert "2026-03-15" in (item["updated_at"] or "")
-    mock_job_repo.list_by_owner.assert_called_once_with(user_id)
+    mock_job_repo.list_by_owner.assert_awaited_once_with(user_id)
 
 
 def test_management_reprovision_starter_401_without_auth(client):
@@ -111,6 +113,7 @@ def test_management_reprovision_starter_200_calls_bootstrap_service(client):
     prev = getattr(app.state, "bootstrap_provisioning_service", None)
     try:
         mock_svc = MagicMock()
+        mock_svc.reprovision_owner_starter_definitions = AsyncMock()
         app.state.bootstrap_provisioning_service = mock_svc
         resp = client.post(
             "/management/bootstrap/reprovision-starter",
@@ -120,7 +123,7 @@ def test_management_reprovision_starter_200_calls_bootstrap_service(client):
         data = resp.json()
         assert data["status"] == "ok"
         assert data["job_id"] == "job_notion_place_inserter"
-        mock_svc.reprovision_owner_starter_definitions.assert_called_once_with(user_id)
+        mock_svc.reprovision_owner_starter_definitions.assert_awaited_once_with(user_id)
     finally:
         app.state.bootstrap_provisioning_service = prev
 
@@ -151,7 +154,7 @@ def test_management_step_templates_200_list_shape(client):
     """GET /management/step-templates with valid auth returns items list with full metadata."""
     _setup_auth(client)
     mock_step_template_repo = MagicMock()
-    mock_step_template_repo.list_all.return_value = [
+    mock_step_template_repo.list_all = AsyncMock(return_value=[
         StepTemplate(
             id="step_template_property_set",
             slug="property-set",
@@ -165,7 +168,7 @@ def test_management_step_templates_200_list_shape(client):
             category="transform",
             status="active",
         ),
-    ]
+    ])
     app.state.step_template_repository = mock_step_template_repo
 
     resp = client.get(
@@ -186,14 +189,14 @@ def test_management_step_templates_200_list_shape(client):
     assert "output_contract" in item
     assert "config_schema" in item
     assert item["config_schema"]["schema_property_id"]["type"] == "string"
-    mock_step_template_repo.list_all.assert_called_once()
+    mock_step_template_repo.list_all.assert_awaited_once()
 
 
 def test_management_step_template_detail_200(client):
     """GET /management/step-templates/{id} with valid auth returns full template metadata."""
     _setup_auth(client)
     mock_step_template_repo = MagicMock()
-    mock_step_template_repo.get_by_id.return_value = StepTemplate(
+    mock_step_template_repo.get_by_id = AsyncMock(return_value=StepTemplate(
         id="step_template_ai_constrain_values_claude",
         slug="ai_constrain_values_claude",
         display_name="AI Constrain Values (Claude)",
@@ -208,7 +211,7 @@ def test_management_step_template_detail_200(client):
         runtime_binding="claude_constrain_values",
         category="transform",
         status="active",
-    )
+    ))
     app.state.step_template_repository = mock_step_template_repo
 
     resp = client.get(
@@ -224,14 +227,14 @@ def test_management_step_template_detail_200(client):
     assert "output_contract" in data
     assert "config_schema" in data
     assert "allowable_values_source" in data["config_schema"]
-    mock_step_template_repo.get_by_id.assert_called_once_with("step_template_ai_constrain_values_claude")
+    mock_step_template_repo.get_by_id.assert_awaited_once_with("step_template_ai_constrain_values_claude")
 
 
 def test_management_step_template_detail_404(client):
     """GET /management/step-templates/{id} returns 404 when template not found."""
     _setup_auth(client)
     mock_step_template_repo = MagicMock()
-    mock_step_template_repo.get_by_id.return_value = None
+    mock_step_template_repo.get_by_id = AsyncMock(return_value=None)
     app.state.step_template_repository = mock_step_template_repo
 
     resp = client.get(
@@ -252,7 +255,7 @@ def test_management_connections_200_list_shape(client):
     """GET /management/connections with valid auth returns items list."""
     user_id = _setup_auth(client)
     mock_conn_repo = MagicMock()
-    mock_conn_repo.list_by_owner.return_value = [
+    mock_conn_repo.list_by_owner = AsyncMock(return_value=[
         ConnectorInstance(
             id="conn-1",
             owner_user_id=user_id,
@@ -264,7 +267,7 @@ def test_management_connections_200_list_shape(client):
             last_validated_at=datetime(2026, 3, 15, 10, 0, 0),
             last_error=None,
         ),
-    ]
+    ])
     app.state.connector_instance_repository = mock_conn_repo
 
     resp = client.get(
@@ -282,7 +285,7 @@ def test_management_connections_200_list_shape(client):
     assert item["connector_template_id"] == "tpl-notion"
     assert "2026-03-15" in (item["last_validated_at"] or "")
     assert item["last_error"] is None
-    mock_conn_repo.list_by_owner.assert_called_once_with(user_id)
+    mock_conn_repo.list_by_owner.assert_awaited_once_with(user_id)
 
 
 def test_management_triggers_401_without_auth(client):
@@ -295,7 +298,7 @@ def test_management_triggers_200_list_shape(client):
     """GET /management/triggers with valid auth returns items list."""
     user_id = _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.list_by_owner.return_value = [
+    mock_trigger_repo.list_by_owner = AsyncMock(return_value=[
         TriggerDefinition(
             id="trigger-1",
             owner_user_id=user_id,
@@ -310,7 +313,7 @@ def test_management_triggers_200_list_shape(client):
             secret_last_rotated_at=datetime(2026, 3, 15, 14, 0, 0),
             updated_at=datetime(2026, 3, 15, 14, 0, 0),
         ),
-    ]
+    ])
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.get(
@@ -334,7 +337,7 @@ def test_management_triggers_200_list_shape(client):
     assert "secret_last_rotated_at" in item
     assert "2026-03-15" in (item["updated_at"] or "")
     assert item["request_body_schema"] == {"keywords": "string"}
-    mock_trigger_repo.list_by_owner.assert_called_once_with(user_id)
+    mock_trigger_repo.list_by_owner.assert_awaited_once_with(user_id)
 
 
 def test_management_rotate_secret_200_returns_new_secret(client):
@@ -356,7 +359,7 @@ def test_management_rotate_secret_200_returns_new_secret(client):
         secret_value="new_secret_abc123",
         secret_last_rotated_at=datetime(2026, 3, 15, 15, 0, 0),
     )
-    mock_trigger_repo.rotate_secret.return_value = (rotated_trigger, "new_secret_abc123")
+    mock_trigger_repo.rotate_secret = AsyncMock(return_value=(rotated_trigger, "new_secret_abc123"))
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -368,14 +371,16 @@ def test_management_rotate_secret_200_returns_new_secret(client):
     assert data["id"] == "trigger-1"
     assert data["secret"] == "new_secret_abc123"
     assert "secret_last_rotated_at" in data
-    mock_trigger_repo.rotate_secret.assert_called_once_with("trigger-1", user_id)
+    mock_trigger_repo.rotate_secret.assert_awaited_once_with("trigger-1", user_id)
 
 
 def test_management_rotate_secret_404_when_trigger_not_found(client):
     """POST /management/triggers/{id}/rotate-secret returns 404 when trigger not found."""
     user_id = _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.rotate_secret.side_effect = ValueError("Trigger not found: id=missing owner=...")
+    mock_trigger_repo.rotate_secret = AsyncMock(
+        side_effect=ValueError("Trigger not found: id=missing owner=...")
+    )
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -399,7 +404,8 @@ def test_management_create_trigger_200_returns_created_trigger(client):
     """POST /management/triggers with valid auth creates trigger and returns it with secret."""
     user_id = _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_path.return_value = None
+    mock_trigger_repo.get_by_path = AsyncMock(return_value=None)
+    mock_trigger_repo.save = AsyncMock()
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -418,11 +424,11 @@ def test_management_create_trigger_200_returns_created_trigger(client):
     assert data["auth_mode"] == "bearer"
     assert "secret" in data
     assert len(data["secret"]) >= 20
-    mock_trigger_repo.get_by_path.assert_called_once()
+    mock_trigger_repo.get_by_path.assert_awaited_once()
     call_args = mock_trigger_repo.get_by_path.call_args
     assert call_args[0][0] == "/my-trigger"
     assert call_args[0][1] == user_id
-    mock_trigger_repo.save.assert_called_once()
+    mock_trigger_repo.save.assert_awaited_once()
     saved_trigger = mock_trigger_repo.save.call_args[0][0]
     assert saved_trigger.request_body_schema.get("type") == "object"
     assert "keywords" in (saved_trigger.request_body_schema.get("properties") or {})
@@ -433,7 +439,8 @@ def test_management_create_trigger_with_body_fields(client):
     """POST /management/triggers accepts body_fields to build request_body_schema."""
     user_id = _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_path.return_value = None
+    mock_trigger_repo.get_by_path = AsyncMock(return_value=None)
+    mock_trigger_repo.save = AsyncMock()
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -469,7 +476,8 @@ def test_management_patch_trigger_body_fields(client):
         auth_mode="bearer",
         secret_value="sec",
     )
-    mock_trigger_repo.get_by_id.return_value = existing
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=existing)
+    mock_trigger_repo.save = AsyncMock()
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.patch(
@@ -482,7 +490,7 @@ def test_management_patch_trigger_body_fields(client):
         },
     )
     assert resp.status_code == 200
-    mock_trigger_repo.save.assert_called_once()
+    mock_trigger_repo.save.assert_awaited_once()
     assert "title" in mock_trigger_repo.save.call_args[0][0].request_body_schema.get(
         "properties", {}
     )
@@ -492,7 +500,7 @@ def test_management_create_trigger_409_duplicate_path(client):
     """POST /management/triggers returns 409 when path already in use."""
     user_id = _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_path.return_value = TriggerDefinition(
+    mock_trigger_repo.get_by_path = AsyncMock(return_value=TriggerDefinition(
         id="existing",
         owner_user_id=user_id,
         trigger_type="http",
@@ -503,7 +511,8 @@ def test_management_create_trigger_409_duplicate_path(client):
         status="active",
         auth_mode="bearer",
         secret_value="secret",
-    )
+    ))
+    mock_trigger_repo.save = AsyncMock()
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -513,14 +522,15 @@ def test_management_create_trigger_409_duplicate_path(client):
     )
     assert resp.status_code == 409
     assert "already in use" in resp.json()["detail"]
-    mock_trigger_repo.save.assert_not_called()
+    mock_trigger_repo.save.assert_not_awaited()
 
 
 def test_management_create_trigger_normalizes_path(client):
     """POST /management/triggers normalizes path to leading slash."""
     _setup_auth(client)
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_path.return_value = None
+    mock_trigger_repo.get_by_path = AsyncMock(return_value=None)
+    mock_trigger_repo.save = AsyncMock()
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -559,7 +569,7 @@ def test_management_account_200_with_limits(client):
     """GET /management/account with valid auth and app_config returns limits."""
     user_id = _setup_auth(client)
     mock_app_config = MagicMock()
-    mock_app_config.get_by_owner.return_value = AppLimits(
+    mock_app_config.get_by_owner = AsyncMock(return_value=AppLimits(
         max_stages_per_job=10,
         max_pipelines_per_stage=20,
         max_steps_per_pipeline=50,
@@ -567,7 +577,7 @@ def test_management_account_200_with_limits(client):
         max_triggers_per_owner=50,
         max_runs_per_utc_day=500,
         max_runs_per_utc_month=10000,
-    )
+    ))
     app.state.app_config_repository = mock_app_config
 
     resp = client.get(
@@ -581,7 +591,7 @@ def test_management_account_200_with_limits(client):
     assert data["limits"]["max_stages_per_job"] == 10
     assert data["limits"]["max_pipelines_per_stage"] == 20
     assert data["limits"]["max_steps_per_pipeline"] == 50
-    mock_app_config.get_by_owner.assert_called_once_with(user_id)
+    mock_app_config.get_by_owner.assert_awaited_once_with(user_id)
 
 
 def _make_minimal_job_graph(user_id: str, job_id: str = "job_test"):
@@ -634,7 +644,8 @@ def test_management_pipeline_delete_404_when_not_found(client):
     """DELETE /management/pipelines/{id} returns 404 when pipeline not found."""
     user_id = _setup_auth(client)
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = None
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=None)
+    mock_job_repo.archive = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     resp = client.delete(
@@ -643,8 +654,8 @@ def test_management_pipeline_delete_404_when_not_found(client):
     )
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
-    mock_job_repo.get_graph_by_id.assert_called_once_with("job_missing", user_id)
-    mock_job_repo.archive.assert_not_called()
+    mock_job_repo.get_graph_by_id.assert_awaited_once_with("job_missing", user_id)
+    mock_job_repo.archive.assert_not_awaited()
 
 
 def test_management_pipeline_delete_200_archives(client):
@@ -652,7 +663,8 @@ def test_management_pipeline_delete_200_archives(client):
     user_id = _setup_auth(client)
     graph = _make_minimal_job_graph(user_id, "job_to_archive")
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = graph
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=graph)
+    mock_job_repo.archive = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     resp = client.delete(
@@ -663,8 +675,8 @@ def test_management_pipeline_delete_200_archives(client):
     data = resp.json()
     assert data["status"] == "archived"
     assert data["id"] == "job_to_archive"
-    mock_job_repo.get_graph_by_id.assert_called_once_with("job_to_archive", user_id)
-    mock_job_repo.archive.assert_called_once_with("job_to_archive", user_id)
+    mock_job_repo.get_graph_by_id.assert_awaited_once_with("job_to_archive", user_id)
+    mock_job_repo.archive.assert_awaited_once_with("job_to_archive", user_id)
 
 
 def test_management_patch_pipeline_status_401_without_auth(client):
@@ -680,7 +692,8 @@ def test_management_patch_pipeline_status_404_when_not_found(client):
     """PATCH /management/pipelines/{id}/status returns 404 when pipeline not found."""
     user_id = _setup_auth(client)
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = None
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=None)
+    mock_job_repo.update_job_status = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     resp = client.patch(
@@ -689,7 +702,7 @@ def test_management_patch_pipeline_status_404_when_not_found(client):
         json={"status": "disabled"},
     )
     assert resp.status_code == 404
-    mock_job_repo.update_job_status.assert_not_called()
+    mock_job_repo.update_job_status.assert_not_awaited()
 
 
 def test_management_patch_pipeline_status_200_toggles_active_disabled(client):
@@ -697,7 +710,9 @@ def test_management_patch_pipeline_status_200_toggles_active_disabled(client):
     user_id = _setup_auth(client)
     graph = _make_minimal_job_graph(user_id, "job_toggle")
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = graph
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=graph)
+    mock_job_repo.update_job_status = AsyncMock()
+    mock_job_repo.save_job_graph = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     resp = client.patch(
@@ -707,8 +722,8 @@ def test_management_patch_pipeline_status_200_toggles_active_disabled(client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"id": "job_toggle", "status": "disabled"}
-    mock_job_repo.update_job_status.assert_called_once_with("job_toggle", user_id, "disabled")
-    mock_job_repo.save_job_graph.assert_not_called()
+    mock_job_repo.update_job_status.assert_awaited_once_with("job_toggle", user_id, "disabled")
+    mock_job_repo.save_job_graph.assert_not_awaited()
 
     mock_job_repo.update_job_status.reset_mock()
     resp2 = client.patch(
@@ -718,14 +733,14 @@ def test_management_patch_pipeline_status_200_toggles_active_disabled(client):
     )
     assert resp2.status_code == 200
     assert resp2.json() == {"id": "job_toggle", "status": "active"}
-    mock_job_repo.update_job_status.assert_called_once_with("job_toggle", user_id, "active")
+    mock_job_repo.update_job_status.assert_awaited_once_with("job_toggle", user_id, "active")
 
 
 def test_management_pipeline_get_404_when_not_found(client):
     """GET /management/pipelines/{id} returns 404 when pipeline not found."""
     user_id = _setup_auth(client)
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = None
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=None)
     app.state.job_repository = mock_job_repo
 
     resp = client.get(
@@ -734,7 +749,7 @@ def test_management_pipeline_get_404_when_not_found(client):
     )
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
-    mock_job_repo.get_graph_by_id.assert_called_once_with("job_missing", user_id)
+    mock_job_repo.get_graph_by_id.assert_awaited_once_with("job_missing", user_id)
 
 
 def test_management_pipeline_get_200_returns_full_graph(client):
@@ -742,11 +757,11 @@ def test_management_pipeline_get_200_returns_full_graph(client):
     user_id = _setup_auth(client)
     graph = _make_minimal_job_graph(user_id, "job_test")
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = graph
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=graph)
     app.state.job_repository = mock_job_repo
 
     mock_link_repo = MagicMock()
-    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_1"]
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["trigger_1"])
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.get(
@@ -765,8 +780,8 @@ def test_management_pipeline_get_200_returns_full_graph(client):
     assert "steps" in data["stages"][0]["pipelines"][0]
     assert data.get("trigger_ids") == ["trigger_1"]
     assert data.get("trigger_id") == "trigger_1"
-    mock_job_repo.get_graph_by_id.assert_called_once_with("job_test", user_id)
-    mock_link_repo.list_trigger_ids_for_job.assert_called_once_with("job_test", user_id)
+    mock_job_repo.get_graph_by_id.assert_awaited_once_with("job_test", user_id)
+    mock_link_repo.list_trigger_ids_for_job.assert_awaited_once_with("job_test", user_id)
 
 
 def test_management_pipeline_put_200_saves_and_returns_canonical(client):
@@ -774,7 +789,8 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
     user_id = _setup_auth(client)
     graph = _make_minimal_job_graph(user_id, "job_save")
     mock_job_repo = MagicMock()
-    mock_job_repo.get_graph_by_id.return_value = graph
+    mock_job_repo.get_graph_by_id = AsyncMock(return_value=graph)
+    mock_job_repo.save_job_graph = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     payload = {
@@ -816,7 +832,7 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
     }
 
     mock_link_repo = MagicMock()
-    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_save"]
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["trigger_save"])
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.put(
@@ -825,8 +841,8 @@ def test_management_pipeline_put_200_saves_and_returns_canonical(client):
         json=payload,
     )
     assert resp.status_code == 200
-    mock_job_repo.save_job_graph.assert_called_once()
-    mock_job_repo.get_graph_by_id.assert_called_with("job_save", user_id)
+    mock_job_repo.save_job_graph.assert_awaited_once()
+    mock_job_repo.get_graph_by_id.assert_awaited_with("job_save", user_id)
     data = resp.json()
     assert data["id"] == "job_save"
     assert "stages" in data
@@ -840,9 +856,11 @@ def test_management_pipeline_put_422_on_validation_error(client):
 
     user_id = _setup_auth(client)
     mock_job_repo = MagicMock()
-    mock_job_repo.save_job_graph.side_effect = ValidationError(
-        "validation failed",
-        errors=["pipeline 'p1' must terminate with Cache Set or Property Set"],
+    mock_job_repo.save_job_graph = AsyncMock(
+        side_effect=ValidationError(
+            "validation failed",
+            errors=["pipeline 'p1' must terminate with Cache Set or Property Set"],
+        )
     )
     app.state.job_repository = mock_job_repo
 
@@ -905,12 +923,13 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
         return g
 
     mock_job_repo = MagicMock()
-    mock_job_repo.save_job_graph.return_value = None
-    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock(return_value=None)
+    mock_job_repo.get_graph_by_id = AsyncMock(side_effect=mock_get_graph)
     app.state.job_repository = mock_job_repo
 
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = DataTarget(
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
         id="tgt1",
         owner_user_id=user_id,
         target_template_id="tt_notion_db",
@@ -918,11 +937,11 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
         display_name="Places to Visit",
         external_target_id="ds-xxx",
         status="active",
-    )
+    ))
     app.state.target_repository = mock_target_repo
 
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=TriggerDefinition(
         id="trigger_1",
         owner_user_id=user_id,
         trigger_type="http",
@@ -933,11 +952,12 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
         status="active",
         auth_mode="bearer",
         secret_value="mock_secret",
-    )
+    ))
     app.state.trigger_repository = mock_trigger_repo
 
     mock_link_repo = MagicMock()
-    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_1"]
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["trigger_1"])
+    mock_link_repo.attach = AsyncMock()
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.post(
@@ -956,11 +976,11 @@ def test_management_pipeline_post_200_creates_and_returns_graph(client):
     assert data["display_name"] == "My New Pipeline"
     assert data["trigger_id"] == "trigger_1"
     assert "stages" in data
-    mock_job_repo.save_job_graph.assert_called_once()
-    mock_job_repo.get_graph_by_id.assert_called_once()
-    mock_target_repo.get_by_id.assert_called_once_with("tgt1", user_id)
-    mock_trigger_repo.get_by_id.assert_called_once_with("trigger_1", user_id)
-    mock_link_repo.attach.assert_called_once()
+    mock_job_repo.save_job_graph.assert_awaited_once()
+    mock_job_repo.get_graph_by_id.assert_awaited()
+    mock_target_repo.get_by_id.assert_awaited_once_with("tgt1", user_id)
+    mock_trigger_repo.get_by_id.assert_awaited_once_with("trigger_1", user_id)
+    mock_link_repo.attach.assert_awaited_once()
     call_args = mock_link_repo.attach.call_args[0]
     assert call_args[0] == "trigger_1"
     assert call_args[1] == data["id"]
@@ -978,12 +998,13 @@ def test_management_pipeline_post_200_with_explicit_target_id(client):
         return g
 
     mock_job_repo = MagicMock()
-    mock_job_repo.save_job_graph.return_value = None
-    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock(return_value=None)
+    mock_job_repo.get_graph_by_id = AsyncMock(side_effect=mock_get_graph)
     app.state.job_repository = mock_job_repo
 
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = DataTarget(
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
         id="tgt_explicit",
         owner_user_id=user_id,
         target_template_id="tt_notion_db",
@@ -991,11 +1012,11 @@ def test_management_pipeline_post_200_with_explicit_target_id(client):
         display_name="My DB",
         external_target_id="ds-xxx",
         status="active",
-    )
+    ))
     app.state.target_repository = mock_target_repo
 
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=TriggerDefinition(
         id="trigger_explicit",
         owner_user_id=user_id,
         trigger_type="http",
@@ -1006,11 +1027,12 @@ def test_management_pipeline_post_200_with_explicit_target_id(client):
         status="active",
         auth_mode="bearer",
         secret_value="mock_secret",
-    )
+    ))
     app.state.trigger_repository = mock_trigger_repo
 
     mock_link_repo = MagicMock()
-    mock_link_repo.list_trigger_ids_for_job.return_value = ["trigger_explicit"]
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["trigger_explicit"])
+    mock_link_repo.attach = AsyncMock()
     app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.post(
@@ -1023,11 +1045,11 @@ def test_management_pipeline_post_200_with_explicit_target_id(client):
         },
     )
     assert resp.status_code == 200
-    mock_job_repo.save_job_graph.assert_called_once()
+    mock_job_repo.save_job_graph.assert_awaited_once()
     call_args = mock_job_repo.save_job_graph.call_args[0][0]
     assert call_args.job.target_id == "tgt_explicit"
-    mock_target_repo.get_by_id.assert_called_once_with("tgt_explicit", user_id)
-    mock_link_repo.attach.assert_called_once_with("trigger_explicit", call_args.job.id, user_id)
+    mock_target_repo.get_by_id.assert_awaited_once_with("tgt_explicit", user_id)
+    mock_link_repo.attach.assert_awaited_once_with("trigger_explicit", call_args.job.id, user_id)
 
 
 def test_management_pipeline_post_422_when_target_invalid(client):
@@ -1035,14 +1057,16 @@ def test_management_pipeline_post_422_when_target_invalid(client):
     user_id = _setup_auth(client)
 
     mock_job_repo = MagicMock()
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = None
+    mock_target_repo.get_by_id = AsyncMock(return_value=None)
     app.state.target_repository = mock_target_repo
 
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=TriggerDefinition(
         id="trigger_1",
         owner_user_id=user_id,
         trigger_type="http",
@@ -1053,7 +1077,7 @@ def test_management_pipeline_post_422_when_target_invalid(client):
         status="active",
         auth_mode="bearer",
         secret_value="mock_secret",
-    )
+    ))
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -1069,8 +1093,8 @@ def test_management_pipeline_post_422_when_target_invalid(client):
     data = resp.json()
     assert "not found" in data["detail"].lower()
     assert data.get("code") == "INVALID_TARGET"
-    mock_target_repo.get_by_id.assert_called_once_with("tgt_nonexistent", user_id)
-    mock_job_repo.save_job_graph.assert_not_called()
+    mock_target_repo.get_by_id.assert_awaited_once_with("tgt_nonexistent", user_id)
+    mock_job_repo.save_job_graph.assert_not_awaited()
 
 
 def test_management_pipeline_post_422_when_attach_policy_rejects(client):
@@ -1085,12 +1109,13 @@ def test_management_pipeline_post_422_when_attach_policy_rejects(client):
         return g
 
     mock_job_repo = MagicMock()
-    mock_job_repo.save_job_graph.return_value = None
-    mock_job_repo.get_graph_by_id.side_effect = mock_get_graph
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock(return_value=None)
+    mock_job_repo.get_graph_by_id = AsyncMock(side_effect=mock_get_graph)
     app.state.job_repository = mock_job_repo
 
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = DataTarget(
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
         id="tgt1",
         owner_user_id=user_id,
         target_template_id="tt_notion_db",
@@ -1098,11 +1123,11 @@ def test_management_pipeline_post_422_when_attach_policy_rejects(client):
         display_name="Places",
         external_target_id="ds-xxx",
         status="active",
-    )
+    ))
     app.state.target_repository = mock_target_repo
 
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = TriggerDefinition(
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=TriggerDefinition(
         id="trigger_new",
         owner_user_id=user_id,
         trigger_type="http",
@@ -1113,13 +1138,15 @@ def test_management_pipeline_post_422_when_attach_policy_rejects(client):
         status="active",
         auth_mode="bearer",
         secret_value="mock_secret",
-    )
+    ))
     app.state.trigger_repository = mock_trigger_repo
 
     mock_link_repo = MagicMock()
-    mock_link_repo.attach.side_effect = TriggerJobLinkPolicyError(
-        "This pipeline is already linked to another trigger. Each pipeline may only use one trigger.",
-        code="JOB_ALREADY_HAS_TRIGGER",
+    mock_link_repo.attach = AsyncMock(
+        side_effect=TriggerJobLinkPolicyError(
+            "This pipeline is already linked to another trigger. Each pipeline may only use one trigger.",
+            code="JOB_ALREADY_HAS_TRIGGER",
+        )
     )
     app.state.trigger_job_link_repository = mock_link_repo
 
@@ -1136,7 +1163,7 @@ def test_management_pipeline_post_422_when_attach_policy_rejects(client):
     body = resp.json()
     assert body.get("code") == "JOB_ALREADY_HAS_TRIGGER"
     assert "already linked" in body.get("detail", "").lower()
-    mock_job_repo.save_job_graph.assert_called_once()
+    mock_job_repo.save_job_graph.assert_awaited_once()
 
 
 def test_management_pipeline_post_422_when_trigger_invalid(client):
@@ -1144,10 +1171,12 @@ def test_management_pipeline_post_422_when_trigger_invalid(client):
     user_id = _setup_auth(client)
 
     mock_job_repo = MagicMock()
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock()
     app.state.job_repository = mock_job_repo
 
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = DataTarget(
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
         id="tgt1",
         owner_user_id=user_id,
         target_template_id="tt_notion_db",
@@ -1155,11 +1184,11 @@ def test_management_pipeline_post_422_when_trigger_invalid(client):
         display_name="Places",
         external_target_id="ds-xxx",
         status="active",
-    )
+    ))
     app.state.target_repository = mock_target_repo
 
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = None
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=None)
     app.state.trigger_repository = mock_trigger_repo
 
     resp = client.post(
@@ -1175,14 +1204,16 @@ def test_management_pipeline_post_422_when_trigger_invalid(client):
     data = resp.json()
     assert "not found" in data["detail"].lower()
     assert data.get("code") == "INVALID_TRIGGER"
-    mock_trigger_repo.get_by_id.assert_called_once_with("trigger_nonexistent", user_id)
-    mock_job_repo.save_job_graph.assert_not_called()
+    mock_trigger_repo.get_by_id.assert_awaited_once_with("trigger_nonexistent", user_id)
+    mock_job_repo.save_job_graph.assert_not_awaited()
 
 
 def test_management_pipeline_post_422_when_missing_trigger_or_target(client):
     """POST /management/pipelines returns 422 when trigger_id or target_id missing."""
     _setup_auth(client)
     mock_job_repo = MagicMock()
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock()
     app.state.job_repository = mock_job_repo
     app.state.target_repository = MagicMock()
     app.state.trigger_repository = MagicMock()
@@ -1194,7 +1225,7 @@ def test_management_pipeline_post_422_when_missing_trigger_or_target(client):
         json={"display_name": "New Pipeline"},
     )
     assert resp.status_code == 422
-    mock_job_repo.save_job_graph.assert_not_called()
+    mock_job_repo.save_job_graph.assert_not_awaited()
 
 
 def test_management_data_targets_401_without_auth(client):
@@ -1207,7 +1238,7 @@ def test_management_data_targets_200_list_shape(client):
     """GET /management/data-targets with valid auth returns items list."""
     user_id = _setup_auth(client)
     mock_target_repo = MagicMock()
-    mock_target_repo.list_by_owner.return_value = [
+    mock_target_repo.list_by_owner = AsyncMock(return_value=[
         DataTarget(
             id="tgt1",
             owner_user_id=user_id,
@@ -1217,7 +1248,7 @@ def test_management_data_targets_200_list_shape(client):
             external_target_id="ds-xxx",
             status="active",
         ),
-    ]
+    ])
     app.state.target_repository = mock_target_repo
 
     resp = client.get(
@@ -1236,7 +1267,7 @@ def test_management_data_targets_deduplicates_by_external_target(client):
     """When bootstrap and per-source targets share the same DB, only one is returned (prefer bootstrap)."""
     user_id = _setup_auth(client)
     mock_target_repo = MagicMock()
-    mock_target_repo.list_by_owner.return_value = [
+    mock_target_repo.list_by_owner = AsyncMock(return_value=[
         DataTarget(
             id="target_notion_abc",
             owner_user_id=user_id,
@@ -1273,7 +1304,7 @@ def test_management_data_targets_deduplicates_by_external_target(client):
             external_target_id="ds-yyy",
             status="active",
         ),
-    ]
+    ])
     app.state.target_repository = mock_target_repo
 
     resp = client.get(
@@ -1292,7 +1323,7 @@ def test_management_data_target_schema_404_when_target_not_found(client):
     """GET /management/data-targets/{id}/schema returns 404 when target not found."""
     user_id = _setup_auth(client)
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = None
+    mock_target_repo.get_by_id = AsyncMock(return_value=None)
     app.state.target_repository = mock_target_repo
     app.state.target_schema_repository = MagicMock()
 
@@ -1310,7 +1341,7 @@ def test_management_data_target_schema_200_returns_properties(client):
 
     user_id = _setup_auth(client)
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = DataTarget(
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
         id="tgt1",
         owner_user_id=user_id,
         target_template_id="tt_notion_db",
@@ -1319,11 +1350,11 @@ def test_management_data_target_schema_200_returns_properties(client):
         external_target_id="ds-xxx",
         status="active",
         active_schema_snapshot_id="snap1",
-    )
+    ))
     app.state.target_repository = mock_target_repo
 
     mock_schema_repo = MagicMock()
-    mock_schema_repo.get_by_id.return_value = TargetSchemaSnapshot(
+    mock_schema_repo.get_by_id = AsyncMock(return_value=TargetSchemaSnapshot(
         id="snap1",
         owner_user_id=user_id,
         data_target_id="tgt1",
@@ -1352,7 +1383,7 @@ def test_management_data_target_schema_200_returns_properties(client):
                 options=[{"id": "a", "name": "Active"}, {"id": "b", "name": "Done"}],
             ),
         ],
-    )
+    ))
     app.state.target_schema_repository = mock_schema_repo
 
     resp = client.get(
@@ -1411,9 +1442,9 @@ def test_management_live_test_analyze_job_scope(client):
     snap = _minimal_live_test_snapshot()
     resolved = ResolvedJobSnapshot(snapshot_ref="ref1", snapshot=snap)
     mock_jd = MagicMock()
-    mock_jd.resolve_for_run.return_value = resolved
+    mock_jd.resolve_for_run = AsyncMock(return_value=resolved)
     mock_link = MagicMock()
-    mock_link.list_trigger_ids_for_job.return_value = ["tr1"]
+    mock_link.list_trigger_ids_for_job = AsyncMock(return_value=["tr1"])
     mock_job = MagicMock()
     app.state.job_definition_service = mock_jd
     app.state.trigger_job_link_repository = mock_link
@@ -1442,9 +1473,9 @@ def test_management_live_test_run_enqueues_with_live_test_block(client):
     snap = _minimal_live_test_snapshot()
     resolved = ResolvedJobSnapshot(snapshot_ref="ref1", snapshot=snap)
     mock_jd = MagicMock()
-    mock_jd.resolve_for_run.return_value = resolved
+    mock_jd.resolve_for_run = AsyncMock(return_value=resolved)
     mock_link = MagicMock()
-    mock_link.list_trigger_ids_for_job.return_value = ["tr1"]
+    mock_link.list_trigger_ids_for_job = AsyncMock(return_value=["tr1"])
     mock_job = MagicMock()
     mock_run = MagicMock()
     mock_queue = MagicMock()
@@ -1462,7 +1493,10 @@ def test_management_live_test_run_enqueues_with_live_test_block(client):
         secret_last_rotated_at=datetime.now(timezone.utc),
     )
     mock_trigger_repo = MagicMock()
-    mock_trigger_repo.get_by_id.return_value = trigger
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=trigger)
+
+    mock_run.create_job = AsyncMock()
+    mock_queue.send = AsyncMock(return_value=MagicMock(message_id="pgmq-1"))
 
     app.state.job_definition_service = mock_jd
     app.state.trigger_job_link_repository = mock_link
@@ -1483,7 +1517,7 @@ def test_management_live_test_run_enqueues_with_live_test_block(client):
     body = resp.json()
     assert body["status"] == "accepted"
     assert body.get("run_id")
-    mock_queue.send.assert_called_once()
+    mock_queue.send.assert_awaited_once()
     enqueued = mock_queue.send.call_args[0][0]
     assert enqueued.get("live_test", {}).get("invocation_source") == "editor_live_test"
     assert enqueued.get("live_test", {}).get("allow_destination_writes") is False
@@ -1494,7 +1528,7 @@ def test_management_get_run_404_when_missing(client):
     """GET /management/runs/{id} returns 404 when run not found for owner."""
     user_id = _setup_auth(client)
     mock_run = MagicMock()
-    mock_run.get_job_run.return_value = None
+    mock_run.get_job_run = AsyncMock(return_value=None)
     app.state.supabase_run_repository = mock_run
 
     resp = client.get(
@@ -1510,7 +1544,7 @@ def test_management_get_run_200(client):
 
     user_id = _setup_auth(client)
     mock_run = MagicMock()
-    mock_run.get_job_run.return_value = JobRun(
+    mock_run.get_job_run = AsyncMock(return_value=JobRun(
         id="00000000-0000-4000-8000-000000000099",
         owner_user_id=user_id,
         job_id="job1",
@@ -1518,7 +1552,7 @@ def test_management_get_run_200(client):
         target_id="tgt1",
         status="succeeded",
         trigger_payload={"keywords": "a"},
-    )
+    ))
     app.state.supabase_run_repository = mock_run
 
     resp = client.get(
@@ -1539,7 +1573,7 @@ def test_management_get_run_includes_step_traces(client):
 
     user_id = _setup_auth(client)
     mock_run = MagicMock()
-    mock_run.get_job_run.return_value = JobRun(
+    mock_run.get_job_run = AsyncMock(return_value=JobRun(
         id="00000000-0000-4000-8000-000000000099",
         owner_user_id=user_id,
         job_id="job1",
@@ -1547,8 +1581,8 @@ def test_management_get_run_includes_step_traces(client):
         target_id="tgt1",
         status="running",
         trigger_payload={},
-    )
-    mock_run.list_step_runs_for_job_run.return_value = [
+    ))
+    mock_run.list_step_runs_for_job_run = AsyncMock(return_value=[
         StepRun(
             id="sr1",
             pipeline_run_id="pr1",
@@ -1563,7 +1597,7 @@ def test_management_get_run_includes_step_traces(client):
             output_summary={"schema_version": 1, "status": "succeeded"},
             processing_log=["a", "b"],
         )
-    ]
+    ])
     app.state.supabase_run_repository = mock_run
 
     resp = client.get(

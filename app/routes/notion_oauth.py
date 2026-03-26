@@ -106,7 +106,7 @@ def _serialize_tracked_properties(snapshot: TargetSchemaSnapshot | None) -> list
     return [{"name": p.name, "property_type": p.property_type} for p in snapshot.properties]
 
 
-def _build_data_source_management_response(
+async def _build_data_source_management_response(
     sources: list[dict[str, Any]],
     connector_instance_id: str,
     owner_user_id: str,
@@ -133,7 +133,7 @@ def _build_data_source_management_response(
             })
         return {"summary": _compute_source_summary(out), "sources": out}
 
-    targets = target_repo.list_by_connector(connector_instance_id, owner_user_id)
+    targets = await target_repo.list_by_connector(connector_instance_id, owner_user_id)
     by_external: dict[str, list[DataTarget]] = defaultdict(list)
     for t in targets:
         if t.external_target_id:
@@ -143,16 +143,18 @@ def _build_data_source_management_response(
         t.active_schema_snapshot_id for t in targets if t.active_schema_snapshot_id
     ]
     snapshot_fetched: dict[str, datetime] = (
-        target_schema_repo.get_fetched_at_for_snapshots(snapshot_ids, owner_user_id)
+        await target_schema_repo.get_fetched_at_for_snapshots(snapshot_ids, owner_user_id)
         if snapshot_ids
         else {}
     )
 
     schema_cache: dict[str, TargetSchemaSnapshot | None] = {}
 
-    def _get_snapshot(snap_id: str) -> TargetSchemaSnapshot | None:
+    async def _get_snapshot(snap_id: str) -> TargetSchemaSnapshot | None:
         if snap_id not in schema_cache:
-            schema_cache[snap_id] = target_schema_repo.get_by_id(snap_id, owner_user_id)
+            schema_cache[snap_id] = await target_schema_repo.get_by_id(
+                snap_id, owner_user_id
+            )
         return schema_cache[snap_id]
 
     enriched: list[dict[str, Any]] = []
@@ -170,7 +172,7 @@ def _build_data_source_management_response(
             tracked_tid = canonical.id
             if canonical.active_schema_snapshot_id:
                 last_sync = snapshot_fetched.get(canonical.active_schema_snapshot_id)
-                snap = _get_snapshot(canonical.active_schema_snapshot_id)
+                snap = await _get_snapshot(canonical.active_schema_snapshot_id)
                 tracked_props = _serialize_tracked_properties(snap)
 
         enriched.append({
@@ -216,7 +218,7 @@ def _map_display_name_to_bootstrap_target(display_name: str) -> str | None:
 
 
 @router.post("/management/connections/notion/oauth/start")
-def start_notion_oauth(
+async def start_notion_oauth(
     request: Request,
     ctx: AuthContext = Depends(require_managed_auth),
 ):
@@ -233,14 +235,14 @@ def start_notion_oauth(
         raise HTTPException(status_code=500, detail="OAuth service not available")
     success_redirect = f"{_frontend_base()}/connections?connected=notion"
     try:
-        url = svc.start_oauth(owner_user_id=ctx.user_id, success_redirect=success_redirect)
+        url = await svc.start_oauth(owner_user_id=ctx.user_id, success_redirect=success_redirect)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"authorization_url": url}
 
 
 @router.get("/auth/callback/notion")
-def notion_oauth_callback(
+async def notion_oauth_callback(
     request: Request,
     code: str | None = None,
     state: str | None = None,
@@ -264,7 +266,7 @@ def notion_oauth_callback(
             status_code=302,
         )
     try:
-        _, redirect_path = svc.exchange_code_and_connect(code, state)
+        _, redirect_path = await svc.exchange_code_and_connect(code, state)
     except ValueError as e:
         err_param = urlencode({"error": str(e)})
         return RedirectResponse(
@@ -275,7 +277,7 @@ def notion_oauth_callback(
 
 
 @router.post("/management/connections/{connection_id}/disconnect")
-def disconnect_connection(
+async def disconnect_connection(
     request: Request,
     connection_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -286,14 +288,14 @@ def disconnect_connection(
     svc = _get_oauth_service(request)
     if not svc:
         raise HTTPException(status_code=500, detail="OAuth service not available")
-    updated = svc.disconnect(owner_user_id=ctx.user_id)
+    updated = await svc.disconnect(owner_user_id=ctx.user_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Connection not found")
     return {"status": "disconnected", "id": updated.id}
 
 
 @router.post("/management/connections/{connection_id}/refresh-sources")
-def refresh_connection_sources(
+async def refresh_connection_sources(
     request: Request,
     connection_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -308,17 +310,17 @@ def refresh_connection_sources(
     if not ext_repo:
         raise HTTPException(status_code=500, detail="External sources repository not available")
     try:
-        svc.refresh_sources(owner_user_id=ctx.user_id)
+        await svc.refresh_sources(owner_user_id=ctx.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    sources = ext_repo.list_for_instance(
+    sources = await ext_repo.list_for_instance(
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
         provider="notion",
     )
     target_repo = getattr(request.app.state, "target_repository", None)
     target_schema_repo = getattr(request.app.state, "target_schema_repository", None)
-    return _build_data_source_management_response(
+    return await _build_data_source_management_response(
         sources,
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
@@ -328,7 +330,7 @@ def refresh_connection_sources(
 
 
 @router.get("/management/connections/{connection_id}/data-sources")
-def list_connection_data_sources(
+async def list_connection_data_sources(
     request: Request,
     connection_id: str,
     ctx: AuthContext = Depends(require_managed_auth),
@@ -339,14 +341,14 @@ def list_connection_data_sources(
     ext_repo = getattr(request.app.state, "connector_external_sources_repository", None)
     if not ext_repo:
         raise HTTPException(status_code=500, detail="External sources repository not available")
-    sources = ext_repo.list_for_instance(
+    sources = await ext_repo.list_for_instance(
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
         provider="notion",
     )
     target_repo = getattr(request.app.state, "target_repository", None)
     target_schema_repo = getattr(request.app.state, "target_schema_repository", None)
-    return _build_data_source_management_response(
+    return await _build_data_source_management_response(
         sources,
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
@@ -356,7 +358,7 @@ def list_connection_data_sources(
 
 
 @router.post("/management/connections/{connection_id}/data-sources/select")
-def select_data_sources(
+async def select_data_sources(
     request: Request,
     connection_id: str,
     body: SelectDataSourcesRequest,
@@ -370,7 +372,7 @@ def select_data_sources(
     schema_sync = getattr(request.app.state, "schema_sync_service", None)
     if not target_repo or not ext_repo:
         raise HTTPException(status_code=500, detail="Repository not available")
-    sources = ext_repo.list_for_instance(
+    sources = await ext_repo.list_for_instance(
         connector_instance_id="connector_instance_notion_default",
         owner_user_id=ctx.user_id,
         provider="notion",
@@ -392,7 +394,7 @@ def select_data_sources(
         selection_order.append((eid, display_name))
 
         target_id = f"target_notion_{eid.replace('-', '_')[:20]}"
-        existing = target_repo.get_by_id(target_id, ctx.user_id)
+        existing = await target_repo.get_by_id(target_id, ctx.user_id)
         if existing:
             created.append({"id": target_id, "display_name": display_name, "created": False})
             continue
@@ -406,11 +408,11 @@ def select_data_sources(
             status="active",
             visibility="owner",
         )
-        target_repo.save(target)
+        await target_repo.save(target)
         created.append({"id": target_id, "display_name": target.display_name, "created": True})
         if schema_sync:
             try:
-                schema_sync.sync_for_target(target_id, ctx.user_id)
+                await schema_sync.sync_for_target(target_id, ctx.user_id)
             except Exception:
                 pass
 
@@ -434,7 +436,7 @@ def select_data_sources(
         if not selection:
             continue
         eid, display_name = selection
-        existing_bootstrap = target_repo.get_by_id(bootstrap_target_id, ctx.user_id)
+        existing_bootstrap = await target_repo.get_by_id(bootstrap_target_id, ctx.user_id)
         if existing_bootstrap:
             updated = DataTarget(
                 id=existing_bootstrap.id,
@@ -446,7 +448,7 @@ def select_data_sources(
                 status="active",
                 visibility=existing_bootstrap.visibility,
             )
-            target_repo.save(updated)
+            await target_repo.save(updated)
         else:
             # Create bootstrap target if missing (e.g. target_locations before bootstrap runs).
             updated = DataTarget(
@@ -459,10 +461,10 @@ def select_data_sources(
                 status="active",
                 visibility="owner",
             )
-            target_repo.save(updated)
+            await target_repo.save(updated)
         if schema_sync:
             try:
-                schema_sync.sync_for_target(bootstrap_target_id, ctx.user_id)
+                await schema_sync.sync_for_target(bootstrap_target_id, ctx.user_id)
             except Exception:
                 pass
         created.append({"id": bootstrap_target_id, "display_name": updated.display_name, "created": existing_bootstrap is None})

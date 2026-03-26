@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/test/claude")
-def claude_poem(
+async def claude_poem(
     request: Request,
     poem_seed: str = "sunset",
     _: None = Depends(require_auth),
@@ -22,7 +22,7 @@ def claude_poem(
 
 
 @router.get("/test/googlePlacesSearch")
-def google_places_search(
+async def google_places_search(
     request: Request,
     query: str,
     _: None = Depends(require_auth),
@@ -36,11 +36,11 @@ def google_places_search(
 
 
 @router.post("/test/randomLocation")
-def random_location(request: Request, _: None = Depends(require_auth)):
+async def random_location(request: Request, _: None = Depends(require_auth)):
     """
     Create a random place entry in the Places to Visit database (test-only).
     Uses schema-derived random values; does not call Claude or Google Places.
     """
     places_service = request.app.state.places_service
-    entry = places_service.generate_random_entry("Places to Visit")
+    entry = await places_service.generate_random_entry("Places to Visit")
     return places_service.create_place(entry)

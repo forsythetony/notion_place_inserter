@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.integrations.supabase_config import SupabaseConfig
 
@@ -39,42 +39,46 @@ class SupabaseQueueRepository:
     """
     Repository for pgmq queue operations via Supabase RPC.
     Uses public schema wrapper functions (pgmq_send, pgmq_read, pgmq_archive).
-    Reuses a single schema-scoped client to avoid socket leaks from per-call allocation.
+    RPC is invoked on the shared Async client (public PostgREST schema).
     """
 
-    def __init__(self, client: Client, config: SupabaseConfig) -> None:
+    def __init__(self, client: AsyncClient, config: SupabaseConfig) -> None:
+        self._client = client
         self._config = config
-        self._schema_client = client.schema("public")
+
+    async def aclose(self) -> None:
+        """
+        Close underlying HTTP sessions for PostgREST (best-effort).
+        Safe to call multiple times.
+        """
+        try:
+            pg = getattr(self._client, "_postgrest", None)
+            if pg is not None:
+                await pg.aclose()
+        except Exception:
+            logger.exception("supabase_queue_aclose_failed | queue={}", self._config.queue_name)
 
     def close(self) -> None:
-        """
-        Close the underlying HTTP session. Safe to call multiple times.
-        Call during process shutdown to release sockets.
-        """
-        session = getattr(self._schema_client, "session", None)
-        if session is not None and callable(getattr(session, "close", None)):
-            try:
-                session.close()
-            except Exception:
-                logger.exception("supabase_queue_close_failed | queue={}", self._config.queue_name)
+        """Sync no-op; prefer ``await aclose()`` from async contexts."""
+        logger.warning(
+            "supabase_queue_sync_close_noop | queue={} use await queue_repo.aclose()",
+            self._config.queue_name,
+        )
 
-    def send(self, payload: dict[str, Any], delay_seconds: int = 0) -> QueueSendResult:
+    async def send(self, payload: dict[str, Any], delay_seconds: int = 0) -> QueueSendResult:
         """
         Send a message to the queue.
         Returns the message ID from pgmq_send.
         """
         try:
-            resp = (
-                self._schema_client.rpc(
-                    "pgmq_send",
-                    {
-                        "queue_name": self._config.queue_name,
-                        "msg": payload,
-                        "delay": delay_seconds,
-                    },
-                )
-                .execute()
-            )
+            resp = await self._client.rpc(
+                "pgmq_send",
+                {
+                    "queue_name": self._config.queue_name,
+                    "msg": payload,
+                    "delay": delay_seconds,
+                },
+            ).execute()
         except Exception:
             logger.exception("supabase_queue_send_failed | queue={}", self._config.queue_name)
             raise
@@ -89,7 +93,7 @@ class SupabaseQueueRepository:
 
         return QueueSendResult(message_id=int(msg_id))
 
-    def read(
+    async def read(
         self,
         batch_size: int = 1,
         vt_seconds: int = 30,
@@ -99,17 +103,14 @@ class SupabaseQueueRepository:
         Returns normalized list of QueueMessage.
         """
         try:
-            resp = (
-                self._schema_client.rpc(
-                    "pgmq_read",
-                    {
-                        "queue_name": self._config.queue_name,
-                        "vt": vt_seconds,
-                        "qty": batch_size,
-                    },
-                )
-                .execute()
-            )
+            resp = await self._client.rpc(
+                "pgmq_read",
+                {
+                    "queue_name": self._config.queue_name,
+                    "vt": vt_seconds,
+                    "qty": batch_size,
+                },
+            ).execute()
         except Exception:
             logger.exception("supabase_queue_read_failed | queue={}", self._config.queue_name)
             raise
@@ -140,22 +141,19 @@ class SupabaseQueueRepository:
                 )
         return messages
 
-    def archive(self, message_id: int) -> QueueAckResult:
+    async def archive(self, message_id: int) -> QueueAckResult:
         """
         Archive a message (acknowledge completion).
         Moves message from queue to archive table.
         """
         try:
-            resp = (
-                self._schema_client.rpc(
-                    "pgmq_archive",
-                    {
-                        "queue_name": self._config.queue_name,
-                        "msg_id": message_id,
-                    },
-                )
-                .execute()
-            )
+            resp = await self._client.rpc(
+                "pgmq_archive",
+                {
+                    "queue_name": self._config.queue_name,
+                    "msg_id": message_id,
+                },
+            ).execute()
         except Exception:
             logger.exception(
                 "supabase_queue_archive_failed | queue={} msg_id={}",

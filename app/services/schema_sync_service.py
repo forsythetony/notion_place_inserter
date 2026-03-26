@@ -86,7 +86,9 @@ class SchemaSyncService:
         self._notion_service = notion_service
         self._credentials_repo = connector_credentials_repository
 
-    def _ensure_secret_ref_or_oauth(self, instance: ConnectorInstance, owner_user_id: str) -> bool:
+    async def _ensure_secret_ref_or_oauth(
+        self, instance: ConnectorInstance, owner_user_id: str
+    ) -> bool:
         """
         Validate connector has credentials. Return True if OAuth path (token available).
         Return False for global notion service path. Raise if invalid.
@@ -97,7 +99,7 @@ class SchemaSyncService:
             )
         auth_status = getattr(instance, "auth_status", "pending")
         if auth_status == "connected" and self._credentials_repo:
-            cred = self._credentials_repo.get_for_instance(
+            cred = await self._credentials_repo.get_for_instance(
                 instance.id, owner_user_id, "notion"
             )
             if cred and (cred.get("token_payload") or {}).get("access_token"):
@@ -110,20 +112,20 @@ class SchemaSyncService:
             )
         return False
 
-    def sync_for_target(
+    async def sync_for_target(
         self, data_target_id: str, owner_user_id: str
     ) -> TargetSchemaSnapshot:
         """
         Fetch live schema for target, create snapshot, attach to target.
         For notion_database targets, uses NotionService. Enforces secret_ref on connector.
         """
-        target = self._target_repo.get_by_id(data_target_id, owner_user_id)
+        target = await self._target_repo.get_by_id(data_target_id, owner_user_id)
         if target is None:
             raise SchemaSyncServiceError(
                 f"Target '{data_target_id}' not found for owner '{owner_user_id}'"
             )
 
-        connector = self._connector_repo.get_by_id(
+        connector = await self._connector_repo.get_by_id(
             target.connector_instance_id, owner_user_id
         )
         if connector is None:
@@ -131,21 +133,21 @@ class SchemaSyncService:
                 f"Connector instance '{target.connector_instance_id}' not found"
             )
 
-        use_oauth = self._ensure_secret_ref_or_oauth(connector, owner_user_id)
+        use_oauth = await self._ensure_secret_ref_or_oauth(connector, owner_user_id)
 
         # Notion path: use OAuth token or global notion service
         if target.target_template_id == "notion_database":
             if use_oauth and self._credentials_repo:
-                return self._sync_notion_target_oauth(target, owner_user_id)
+                return await self._sync_notion_target_oauth(target, owner_user_id)
             if self._notion_service:
                 # TODO: Remove global token fallback in future PR. Require OAuth for schema sync.
-                return self._sync_notion_target(target, owner_user_id)
+                return await self._sync_notion_target(target, owner_user_id)
 
         raise SchemaSyncServiceError(
             f"Schema sync not supported for target template '{target.target_template_id}'"
         )
 
-    def _sync_notion_target_oauth(
+    async def _sync_notion_target_oauth(
         self, target: DataTarget, owner_user_id: str
     ) -> TargetSchemaSnapshot:
         """Fetch schema from Notion using OAuth token and data_source_id."""
@@ -154,7 +156,7 @@ class SchemaSyncService:
             raise SchemaSyncServiceError(
                 f"Target '{target.id}' has no external_target_id for OAuth schema fetch"
             )
-        cred = self._credentials_repo.get_for_instance(
+        cred = await self._credentials_repo.get_for_instance(
             target.connector_instance_id, owner_user_id, "notion"
         )
         if not cred:
@@ -165,9 +167,9 @@ class SchemaSyncService:
         from app.services.notion_service import NotionService
 
         _, raw_props = NotionService.get_raw_schema_for_data_source(token, data_source_id)
-        return self._build_and_save_snapshot(target, owner_user_id, data_source_id, raw_props)
+        return await self._build_and_save_snapshot(target, owner_user_id, data_source_id, raw_props)
 
-    def _sync_notion_target(
+    async def _sync_notion_target(
         self, target: DataTarget, owner_user_id: str
     ) -> TargetSchemaSnapshot:
         """Fetch schema from Notion using global service (name lookup)."""
@@ -180,9 +182,9 @@ class SchemaSyncService:
         data_source_id, raw_props = self._notion_service.get_raw_schema_for_sync(
             db_name
         )
-        return self._build_and_save_snapshot(target, owner_user_id, data_source_id, raw_props)
+        return await self._build_and_save_snapshot(target, owner_user_id, data_source_id, raw_props)
 
-    def _build_and_save_snapshot(
+    async def _build_and_save_snapshot(
         self,
         target: DataTarget,
         owner_user_id: str,
@@ -190,12 +192,12 @@ class SchemaSyncService:
         raw_props: dict,
     ) -> TargetSchemaSnapshot:
         # Deactivate previous active snapshot for this target
-        for snap in self._schema_repo.list_by_owner(owner_user_id):
+        for snap in await self._schema_repo.list_by_owner(owner_user_id):
             if snap.data_target_id == target.id and snap.is_active:
                 from dataclasses import replace
 
                 deactivated = replace(snap, is_active=False)
-                self._schema_repo.save(deactivated)
+                await self._schema_repo.save(deactivated)
                 break
 
         # Build snapshot
@@ -230,7 +232,7 @@ class SchemaSyncService:
             visibility="owner",
             raw_source_payload={"data_source_id": data_source_id},
         )
-        self._schema_repo.save(snapshot)
+        await self._schema_repo.save(snapshot)
 
         # Update target
         from dataclasses import replace
@@ -238,7 +240,7 @@ class SchemaSyncService:
         updated_target = replace(
             target, active_schema_snapshot_id=snapshot_id
         )
-        self._target_repo.save(updated_target)
+        await self._target_repo.save(updated_target)
 
         logger.info(
             "schema_sync_completed | target_id={} snapshot_id={} property_count={}",

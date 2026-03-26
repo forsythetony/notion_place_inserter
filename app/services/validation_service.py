@@ -94,12 +94,12 @@ class ValidationService:
         self._connector_instance_repo = connector_instance_repo
         self._app_config_repo = app_config_repo
 
-    def _maybe_migrate_legacy_trigger_bindings(self, graph: JobGraph) -> None:
+    async def _maybe_migrate_legacy_trigger_bindings(self, graph: JobGraph) -> None:
         """Rewrite legacy raw_input trigger refs when all linked triggers declare keywords."""
         if not self._trigger_repo or not self._trigger_job_link_repo:
             return
         try:
-            trigger_ids = self._trigger_job_link_repo.list_trigger_ids_for_job(
+            trigger_ids = await self._trigger_job_link_repo.list_trigger_ids_for_job(
                 graph.job.id, graph.job.owner_user_id
             )
         except Exception:
@@ -109,7 +109,7 @@ class ValidationService:
         owner = graph.job.owner_user_id
         trigger_defs = []
         for tid in trigger_ids:
-            trig = self._trigger_repo.get_by_id(tid, owner)
+            trig = await self._trigger_repo.get_by_id(tid, owner)
             if trig is None:
                 return
             trigger_defs.append(trig)
@@ -124,7 +124,7 @@ class ValidationService:
                 n,
             )
 
-    def validate_job_graph(
+    async def validate_job_graph(
         self,
         graph: JobGraph,
         *,
@@ -134,7 +134,7 @@ class ValidationService:
         Validate a full job graph. Raises ValidationError on failure.
         Set skip_reference_checks=True when referenced entities may not yet be persisted.
         """
-        self._maybe_migrate_legacy_trigger_bindings(graph)
+        await self._maybe_migrate_legacy_trigger_bindings(graph)
         errors: list[str] = []
         job = graph.job
         stages = graph.stages
@@ -208,7 +208,7 @@ class ValidationService:
                 if not pipe_steps:
                     continue
                 last_step = pipe_steps[-1]
-                template = self._step_template_repo.get_by_id(last_step.step_template_id)
+                template = await self._step_template_repo.get_by_id(last_step.step_template_id)
                 if template is None:
                     errors.append(
                         f"step '{last_step.id}' references unknown step_template_id '{last_step.step_template_id}'"
@@ -248,7 +248,7 @@ class ValidationService:
                                 "(or use target_kind=page_metadata with target_field)"
                             )
                         elif self._target_schema_repo and not skip_reference_checks:
-                            schema = self._target_schema_repo.get_active_for_target(
+                            schema = await self._target_schema_repo.get_active_for_target(
                                 job.target_id, job.owner_user_id
                             )
                             if schema is None:
@@ -266,10 +266,14 @@ class ValidationService:
         # Step input bindings resolution (signal_ref: same pipeline only; cross-pipeline via cache_key_ref)
         if self._step_template_repo:
             for step in steps:
-                self._validate_step_bindings(step, steps, job, errors)
+                await self._validate_step_bindings(step, steps, job, errors)
 
         # Limits (from AppConfigRepository; will be backend-configurable for frontend display)
-        limits = self._app_config_repo.get_by_owner(job.owner_user_id) if self._app_config_repo else None
+        limits = (
+            await self._app_config_repo.get_by_owner(job.owner_user_id)
+            if self._app_config_repo
+            else None
+        )
         if limits:
             if len(stages) > limits.max_stages_per_job:
                 errors.append(
@@ -294,7 +298,7 @@ class ValidationService:
         # Trigger-job linkage is many-to-many via trigger_job_links; validated at link time
         if not skip_reference_checks:
             if self._target_repo:
-                target = self._target_repo.get_by_id(job.target_id, job.owner_user_id)
+                target = await self._target_repo.get_by_id(job.target_id, job.owner_user_id)
                 if target is None:
                     errors.append(f"target_id '{job.target_id}' not found for owner")
 
@@ -324,7 +328,7 @@ class ValidationService:
                     result.append(s.id)
         return result
 
-    def _validate_step_bindings(
+    async def _validate_step_bindings(
         self,
         step: "StepInstance",
         all_steps: list["StepInstance"],
@@ -393,7 +397,7 @@ class ValidationService:
                                 f"does not match job target '{job.target_id}'"
                             )
                         elif self._target_schema_repo:
-                            schema = self._target_schema_repo.get_active_for_target(
+                            schema = await self._target_schema_repo.get_active_for_target(
                                 effective_tid, job.owner_user_id
                             )
                             if schema and pid not in {p.id for p in schema.properties}:
@@ -418,7 +422,7 @@ class ValidationService:
         if errors:
             raise ValidationError("pipeline validation failed", errors)
 
-    def validate_step_instance(
+    async def validate_step_instance(
         self,
         step: "StepInstance",
         step_template: "StepTemplate | None" = None,
@@ -431,7 +435,7 @@ class ValidationService:
         if not step.step_template_id:
             errors.append(f"step '{step.id}' must have step_template_id")
         if step_template is None and self._step_template_repo:
-            step_template = self._step_template_repo.get_by_id(step.step_template_id)
+            step_template = await self._step_template_repo.get_by_id(step.step_template_id)
         if step_template is None and step.step_template_id:
             errors.append(
                 f"step '{step.id}' references unknown step_template_id '{step.step_template_id}'"
@@ -439,20 +443,20 @@ class ValidationService:
         if errors:
             raise ValidationError("step instance validation failed", errors)
 
-    def validate_trigger(self, trigger: "TriggerDefinition") -> None:
+    async def validate_trigger(self, trigger: "TriggerDefinition") -> None:
         """Validate a trigger definition. Raises ValidationError on failure."""
         errors: list[str] = []
         if not trigger.path or not trigger.path.strip():
             errors.append("trigger path is required")
         # job_id may be None for triggers created before pipeline assignment
         if self._trigger_repo:
-            existing = self._trigger_repo.get_by_path(trigger.path, trigger.owner_user_id)
+            existing = await self._trigger_repo.get_by_path(trigger.path, trigger.owner_user_id)
             if existing is not None and existing.id != trigger.id:
                 errors.append(f"trigger path '{trigger.path}' already in use by another trigger for owner")
         if errors:
             raise ValidationError("trigger validation failed", errors)
 
-    def validate_data_target(self, target: "DataTarget") -> None:
+    async def validate_data_target(self, target: "DataTarget") -> None:
         """Validate a data target. Raises ValidationError on failure."""
         errors: list[str] = []
         if not target.target_template_id:
@@ -460,11 +464,11 @@ class ValidationService:
         if not target.connector_instance_id:
             errors.append("connector_instance_id is required")
         if self._target_template_repo:
-            tmpl = self._target_template_repo.get_by_id(target.target_template_id)
+            tmpl = await self._target_template_repo.get_by_id(target.target_template_id)
             if tmpl is None:
                 errors.append(f"target_template_id '{target.target_template_id}' not found")
         if self._connector_instance_repo:
-            inst = self._connector_instance_repo.get_by_id(
+            inst = await self._connector_instance_repo.get_by_id(
                 target.connector_instance_id, target.owner_user_id
             )
             if inst is None:

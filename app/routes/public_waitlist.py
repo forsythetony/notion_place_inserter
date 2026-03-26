@@ -55,7 +55,7 @@ def _client_ip(request: Request) -> str | None:
 
 
 @router.post("/waitlist", status_code=202)
-def submit_public_waitlist(request: Request, body: PublicWaitlistRequest):
+async def submit_public_waitlist(request: Request, body: PublicWaitlistRequest):
     """
     Accept waitlist submission. Returns generic 202 for success, duplicate, or honeypot spam
     (anti-enumeration). Rate limits always; Turnstile only when TURNSTILE_ENABLED is set.

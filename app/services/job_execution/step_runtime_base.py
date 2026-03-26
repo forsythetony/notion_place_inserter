@@ -15,7 +15,7 @@ class StepRuntime(ABC):
     """
 
     @abstractmethod
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

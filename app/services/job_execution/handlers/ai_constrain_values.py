@@ -13,7 +13,7 @@ from app.services.pipeline_live_test.api_overrides import consume_manual_api_res
 class AiConstrainValuesClaudeHandler(StepRuntime):
     """Select values from allowed list using Claude, with optional suggestion."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

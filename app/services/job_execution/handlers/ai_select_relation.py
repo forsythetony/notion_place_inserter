@@ -163,7 +163,7 @@ def _fetch_candidate_pages(notion_client, data_source_id: str, key_prop: str) ->
 class AiSelectRelationHandler(StepRuntime):
     """Use AI to select the best relation from a related database by key lookup."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

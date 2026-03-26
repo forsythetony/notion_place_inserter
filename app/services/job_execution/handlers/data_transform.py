@@ -49,7 +49,7 @@ def _extract_at_path(value: Any, segments: list[str | int]) -> Any:
 class DataTransformHandler(StepRuntime):
     """Deterministic transform over step input (e.g. extract URL/name from payload)."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

@@ -5,12 +5,12 @@ Mapper version and namespace are FROZEN - do not change after deployment.
 
 from __future__ import annotations
 
-import time
+import asyncio
 import uuid
 from typing import Literal
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 # FROZEN: Do not change namespace or version after first deployment.
 # Changing these will break historical row resolution.
@@ -40,8 +40,8 @@ def _is_transient_error(e: BaseException) -> bool:
     return "errno 11" in msg or "resource temporarily unavailable" in msg
 
 
-def resolve_or_create_mapping(
-    client: Client,
+async def resolve_or_create_mapping(
+    client: AsyncClient,
     entity_type: EntityType,
     source_id: str,
 ) -> uuid.UUID:
@@ -53,7 +53,7 @@ def resolve_or_create_mapping(
     last_error: BaseException | None = None
     for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
         try:
-            r = (
+            r = await (
                 client.table(TABLE)
                 .select("mapped_uuid")
                 .eq("entity_type", entity_type)
@@ -74,7 +74,7 @@ def resolve_or_create_mapping(
                     attempt,
                     e,
                 )
-                time.sleep(_RETRY_DELAY_SECONDS)
+                await asyncio.sleep(_RETRY_DELAY_SECONDS)
                 continue
             logger.exception(
                 "id_mapping_lookup_failed | entity_type={} source_id={} error={}",
@@ -87,14 +87,18 @@ def resolve_or_create_mapping(
     mapped = _compute_uuid(entity_type, source_id)
     for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
         try:
-            client.table(TABLE).insert(
-                {
-                    "entity_type": entity_type,
-                    "source_id": source_id,
-                    "mapped_uuid": str(mapped),
-                    "mapper_version": _MAPPER_VERSION,
-                }
-            ).execute()
+            await (
+                client.table(TABLE)
+                .insert(
+                    {
+                        "entity_type": entity_type,
+                        "source_id": source_id,
+                        "mapped_uuid": str(mapped),
+                        "mapper_version": _MAPPER_VERSION,
+                    }
+                )
+                .execute()
+            )
             return mapped
         except Exception as e:
             last_error = e
@@ -106,11 +110,11 @@ def resolve_or_create_mapping(
                     attempt,
                     e,
                 )
-                time.sleep(_RETRY_DELAY_SECONDS)
+                await asyncio.sleep(_RETRY_DELAY_SECONDS)
                 continue
             # Race: another insert may have succeeded; retry lookup
             try:
-                r = (
+                r = await (
                     client.table(TABLE)
                     .select("mapped_uuid")
                     .eq("entity_type", entity_type)
@@ -135,13 +139,13 @@ def resolve_or_create_mapping(
     return mapped
 
 
-def verify_mapping_consistency(client: Client, sample_size: int = 5) -> None:
+async def verify_mapping_consistency(client: AsyncClient, sample_size: int = 5) -> None:
     """
     Startup guard: verify that recomputed UUIDs match stored mappings.
     Raises RuntimeError if mismatch detected.
     """
     try:
-        r = (
+        r = await (
             client.table(TABLE)
             .select("entity_type, source_id, mapped_uuid")
             .eq("mapper_version", _MAPPER_VERSION)

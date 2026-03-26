@@ -69,7 +69,7 @@ def _find_linked_step(
 class OptimizeInputClaudeHandler(StepRuntime):
     """Reshape input via Claude for downstream consumption (e.g. Google Places query)."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],
@@ -179,7 +179,7 @@ class OptimizeInputClaudeHandler(StepRuntime):
         if usage_svc and ctx.owner_user_id:
             usage = claude.get_last_usage()
             if usage:
-                usage_svc.record_llm_tokens(
+                await usage_svc.record_llm_tokens(
                     job_run_id=ctx.run_id,
                     owner_user_id=ctx.owner_user_id,
                     provider="anthropic",

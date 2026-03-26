@@ -3,15 +3,12 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from app.domain import DataTarget, TargetSchemaSnapshot
 from app.repositories import YamlTargetRepository, YamlTargetSchemaRepository
 from app.services.target_service import TargetService
-from app.services.validation_service import ValidationService
 
 
-def test_target_service_get_with_active_schema_no_schema():
+async def test_target_service_get_with_active_schema_no_schema():
     """TargetService get_with_active_schema returns target without schema when none attached."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -33,15 +30,15 @@ def test_target_service_get_with_active_schema_no_schema():
             status="active",
             active_schema_snapshot_id=None,
         )
-        target_repo.save(target)
+        await target_repo.save(target)
 
-        result = service.get_with_active_schema("t1", "u1")
+        result = await service.get_with_active_schema("t1", "u1")
         assert result is not None
         assert result.target.id == "t1"
         assert result.active_schema is None
 
 
-def test_target_service_get_with_active_schema_with_snapshot():
+async def test_target_service_get_with_active_schema_with_snapshot():
     """TargetService get_with_active_schema returns target with schema when attached."""
     from datetime import datetime, timezone
 
@@ -66,7 +63,7 @@ def test_target_service_get_with_active_schema_with_snapshot():
             status="active",
             active_schema_snapshot_id="schema_1",
         )
-        target_repo.save(target)
+        await target_repo.save(target)
 
         snapshot = TargetSchemaSnapshot(
             id="schema_1",
@@ -78,16 +75,16 @@ def test_target_service_get_with_active_schema_with_snapshot():
             source_connector_instance_id="conn_1",
             properties=[],
         )
-        schema_repo.save(snapshot)
+        await schema_repo.save(snapshot)
 
-        result = service.get_with_active_schema("t1", "u1")
+        result = await service.get_with_active_schema("t1", "u1")
         assert result is not None
         assert result.target.id == "t1"
         assert result.active_schema is not None
         assert result.active_schema.id == "schema_1"
 
 
-def test_target_service_get_with_active_schema_missing_target():
+async def test_target_service_get_with_active_schema_missing_target():
     """TargetService get_with_active_schema returns None for unknown target."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -98,5 +95,5 @@ def test_target_service_get_with_active_schema_missing_target():
             target_schema_repository=schema_repo,
         )
 
-        result = service.get_with_active_schema("nonexistent", "u1")
+        result = await service.get_with_active_schema("nonexistent", "u1")
         assert result is None

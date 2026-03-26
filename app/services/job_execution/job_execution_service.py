@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
@@ -120,7 +120,7 @@ class JobExecutionService:
         freepik_service: Any = None,
         dry_run: bool = False,
         run_repository: RunRepository | None = None,
-        get_notion_token_fn: Callable[[str], str | None] | None = None,
+        get_notion_token_fn: Callable[[str], Awaitable[str | None]] | None = None,
     ) -> None:
         self._registry = step_registry or _default_registry()
         self._notion = notion_service
@@ -131,7 +131,7 @@ class JobExecutionService:
         self._run_repo = run_repository
         self._get_notion_token = get_notion_token_fn
 
-    def execute_snapshot_run(
+    async def execute_snapshot_run(
         self,
         snapshot: dict[str, Any],
         run_id: str,
@@ -213,7 +213,7 @@ class JobExecutionService:
                 )
             stage_run_id = f"{run_id}_stage_{stage_id}"
             if self._run_repo and owner_user_id:
-                self._persist_stage_run(
+                await self._persist_stage_run(
                     stage_run_id=stage_run_id,
                     job_run_id=run_id,
                     stage_id=stage_id,
@@ -222,16 +222,16 @@ class JobExecutionService:
                 )
             try:
                 if run_mode == "parallel":
-                    self._run_parallel_pipelines(
+                    await self._run_parallel_pipelines(
                         pipelines_data, ctx, snapshot, stage_id, run_id, stage_run_id, owner_user_id
                     )
                 else:
                     for p_data in sorted(pipelines_data, key=lambda p: p.get("sequence", 0)):
-                        self._run_pipeline(
+                        await self._run_pipeline(
                             p_data, ctx, snapshot, stage_id, run_id, stage_run_id, owner_user_id
                         )
                 if self._run_repo and owner_user_id:
-                    self._persist_stage_run(
+                    await self._persist_stage_run(
                         stage_run_id=stage_run_id,
                         job_run_id=run_id,
                         stage_id=stage_id,
@@ -241,7 +241,7 @@ class JobExecutionService:
                     )
             except Exception as e:
                 if self._run_repo and owner_user_id:
-                    self._persist_stage_run(
+                    await self._persist_stage_run(
                         stage_run_id=stage_run_id,
                         job_run_id=run_id,
                         stage_id=stage_id,
@@ -256,7 +256,7 @@ class JobExecutionService:
         notion_props = build_notion_properties_payload(ctx.properties, active_schema)
         access_token: str | None = None
         if self._get_notion_token and owner_user_id:
-            access_token = self._get_notion_token(owner_user_id)
+            access_token = await self._get_notion_token(owner_user_id)
         token_source = "oauth" if access_token else "global"
         if not access_token and owner_user_id:
             logger.warning(
@@ -330,7 +330,7 @@ class JobExecutionService:
                         metric_value=1,
                         owner_user_id=owner_user_id,
                     )
-                    self._run_repo.save_usage_record(record)
+                    await self._run_repo.save_usage_record(record)
                 except Exception as e:
                     logger.exception(
                         "job_execution_save_usage_notion_create_failed | run_id={} error={}",
@@ -407,7 +407,7 @@ class JobExecutionService:
         )
         return {"id": "runtime_synthesized", "properties": synthesized_props}
 
-    def _persist_stage_run(
+    async def _persist_stage_run(
         self,
         *,
         stage_run_id: str,
@@ -429,7 +429,7 @@ class JobExecutionService:
                 started_at=datetime.now(timezone.utc) if status == "running" else None,
                 completed_at=completed_at,
             )
-            self._run_repo.save_stage_run(run)
+            await self._run_repo.save_stage_run(run)
         except Exception as e:
             logger.exception(
                 "job_execution_save_stage_run_failed | stage_run_id={} job_run_id={} error={}",
@@ -438,7 +438,7 @@ class JobExecutionService:
                 e,
             )
 
-    def _run_pipeline(
+    async def _run_pipeline(
         self,
         pipeline_data: dict[str, Any],
         ctx: ExecutionContext,
@@ -452,7 +452,7 @@ class JobExecutionService:
         pipeline_run_id = f"{job_run_id}_pipeline_{pipeline_id}"
         if self._run_repo and owner_user_id:
             try:
-                self._run_repo.save_pipeline_run(
+                await self._run_repo.save_pipeline_run(
                     PipelineRun(
                         id=pipeline_run_id,
                         stage_run_id=stage_run_id,
@@ -474,7 +474,7 @@ class JobExecutionService:
         steps_data = pipeline_data.get("steps") or []
         try:
             for step_data in sorted(steps_data, key=lambda s: s.get("sequence", 0)):
-                self._run_step(
+                await self._run_step(
                     step_data,
                     ctx,
                     snapshot,
@@ -487,7 +487,7 @@ class JobExecutionService:
                 )
             if self._run_repo and owner_user_id:
                 try:
-                    self._run_repo.save_pipeline_run(
+                    await self._run_repo.save_pipeline_run(
                         PipelineRun(
                             id=pipeline_run_id,
                             stage_run_id=stage_run_id,
@@ -508,7 +508,7 @@ class JobExecutionService:
         except Exception as e:
             if self._run_repo and owner_user_id:
                 try:
-                    self._run_repo.save_pipeline_run(
+                    await self._run_repo.save_pipeline_run(
                         PipelineRun(
                             id=pipeline_run_id,
                             stage_run_id=stage_run_id,
@@ -528,7 +528,7 @@ class JobExecutionService:
                     )
             raise
 
-    def _run_parallel_pipelines(
+    async def _run_parallel_pipelines(
         self,
         pipelines_data: list[dict[str, Any]],
         ctx: ExecutionContext,
@@ -539,43 +539,39 @@ class JobExecutionService:
         owner_user_id: str | None,
     ) -> None:
         """
-        Run pipelines in parallel via ThreadPoolExecutor.
-        NOTE: Under shared Supabase client, parallel execution can trigger Errno 11
-        (connection contention). Bootstrap job uses sequential mode as temporary
-        mitigation. See td-2026-03-15-resource-constraints-db-connections-threads.
+        Run pipelines concurrently as asyncio tasks (single event loop).
+        NOTE: Parallel pipelines still share the async Supabase client; use sequential
+        pipeline_run_mode if connection contention appears (see td-2026-03-15).
         """
-        errors: list[tuple[str, Exception]] = []
-        with ThreadPoolExecutor(max_workers=len(pipelines_data)) as executor:
-            futures = {
-                executor.submit(
-                    self._run_pipeline,
-                    p,
-                    ctx,
-                    snapshot,
+        errors: list[tuple[str, BaseException]] = []
+        coros = [
+            self._run_pipeline(
+                p,
+                ctx,
+                snapshot,
+                stage_id,
+                job_run_id,
+                stage_run_id,
+                owner_user_id,
+            )
+            for p in pipelines_data
+        ]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        for p, res in zip(pipelines_data, results):
+            if isinstance(res, BaseException):
+                pipeline_id = p.get("id", "")
+                errors.append((pipeline_id, res))
+                logger.warning(
+                    "job_execution_pipeline_failed | run_id={} stage_id={} pipeline_id={} error={}",
+                    ctx.run_id,
                     stage_id,
-                    job_run_id,
-                    stage_run_id,
-                    owner_user_id,
-                ): p.get("id", "")
-                for p in pipelines_data
-            }
-            for future in as_completed(futures):
-                pipeline_id = futures[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    errors.append((pipeline_id, e))
-                    logger.warning(
-                        "job_execution_pipeline_failed | run_id={} stage_id={} pipeline_id={} error={}",
-                        ctx.run_id,
-                        stage_id,
-                        pipeline_id,
-                        e,
-                    )
+                    pipeline_id,
+                    res,
+                )
         if errors:
             raise errors[0][1]
 
-    def _run_step(
+    async def _run_step(
         self,
         step_data: dict[str, Any],
         ctx: ExecutionContext,
@@ -628,7 +624,7 @@ class JobExecutionService:
 
         if self._run_repo and owner_user_id:
             try:
-                self._run_repo.save_step_run(
+                await self._run_repo.save_step_run(
                     StepRun(
                         id=step_run_id,
                         pipeline_run_id=pipeline_run_id,
@@ -670,7 +666,7 @@ class JobExecutionService:
         t0: float | None = None
         try:
             t0 = time.perf_counter()
-            outputs = handler.execute(
+            outputs = await handler.execute(
                 step_id=step_id,
                 config=config,
                 input_bindings=input_bindings,
@@ -705,7 +701,7 @@ class JobExecutionService:
 
             if self._run_repo and owner_user_id:
                 try:
-                    self._run_repo.save_step_run(
+                    await self._run_repo.save_step_run(
                         StepRun(
                             id=step_run_id,
                             pipeline_run_id=pipeline_run_id,
@@ -753,7 +749,7 @@ class JobExecutionService:
             )
             if self._run_repo and owner_user_id:
                 try:
-                    self._run_repo.save_step_run(
+                    await self._run_repo.save_step_run(
                         StepRun(
                             id=step_run_id,
                             pipeline_run_id=pipeline_run_id,

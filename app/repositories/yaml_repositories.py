@@ -75,7 +75,7 @@ class YamlConnectorTemplateRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_id(self, id: str) -> ConnectorTemplate | None:
+    async def get_by_id(self, id: str) -> ConnectorTemplate | None:
         path = catalog_connector_template_path(id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -85,21 +85,21 @@ class YamlConnectorTemplateRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_all(self) -> list[ConnectorTemplate]:
+    async def list_all(self) -> list[ConnectorTemplate]:
         catalog_dir = f"{self._base}/catalog/connector_templates"
         ids = _list_yaml_files_in_dir(catalog_dir)
         result: list[ConnectorTemplate] = []
         for tid in ids:
-            t = self.get_by_id(tid)
+            t = await self.get_by_id(tid)
             if t is not None:
                 result.append(t)
         return result
 
-    def save(self, template: ConnectorTemplate) -> None:
+    async def save(self, template: ConnectorTemplate) -> None:
         # Catalog is read-only
         pass
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         # Catalog is read-only
         pass
 
@@ -110,7 +110,7 @@ class YamlTargetTemplateRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_id(self, id: str) -> TargetTemplate | None:
+    async def get_by_id(self, id: str) -> TargetTemplate | None:
         path = catalog_target_template_path(id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -120,20 +120,20 @@ class YamlTargetTemplateRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_all(self) -> list[TargetTemplate]:
+    async def list_all(self) -> list[TargetTemplate]:
         catalog_dir = f"{self._base}/catalog/target_templates"
         ids = _list_yaml_files_in_dir(catalog_dir)
         result: list[TargetTemplate] = []
         for tid in ids:
-            t = self.get_by_id(tid)
+            t = await self.get_by_id(tid)
             if t is not None:
                 result.append(t)
         return result
 
-    def save(self, template: TargetTemplate) -> None:
+    async def save(self, template: TargetTemplate) -> None:
         pass
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         pass
 
 
@@ -143,7 +143,7 @@ class YamlStepTemplateRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_id(self, id: str) -> StepTemplate | None:
+    async def get_by_id(self, id: str) -> StepTemplate | None:
         path = catalog_step_template_path(id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -153,20 +153,20 @@ class YamlStepTemplateRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_all(self) -> list[StepTemplate]:
+    async def list_all(self) -> list[StepTemplate]:
         catalog_dir = f"{self._base}/catalog/step_templates"
         ids = _list_yaml_files_in_dir(catalog_dir)
         result: list[StepTemplate] = []
         for tid in ids:
-            t = self.get_by_id(tid)
+            t = await self.get_by_id(tid)
             if t is not None:
                 result.append(t)
         return result
 
-    def save(self, template: StepTemplate) -> None:
+    async def save(self, template: StepTemplate) -> None:
         pass
 
-    def delete(self, id: str) -> None:
+    async def delete(self, id: str) -> None:
         pass
 
 
@@ -185,7 +185,7 @@ class YamlJobRepository:
         """Inject validation service for save-time validation."""
         self._validation_service = validation_service
 
-    def get_bootstrap_job(self, job_slug: str) -> JobDefinition | None:
+    async def get_bootstrap_job(self, job_slug: str) -> JobDefinition | None:
         path = bootstrap_job_path(job_slug, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -195,7 +195,7 @@ class YamlJobRepository:
         except (KeyError, TypeError):
             return None
 
-    def get_by_id(self, id: str, owner_user_id: str) -> JobDefinition | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> JobDefinition | None:
         # First check bootstrap
         path = bootstrap_job_path("notion_place_inserter", self._base)
         data = load_yaml_file(path)
@@ -219,7 +219,7 @@ class YamlJobRepository:
                     return parse_job_definition(data, owner_user_id_override=owner_user_id)
         return None
 
-    def get_graph_by_id(self, id: str, owner_user_id: str) -> JobGraph | None:
+    async def get_graph_by_id(self, id: str, owner_user_id: str) -> JobGraph | None:
         """Load full job graph (job + stages + pipelines + steps) by ID for the given owner."""
         # First check bootstrap
         path = bootstrap_job_path("notion_place_inserter", self._base)
@@ -250,7 +250,7 @@ class YamlJobRepository:
                         return None
         return None
 
-    def list_by_owner(self, owner_user_id: str) -> list[JobDefinition]:
+    async def list_by_owner(self, owner_user_id: str) -> list[JobDefinition]:
         result: list[JobDefinition] = []
         # Bootstrap job: same starter for all signed-in users
         path = bootstrap_job_path("notion_place_inserter", self._base)
@@ -277,7 +277,7 @@ class YamlJobRepository:
                         pass
         return result
 
-    def save(self, job: JobDefinition) -> None:
+    async def save(self, job: JobDefinition) -> None:
         """Persist job to tenant path. Bootstrap jobs are read-only. Use save_job_graph for full structure."""
         if job.owner_user_id == "bootstrap":
             return  # Bootstrap is read-only
@@ -287,7 +287,7 @@ class YamlJobRepository:
         data["stages"] = []
         dump_yaml_file(path, data)
 
-    def save_job_graph(
+    async def save_job_graph(
         self,
         graph: JobGraph,
         *,
@@ -297,14 +297,14 @@ class YamlJobRepository:
         if graph.job.owner_user_id == "bootstrap":
             return  # Bootstrap is read-only
         if self._validation_service:
-            self._validation_service.validate_job_graph(
+            await self._validation_service.validate_job_graph(
                 graph, skip_reference_checks=skip_reference_checks
             )
         path = tenant_job_path(graph.job.owner_user_id, graph.job.id, self._base)
         data = job_graph_to_yaml_dict(graph)
         dump_yaml_file(path, data)
 
-    def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
+    async def update_job_status(self, id: str, owner_user_id: str, status: str) -> None:
         """Set status on tenant job YAML without rewriting stages (avoids corrupting graph)."""
         if owner_user_id == "bootstrap":
             return
@@ -315,7 +315,7 @@ class YamlJobRepository:
         data["status"] = status
         dump_yaml_file(path, data)
 
-    def archive(self, id: str, owner_user_id: str) -> None:
+    async def archive(self, id: str, owner_user_id: str) -> None:
         """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""
         if owner_user_id == "bootstrap":
             return  # Bootstrap is read-only
@@ -330,7 +330,7 @@ class YamlJobRepository:
         data["status"] = "archived"
         dump_yaml_file(path, data)
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         """Remove job file from tenant path."""
         path = tenant_job_path(owner_user_id, id, self._base)
         root = _project_root()
@@ -354,7 +354,7 @@ class YamlTriggerRepository:
         """Inject validation service for save-time validation."""
         self._validation_service = validation_service
 
-    def get_by_id(self, id: str, owner_user_id: str) -> TriggerDefinition | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> TriggerDefinition | None:
         if owner_user_id == "bootstrap":
             file_path = bootstrap_trigger_path(id, self._base)
             data = load_yaml_file(file_path)
@@ -389,7 +389,7 @@ class YamlTriggerRepository:
         except ValueError:
             return str(f)
 
-    def get_by_path(self, path: str, owner_user_id: str) -> TriggerDefinition | None:
+    async def get_by_path(self, path: str, owner_user_id: str) -> TriggerDefinition | None:
         root = _project_root()
         # Tenant triggers first
         triggers_dir = root / tenant_triggers_dir(owner_user_id, self._base)
@@ -413,7 +413,7 @@ class YamlTriggerRepository:
                         pass
         return None
 
-    def list_by_owner(self, owner_user_id: str) -> list[TriggerDefinition]:
+    async def list_by_owner(self, owner_user_id: str) -> list[TriggerDefinition]:
         root = _project_root()
         result: list[TriggerDefinition] = []
         if owner_user_id == "bootstrap":
@@ -439,14 +439,14 @@ class YamlTriggerRepository:
                     pass
         return result
 
-    def save(self, trigger: TriggerDefinition) -> None:
+    async def save(self, trigger: TriggerDefinition) -> None:
         if self._validation_service:
-            self._validation_service.validate_trigger(trigger)
+            await self._validation_service.validate_trigger(trigger)
         path = tenant_trigger_path(trigger.owner_user_id, trigger.id, self._base)
         data = domain_to_yaml_dict(trigger)
         dump_yaml_file(path, data)
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         path = tenant_trigger_path(owner_user_id, id, self._base)
         root = _project_root()
         full_path = root / path
@@ -469,7 +469,7 @@ class YamlTargetRepository:
         """Inject validation service for save-time validation."""
         self._validation_service = validation_service
 
-    def get_by_id(self, id: str, owner_user_id: str) -> DataTarget | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> DataTarget | None:
         path = tenant_target_path(owner_user_id, id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -479,7 +479,7 @@ class YamlTargetRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_by_owner(self, owner_user_id: str) -> list[DataTarget]:
+    async def list_by_owner(self, owner_user_id: str) -> list[DataTarget]:
         root = _project_root()
         targets_dir = root / tenant_targets_dir(owner_user_id, self._base)
         if not targets_dir.exists():
@@ -494,14 +494,14 @@ class YamlTargetRepository:
                     pass
         return result
 
-    def save(self, target: DataTarget) -> None:
+    async def save(self, target: DataTarget) -> None:
         if self._validation_service:
-            self._validation_service.validate_data_target(target)
+            await self._validation_service.validate_data_target(target)
         path = tenant_target_path(target.owner_user_id, target.id, self._base)
         data = domain_to_yaml_dict(target)
         dump_yaml_file(path, data)
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         path = tenant_target_path(owner_user_id, id, self._base)
         root = _project_root()
         full_path = root / path
@@ -515,7 +515,7 @@ class YamlTargetSchemaRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_id(self, id: str, owner_user_id: str) -> TargetSchemaSnapshot | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> TargetSchemaSnapshot | None:
         path = tenant_target_schema_snapshot_path(owner_user_id, id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -525,7 +525,7 @@ class YamlTargetSchemaRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_by_owner(self, owner_user_id: str) -> list[TargetSchemaSnapshot]:
+    async def list_by_owner(self, owner_user_id: str) -> list[TargetSchemaSnapshot]:
         root = _project_root()
         snap_dir = root / tenant_target_schema_snapshots_dir(owner_user_id, self._base)
         if not snap_dir.exists():
@@ -540,22 +540,22 @@ class YamlTargetSchemaRepository:
                     pass
         return result
 
-    def get_active_for_target(
+    async def get_active_for_target(
         self, data_target_id: str, owner_user_id: str
     ) -> TargetSchemaSnapshot | None:
-        for snap in self.list_by_owner(owner_user_id):
+        for snap in await self.list_by_owner(owner_user_id):
             if snap.data_target_id == data_target_id and snap.is_active:
                 return snap
         return None
 
-    def save(self, snapshot: TargetSchemaSnapshot) -> None:
+    async def save(self, snapshot: TargetSchemaSnapshot) -> None:
         path = tenant_target_schema_snapshot_path(
             snapshot.owner_user_id, snapshot.id, self._base
         )
         data = domain_to_yaml_dict(snapshot)
         dump_yaml_file(path, data)
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         path = tenant_target_schema_snapshot_path(owner_user_id, id, self._base)
         root = _project_root()
         full_path = root / path
@@ -569,7 +569,7 @@ class YamlConnectorInstanceRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_id(self, id: str, owner_user_id: str) -> ConnectorInstance | None:
+    async def get_by_id(self, id: str, owner_user_id: str) -> ConnectorInstance | None:
         path = tenant_connector_instance_path(owner_user_id, id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -579,7 +579,7 @@ class YamlConnectorInstanceRepository:
         except (KeyError, TypeError):
             return None
 
-    def list_by_owner(self, owner_user_id: str) -> list[ConnectorInstance]:
+    async def list_by_owner(self, owner_user_id: str) -> list[ConnectorInstance]:
         root = _project_root()
         inst_dir = root / tenant_connector_instances_dir(owner_user_id, self._base)
         if not inst_dir.exists():
@@ -594,14 +594,14 @@ class YamlConnectorInstanceRepository:
                     pass
         return result
 
-    def save(self, instance: ConnectorInstance) -> None:
+    async def save(self, instance: ConnectorInstance) -> None:
         path = tenant_connector_instance_path(
             instance.owner_user_id, instance.id, self._base
         )
         data = domain_to_yaml_dict(instance)
         dump_yaml_file(path, data)
 
-    def delete(self, id: str, owner_user_id: str) -> None:
+    async def delete(self, id: str, owner_user_id: str) -> None:
         path = tenant_connector_instance_path(owner_user_id, id, self._base)
         root = _project_root()
         full_path = root / path
@@ -615,7 +615,7 @@ class YamlAppConfigRepository:
     def __init__(self, base: str = PRODUCT_MODEL_ROOT) -> None:
         self._base = base
 
-    def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
+    async def get_by_owner(self, owner_user_id: str) -> AppLimits | None:
         path = tenant_app_config_path(owner_user_id, self._base)
         data = load_yaml_file(path)
         if data is None:
@@ -625,7 +625,7 @@ class YamlAppConfigRepository:
         except (KeyError, TypeError):
             return None
 
-    def save(self, owner_user_id: str, limits: AppLimits) -> None:
+    async def save(self, owner_user_id: str, limits: AppLimits) -> None:
         path = tenant_app_config_path(owner_user_id, self._base)
         data = domain_to_yaml_dict(limits)
         dump_yaml_file(path, data)

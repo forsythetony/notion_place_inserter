@@ -59,7 +59,7 @@ def _log_google_places_http_traces(google: Any, step_handle: StepExecutionHandle
 class GooglePlacesLookupHandler(StepRuntime):
     """Perform Google Places search and optionally fetch details."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],
@@ -108,7 +108,7 @@ class GooglePlacesLookupHandler(StepRuntime):
 
         usage_svc = ctx.get_service("usage_accounting")
         if usage_svc and ctx.owner_user_id:
-            usage_svc.record_external_api_call(
+            await usage_svc.record_external_api_call(
                 job_run_id=ctx.run_id,
                 owner_user_id=ctx.owner_user_id,
                 provider="google_places",
@@ -134,7 +134,7 @@ class GooglePlacesLookupHandler(StepRuntime):
             )
             usage_svc = ctx.get_service("usage_accounting")
             if usage_svc and ctx.owner_user_id and place:
-                usage_svc.record_external_api_call(
+                await usage_svc.record_external_api_call(
                     job_run_id=ctx.run_id,
                     owner_user_id=ctx.owner_user_id,
                     provider="google_places",

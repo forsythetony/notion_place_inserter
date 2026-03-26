@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.integrations.supabase_config import SupabaseConfig
 
@@ -18,7 +18,7 @@ def _utc_now_iso() -> str:
 class SupabaseBetaWaitlistRepository:
     """Insert / update waitlist rows keyed by email_normalized."""
 
-    def __init__(self, client: Client, config: SupabaseConfig) -> None:
+    def __init__(self, client: AsyncClient, config: SupabaseConfig) -> None:
         self._client = client
         self._config = config
 

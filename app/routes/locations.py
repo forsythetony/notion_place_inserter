@@ -34,9 +34,11 @@ def _normalize_trigger_path(path: str) -> str:
     return f"/{p}" if p and not p.startswith("/") else p or "/"
 
 
-def _linked_and_dispatchable_job_ids(link_repo, trigger_id: str, user_id: str) -> tuple[list[str], list[str]]:
-    linked = link_repo.list_job_ids_for_trigger(trigger_id, user_id)
-    dispatchable = link_repo.list_dispatchable_job_ids_for_trigger(trigger_id, user_id)
+async def _linked_and_dispatchable_job_ids(
+    link_repo, trigger_id: str, user_id: str
+) -> tuple[list[str], list[str]]:
+    linked = await link_repo.list_job_ids_for_trigger(trigger_id, user_id)
+    dispatchable = await link_repo.list_dispatchable_job_ids_for_trigger(trigger_id, user_id)
     return linked, dispatchable
 
 
@@ -100,7 +102,7 @@ def _legacy_keywords_from_body(body: dict[str, Any]) -> str:
 
 
 @router.post("/triggers/{user_id}/{path:path}")
-def invoke_trigger(
+async def invoke_trigger(
     request: Request,
     user_id: str,
     path: str,
@@ -126,7 +128,7 @@ def invoke_trigger(
         bootstrap_svc_sync = getattr(request.app.state, "bootstrap_provisioning_service", None)
         if bootstrap_svc_sync is not None:
             try:
-                bootstrap_svc_sync.ensure_owner_starter_definitions(user_id)
+                await bootstrap_svc_sync.ensure_owner_starter_definitions(user_id)
             except Exception as e:
                 logger.warning(
                     "locations_bootstrap_ensure_owner_failed | user_id={} error={}",
@@ -136,18 +138,20 @@ def invoke_trigger(
         link_repo_sync = getattr(request.app.state, "trigger_job_link_repository", None)
         if job_execution_service and trigger_service_sync and job_def_svc and link_repo_sync:
             normalized_path = _normalize_trigger_path(path)
-            trigger = trigger_service_sync.resolve_by_path(normalized_path, user_id)
+            trigger = await trigger_service_sync.resolve_by_path(normalized_path, user_id)
             if trigger:
                 _validate_trigger_secret(authorization, trigger.secret_value)
-                linked_ids, dispatchable_ids = _linked_and_dispatchable_job_ids(
+                linked_ids, dispatchable_ids = await _linked_and_dispatchable_job_ids(
                     link_repo_sync, trigger.id, user_id
                 )
                 _ensure_trigger_has_dispatchable_jobs(linked_ids, dispatchable_ids)
-                snapshot = job_def_svc.resolve_for_run(dispatchable_ids[0], user_id, trigger.id)
+                snapshot = await job_def_svc.resolve_for_run(
+                    dispatchable_ids[0], user_id, trigger.id
+                )
                 if snapshot:
                     run_id = str(uuid.uuid4())
                     trigger_payload = _validate_and_build_trigger_payload(trigger, body)
-                    result = job_execution_service.execute_snapshot_run(
+                    result = await job_execution_service.execute_snapshot_run(
                         snapshot=snapshot.snapshot,
                         run_id=run_id,
                         job_id=f"sync_{run_id[:8]}",
@@ -213,7 +217,7 @@ def invoke_trigger(
             status_code=503,
             detail="Unable to enqueue request",
         )
-    eff_limits = app_config_repo.get_by_owner(user_id)
+    eff_limits = await app_config_repo.get_by_owner(user_id)
     if eff_limits is None:
         logger.error("locations_enqueue_skipped | effective_limits_unavailable user_id={}", user_id)
         raise HTTPException(
@@ -224,7 +228,7 @@ def invoke_trigger(
     bootstrap_svc = getattr(request.app.state, "bootstrap_provisioning_service", None)
     if bootstrap_svc is not None:
         try:
-            bootstrap_svc.ensure_owner_starter_definitions(user_id)
+            await bootstrap_svc.ensure_owner_starter_definitions(user_id)
         except Exception as e:
             logger.warning(
                 "locations_bootstrap_ensure_owner_failed | user_id={} error={}",
@@ -233,7 +237,7 @@ def invoke_trigger(
             )
 
     normalized_path = _normalize_trigger_path(path)
-    trigger = trigger_service.resolve_by_path(normalized_path, user_id)
+    trigger = await trigger_service.resolve_by_path(normalized_path, user_id)
     if trigger is None:
         logger.error(
             "trigger_enqueue_skipped | trigger_unavailable path={} user_id={}",
@@ -245,7 +249,9 @@ def invoke_trigger(
             detail=f"Trigger not found for path '{normalized_path}' and user",
         )
     _validate_trigger_secret(authorization, trigger.secret_value)
-    linked_ids, dispatchable_ids = _linked_and_dispatchable_job_ids(link_repo, trigger.id, user_id)
+    linked_ids, dispatchable_ids = await _linked_and_dispatchable_job_ids(
+        link_repo, trigger.id, user_id
+    )
     _ensure_trigger_has_dispatchable_jobs(linked_ids, dispatchable_ids)
 
     trigger_payload = _validate_and_build_trigger_payload(trigger, body)
@@ -256,7 +262,7 @@ def invoke_trigger(
     recipient_whatsapp = None
 
     for job_definition_id in dispatchable_ids:
-        snapshot = job_definition_service.resolve_for_run(
+        snapshot = await job_definition_service.resolve_for_run(
             job_definition_id, user_id, trigger.id
         )
         if snapshot is None:
@@ -273,7 +279,7 @@ def invoke_trigger(
         target_id = target_data.get("id", "")
 
         try:
-            run_repo.enqueue_production_job_run_with_quota(
+            await run_repo.enqueue_production_job_run_with_quota(
                 job_id,
                 run_id=run_id,
                 owner_user_id=user_id,
@@ -299,7 +305,7 @@ def invoke_trigger(
                 payload["keywords"] = log_preview
             if recipient_whatsapp is not None:
                 payload["recipient_whatsapp"] = recipient_whatsapp
-            send_result = queue_repo.send(payload, delay_seconds=0)
+            send_result = await queue_repo.send(payload, delay_seconds=0)
             job_ids_accepted.append(job_id)
             run_ids_accepted.append(run_id)
             logger.debug(

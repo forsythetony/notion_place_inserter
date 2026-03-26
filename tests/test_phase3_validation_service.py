@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -48,7 +48,7 @@ def _validation_service(
     )
 
 
-def test_validation_service_rejects_job_with_no_stages():
+async def test_validation_service_rejects_job_with_no_stages():
     """Job must have at least one stage."""
     job = JobDefinition(
         id="j1",
@@ -61,11 +61,11 @@ def test_validation_service_rejects_job_with_no_stages():
     graph = JobGraph(job=job, stages=[], pipelines=[], steps=[])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph)
+        await svc.validate_job_graph(graph)
     assert "at least one stage" in str(exc_info.value).lower()
 
 
-def test_validation_service_rejects_stage_with_no_pipelines():
+async def test_validation_service_rejects_stage_with_no_pipelines():
     """Stage must have at least one pipeline."""
     job = JobDefinition(
         id="j1",
@@ -85,11 +85,11 @@ def test_validation_service_rejects_stage_with_no_pipelines():
     graph = JobGraph(job=job, stages=[stage], pipelines=[], steps=[])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph)
+        await svc.validate_job_graph(graph)
     assert "at least one pipeline" in str(exc_info.value).lower()
 
 
-def test_validation_service_rejects_duplicate_stage_sequences():
+async def test_validation_service_rejects_duplicate_stage_sequences():
     """Stage sequences must be unique within job."""
     job = JobDefinition(
         id="j1",
@@ -124,11 +124,11 @@ def test_validation_service_rejects_duplicate_stage_sequences():
     graph = JobGraph(job=job, stages=[s1, s2], pipelines=[p1, p2], steps=[st1, st2])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph)
+        await svc.validate_job_graph(graph)
     assert "unique" in str(exc_info.value).lower()
 
 
-def test_validation_service_rejects_property_set_not_final_step():
+async def test_validation_service_rejects_property_set_not_final_step():
     """Pipeline must terminate with Cache Set or Property Set."""
     job = JobDefinition(
         id="j1",
@@ -175,11 +175,11 @@ def test_validation_service_rejects_property_set_not_final_step():
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1, st2])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph)
+        await svc.validate_job_graph(graph)
     assert "terminate" in str(exc_info.value).lower() or "cache set" in str(exc_info.value).lower()
 
 
-def test_validation_service_rejects_job_exceeding_stage_limit():
+async def test_validation_service_rejects_job_exceeding_stage_limit():
     """Job must not exceed max_stages_per_job."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -190,7 +190,7 @@ def test_validation_service_rejects_job_exceeding_stage_limit():
             "max_stages_per_job: 1\nmax_pipelines_per_stage: 10\nmax_steps_per_pipeline: 50\n"
         )
         app_repo = YamlAppConfigRepository(base=base)
-        limits = app_repo.get_by_owner("u1")
+        limits = await app_repo.get_by_owner("u1")
         assert limits is not None
         assert limits.max_stages_per_job == 1
 
@@ -227,17 +227,17 @@ def test_validation_service_rejects_job_exceeding_stage_limit():
         graph = JobGraph(job=job, stages=[s1, s2], pipelines=[p1, p2], steps=[st1, st2])
         svc = _validation_service(base=base, app_config_repo=app_repo)
         with pytest.raises(ValidationError) as exc_info:
-            svc.validate_job_graph(graph)
+            await svc.validate_job_graph(graph)
         assert "max_stages" in str(exc_info.value).lower() or "exceeds" in str(exc_info.value).lower()
 
 
-def test_validation_service_accepts_valid_bootstrap_job():
+async def test_validation_service_accepts_valid_bootstrap_job():
     """Valid Notion Place Inserter-like job passes validation (skip reference checks)."""
     data = load_yaml_file("product_model/bootstrap/jobs/notion_place_inserter.yaml")
     assert data is not None
     graph = parse_job_graph(data, owner_user_id_override="user_test")
     svc = _validation_service()
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
 
 
 def test_validation_service_validate_stage_definition():
@@ -270,7 +270,7 @@ def test_validation_service_validate_pipeline_definition():
     assert "at least one step" in str(exc_info.value).lower()
 
 
-def test_validation_service_validate_trigger_rejects_empty_path():
+async def test_validation_service_validate_trigger_rejects_empty_path():
     """validate_trigger rejects empty path."""
     svc = ValidationService()
     trigger = TriggerDefinition(
@@ -286,7 +286,7 @@ def test_validation_service_validate_trigger_rejects_empty_path():
         secret_value="placeholder",
     )
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_trigger(trigger)
+        await svc.validate_trigger(trigger)
     assert "path" in str(exc_info.value).lower()
 
 
@@ -298,7 +298,7 @@ def test_validation_error_aggregates_messages():
     assert "error two" in str(err)
 
 
-def test_validation_service_accepts_property_set_page_metadata_cover_image():
+async def test_validation_service_accepts_property_set_page_metadata_cover_image():
     """Property Set with target_kind=page_metadata and target_field=cover_image is valid."""
     job = JobDefinition(
         id="j1",
@@ -336,10 +336,10 @@ def test_validation_service_accepts_property_set_page_metadata_cover_image():
     )
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
     svc = _validation_service()
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
 
 
-def test_validation_service_accepts_property_set_page_metadata_icon_image():
+async def test_validation_service_accepts_property_set_page_metadata_icon_image():
     """Property Set with target_kind=page_metadata and target_field=icon_image is valid."""
     job = JobDefinition(
         id="j1",
@@ -377,10 +377,10 @@ def test_validation_service_accepts_property_set_page_metadata_icon_image():
     )
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
     svc = _validation_service()
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
 
 
-def test_validation_service_rejects_property_set_page_metadata_invalid_target_field():
+async def test_validation_service_rejects_property_set_page_metadata_invalid_target_field():
     """Property Set with target_kind=page_metadata and invalid target_field fails."""
     job = JobDefinition(
         id="j1",
@@ -419,11 +419,11 @@ def test_validation_service_rejects_property_set_page_metadata_invalid_target_fi
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph, skip_reference_checks=True)
+        await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert "cover_image" in str(exc_info.value) or "icon_image" in str(exc_info.value)
 
 
-def test_validation_service_accepts_signal_ref_within_same_pipeline():
+async def test_validation_service_accepts_signal_ref_within_same_pipeline():
     """step signal_ref may reference preceding steps in the same pipeline only."""
     job = JobDefinition(
         id="j1",
@@ -467,10 +467,10 @@ def test_validation_service_accepts_signal_ref_within_same_pipeline():
     )
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st_lookup, st_cache])
     svc = _validation_service()
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
 
 
-def test_validation_service_migrates_raw_input_when_linked_triggers_declare_keywords():
+async def test_validation_service_migrates_raw_input_when_linked_triggers_declare_keywords():
     """save-time validation rewrites raw_input trigger refs when all linked triggers have keywords."""
     job = JobDefinition(
         id="j1",
@@ -514,24 +514,24 @@ def test_validation_service_migrates_raw_input_when_linked_triggers_declare_keyw
     )
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st_lookup, st_cache])
     link_repo = MagicMock()
-    link_repo.list_trigger_ids_for_job.return_value = ["tr1"]
+    link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["tr1"])
     tr = MagicMock()
     tr.request_body_schema = {
         "type": "object",
         "properties": {"keywords": {"type": "string"}},
     }
     trigger_repo = MagicMock()
-    trigger_repo.get_by_id.return_value = tr
+    trigger_repo.get_by_id = AsyncMock(return_value=tr)
     svc = ValidationService(
         trigger_repo=trigger_repo,
         trigger_job_link_repo=link_repo,
         step_template_repo=_step_template_repo(),
     )
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert st_lookup.input_bindings["query"]["signal_ref"] == "trigger.payload.keywords"
 
 
-def test_validation_service_skips_migration_when_trigger_lacks_keywords_field():
+async def test_validation_service_skips_migration_when_trigger_lacks_keywords_field():
     """Do not rewrite raw_input if a linked trigger's schema does not declare keywords."""
     job = JobDefinition(
         id="j1",
@@ -575,7 +575,7 @@ def test_validation_service_skips_migration_when_trigger_lacks_keywords_field():
     )
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st_lookup, st_cache])
     link_repo = MagicMock()
-    link_repo.list_trigger_ids_for_job.return_value = ["tr1"]
+    link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["tr1"])
     tr = MagicMock()
     tr.request_body_schema = {
         "type": "object",
@@ -583,17 +583,17 @@ def test_validation_service_skips_migration_when_trigger_lacks_keywords_field():
         "properties": {"limit": {"type": "number"}},
     }
     trigger_repo = MagicMock()
-    trigger_repo.get_by_id.return_value = tr
+    trigger_repo.get_by_id = AsyncMock(return_value=tr)
     svc = ValidationService(
         trigger_repo=trigger_repo,
         trigger_job_link_repo=link_repo,
         step_template_repo=_step_template_repo(),
     )
-    svc.validate_job_graph(graph, skip_reference_checks=True)
+    await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert st_lookup.input_bindings["query"]["signal_ref"] == "trigger.payload.raw_input"
 
 
-def test_validation_service_rejects_signal_ref_across_pipelines():
+async def test_validation_service_rejects_signal_ref_across_pipelines():
     """step signal_ref to a step in another pipeline fails; use cache_key_ref instead."""
     job = JobDefinition(
         id="j1",
@@ -659,11 +659,11 @@ def test_validation_service_rejects_signal_ref_across_pipelines():
     )
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph, skip_reference_checks=True)
+        await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert "same pipeline" in str(exc_info.value).lower()
 
 
-def test_validation_service_rejects_property_set_data_target_id_mismatch():
+async def test_validation_service_rejects_property_set_data_target_id_mismatch():
     """Property Set with data_target_id that does not match job target fails (legacy config)."""
     job = JobDefinition(
         id="j1",
@@ -703,6 +703,6 @@ def test_validation_service_rejects_property_set_data_target_id_mismatch():
     graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[st1])
     svc = _validation_service()
     with pytest.raises(ValidationError) as exc_info:
-        svc.validate_job_graph(graph, skip_reference_checks=True)
+        await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert "wrong_target" in str(exc_info.value)
     assert "d1" in str(exc_info.value)

@@ -78,7 +78,7 @@ class JobDefinitionService:
         self._target_service = target_service
         self._step_template_repo = step_template_repository
 
-    def resolve_for_run(
+    async def resolve_for_run(
         self, job_id: str, owner_user_id: str, trigger_id: str
     ) -> ResolvedJobSnapshot | None:
         """
@@ -87,16 +87,16 @@ class JobDefinitionService:
         Returns None if job, trigger, or target cannot be resolved for the owner.
         Snapshot is owner-scoped; cross-tenant resolution is rejected.
         """
-        graph = self._job_repo.get_graph_by_id(job_id, owner_user_id)
+        graph = await self._job_repo.get_graph_by_id(job_id, owner_user_id)
         if graph is None:
             return None
 
         job = graph.job
-        trigger = self._trigger_service.get_by_id(trigger_id, owner_user_id)
+        trigger = await self._trigger_service.get_by_id(trigger_id, owner_user_id)
         if trigger is None:
             return None
 
-        target_with_schema = self._target_service.get_with_active_schema(
+        target_with_schema = await self._target_service.get_with_active_schema(
             job.target_id, owner_user_id
         )
         if target_with_schema is None:
@@ -115,7 +115,7 @@ class JobDefinitionService:
         targets_dict: dict[str, Any] = {}
         owner_for_targets = owner_user_id
         for tid in related_target_ids:
-            t = self._target_service.get_by_id(tid, owner_for_targets)
+            t = await self._target_service.get_by_id(tid, owner_for_targets)
             if t is not None:
                 targets_dict[tid] = domain_to_yaml_dict(t)
 
@@ -123,7 +123,7 @@ class JobDefinitionService:
         if self._step_template_repo:
             template_ids = {s.step_template_id for s in graph.steps if s.step_template_id}
             for tid in template_ids:
-                template = self._step_template_repo.get_by_id(tid)
+                template = await self._step_template_repo.get_by_id(tid)
                 if template is not None:
                     step_templates_dict[tid] = {"query_schema": template.query_schema}
 

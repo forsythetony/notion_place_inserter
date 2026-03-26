@@ -13,3 +13,5 @@ rich>=13.0.0
 twilio>=9.0.0
 supabase>=2.0.0
 PyYAML>=6.0.0
+pytest>=8.0.0
+pytest-asyncio>=0.24.0

@@ -1,6 +1,6 @@
 """Tests for SchemaSyncService (p3_pr07)."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -8,7 +8,7 @@ from app.domain import ConnectorInstance, DataTarget
 from app.services.schema_sync_service import SchemaSyncService, SchemaSyncServiceError
 
 
-def test_schema_sync_service_rejects_plaintext_secrets():
+async def test_schema_sync_service_rejects_plaintext_secrets():
     """SchemaSyncService raises when connector has plaintext secret in config."""
     mock_target_repo = MagicMock()
     mock_schema_repo = MagicMock()
@@ -33,8 +33,8 @@ def test_schema_sync_service_rejects_plaintext_secrets():
         secret_ref=None,
     )
 
-    mock_target_repo.get_by_id.return_value = target
-    mock_connector_repo.get_by_id.return_value = connector
+    mock_target_repo.get_by_id = AsyncMock(return_value=target)
+    mock_connector_repo.get_by_id = AsyncMock(return_value=connector)
 
     service = SchemaSyncService(
         target_repository=mock_target_repo,
@@ -44,11 +44,11 @@ def test_schema_sync_service_rejects_plaintext_secrets():
     )
 
     with pytest.raises(SchemaSyncServiceError) as exc_info:
-        service.sync_for_target("t1", "u1")
+        await service.sync_for_target("t1", "u1")
     assert "secret_ref" in str(exc_info.value).lower() or "plaintext" in str(exc_info.value).lower()
 
 
-def test_schema_sync_service_rejects_missing_secret_ref():
+async def test_schema_sync_service_rejects_missing_secret_ref():
     """SchemaSyncService raises when connector has no secret_ref."""
     mock_target_repo = MagicMock()
     mock_schema_repo = MagicMock()
@@ -73,8 +73,8 @@ def test_schema_sync_service_rejects_missing_secret_ref():
         secret_ref=None,
     )
 
-    mock_target_repo.get_by_id.return_value = target
-    mock_connector_repo.get_by_id.return_value = connector
+    mock_target_repo.get_by_id = AsyncMock(return_value=target)
+    mock_connector_repo.get_by_id = AsyncMock(return_value=connector)
 
     service = SchemaSyncService(
         target_repository=mock_target_repo,
@@ -84,14 +84,14 @@ def test_schema_sync_service_rejects_missing_secret_ref():
     )
 
     with pytest.raises(SchemaSyncServiceError) as exc_info:
-        service.sync_for_target("t1", "u1")
+        await service.sync_for_target("t1", "u1")
     assert "secret_ref" in str(exc_info.value).lower()
 
 
-def test_schema_sync_service_raises_when_target_not_found():
+async def test_schema_sync_service_raises_when_target_not_found():
     """SchemaSyncService raises when target does not exist."""
     mock_target_repo = MagicMock()
-    mock_target_repo.get_by_id.return_value = None
+    mock_target_repo.get_by_id = AsyncMock(return_value=None)
 
     service = SchemaSyncService(
         target_repository=mock_target_repo,
@@ -101,11 +101,11 @@ def test_schema_sync_service_raises_when_target_not_found():
     )
 
     with pytest.raises(SchemaSyncServiceError) as exc_info:
-        service.sync_for_target("t1", "u1")
+        await service.sync_for_target("t1", "u1")
     assert "not found" in str(exc_info.value).lower()
 
 
-def test_schema_sync_service_raises_unsupported_target_template():
+async def test_schema_sync_service_raises_unsupported_target_template():
     """SchemaSyncService raises for unsupported target template."""
     mock_target_repo = MagicMock()
     mock_connector_repo = MagicMock()
@@ -129,8 +129,8 @@ def test_schema_sync_service_raises_unsupported_target_template():
         secret_ref="ENV_NOTION_KEY",
     )
 
-    mock_target_repo.get_by_id.return_value = target
-    mock_connector_repo.get_by_id.return_value = connector
+    mock_target_repo.get_by_id = AsyncMock(return_value=target)
+    mock_connector_repo.get_by_id = AsyncMock(return_value=connector)
 
     service = SchemaSyncService(
         target_repository=mock_target_repo,
@@ -140,5 +140,5 @@ def test_schema_sync_service_raises_unsupported_target_template():
     )
 
     with pytest.raises(SchemaSyncServiceError) as exc_info:
-        service.sync_for_target("t1", "u1")
+        await service.sync_for_target("t1", "u1")
     assert "not supported" in str(exc_info.value).lower()

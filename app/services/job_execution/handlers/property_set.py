@@ -15,7 +15,7 @@ _ALLOWED_PAGE_METADATA_FIELDS = frozenset({"cover_image", "icon_image"})
 class PropertySetHandler(StepRuntime):
     """Write value to target schema property or page metadata (terminal step)."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

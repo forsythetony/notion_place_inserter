@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from loguru import logger
-from supabase import Client
+from supabase import AsyncClient
 
 from app.domain.runs import (
     JobRun,
@@ -183,15 +183,15 @@ class PostgresRunRepository:
     STEP_RUNS = "step_runs"
     USAGE_RECORDS = "usage_records"
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
     # ---- RunRepository protocol ----
 
-    def get_job_run(self, id: str, owner_user_id: str) -> JobRun | None:
+    async def get_job_run(self, id: str, owner_user_id: str) -> JobRun | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.JOB_RUNS)
                 .select("*")
                 .eq("id", id)
@@ -209,12 +209,12 @@ class PostgresRunRepository:
             return None
         return _row_to_job_run(rows[0])
 
-    def get_job_run_by_platform_job_id(
+    async def get_job_run_by_platform_job_id(
         self, platform_job_id: str, owner_user_id: str
     ) -> JobRun | None:
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.JOB_RUNS)
                 .select("*")
                 .eq("platform_job_id", platform_job_id)
@@ -236,10 +236,10 @@ class PostgresRunRepository:
             return None
         return _row_to_job_run(rows[0])
 
-    def find_job_run_by_platform_job_id(self, platform_job_id: str) -> JobRun | None:
+    async def find_job_run_by_platform_job_id(self, platform_job_id: str) -> JobRun | None:
         """Find JobRun by platform_job_id without owner (for lifecycle adapter)."""
         try:
-            r = (
+            r = await (
                 self._client.table(self.JOB_RUNS)
                 .select("*")
                 .eq("platform_job_id", platform_job_id)
@@ -258,10 +258,10 @@ class PostgresRunRepository:
             return None
         return _row_to_job_run(rows[0])
 
-    def find_job_run_by_id(self, run_id: str) -> JobRun | None:
+    async def find_job_run_by_id(self, run_id: str) -> JobRun | None:
         """Find JobRun by id without owner (for lifecycle adapter)."""
         try:
-            r = (
+            r = await (
                 self._client.table(self.JOB_RUNS)
                 .select("*")
                 .eq("id", run_id)
@@ -276,11 +276,11 @@ class PostgresRunRepository:
             return None
         return _row_to_job_run(rows[0])
 
-    def count_job_runs_owner_since_utc(self, owner_user_id: str, since_iso: str) -> int:
+    async def count_job_runs_owner_since_utc(self, owner_user_id: str, since_iso: str) -> int:
         """Count job_runs for owner with ``created_at >= since_iso`` (timestamptz ISO)."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
-            r = (
+            r = await (
                 self._client.table(self.JOB_RUNS)
                 .select("id", count="exact", head=True)
                 .eq("owner_user_id", uid)
@@ -294,7 +294,7 @@ class PostgresRunRepository:
             raise
         return int(r.count or 0)
 
-    def list_job_runs_by_owner(
+    async def list_job_runs_by_owner(
         self,
         owner_user_id: str,
         *,
@@ -315,7 +315,7 @@ class PostgresRunRepository:
                 q = q.gte("created_at", from_iso)
             if to_iso:
                 q = q.lte("created_at", to_iso)
-            r = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+            r = await q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         except ValueError:
             return []
         except Exception as e:
@@ -323,7 +323,7 @@ class PostgresRunRepository:
             raise
         return [_row_to_job_run(row) for row in (r.data or [])]
 
-    def list_recent_job_runs(
+    async def list_recent_job_runs(
         self,
         *,
         limit: int = 50,
@@ -351,13 +351,13 @@ class PostgresRunRepository:
                 q = q.gte("created_at", from_iso)
             if to_iso:
                 q = q.lte("created_at", to_iso)
-            r = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+            r = await q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         except Exception as e:
             logger.exception("postgres_list_recent_job_runs_failed | error={}", e)
             raise
         return [_row_to_job_run(row) for row in (r.data or [])]
 
-    def save_job_run(self, run: JobRun) -> None:
+    async def save_job_run(self, run: JobRun) -> None:
         st = _normalize_db_run_status(run.status)
         _validate_run_status(st)
         uid = str(_ensure_uuid(run.owner_user_id))
@@ -378,16 +378,16 @@ class PostgresRunRepository:
             "result_json": run.result_json,
         }
         try:
-            self._client.table(self.JOB_RUNS).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.JOB_RUNS).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_save_job_run_failed | run_id={} error={}", run.id, e)
             raise
 
-    def save_stage_run(self, run: StageRun) -> None:
+    async def save_stage_run(self, run: StageRun) -> None:
         _validate_run_status(run.status)
         uid = str(_ensure_uuid(run.owner_user_id))
         job_run_uuid = UUID(run.job_run_id)
-        stage_run_uuid = resolve_or_create_mapping(
+        stage_run_uuid = await resolve_or_create_mapping(
             self._client, "stage_run", run.id
         )
         row = {
@@ -400,19 +400,19 @@ class PostgresRunRepository:
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         }
         try:
-            self._client.table(self.STAGE_RUNS).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.STAGE_RUNS).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_save_stage_run_failed | stage_run_id={} error={}", run.id, e)
             raise
 
-    def save_pipeline_run(self, run: PipelineRun) -> None:
+    async def save_pipeline_run(self, run: PipelineRun) -> None:
         _validate_run_status(run.status)
         uid = str(_ensure_uuid(run.owner_user_id))
-        stage_run_uuid = resolve_or_create_mapping(
+        stage_run_uuid = await resolve_or_create_mapping(
             self._client, "stage_run", run.stage_run_id
         )
         job_run_uuid = UUID(run.job_run_id)
-        pipeline_run_uuid = resolve_or_create_mapping(
+        pipeline_run_uuid = await resolve_or_create_mapping(
             self._client, "pipeline_run", run.id
         )
         row = {
@@ -426,22 +426,22 @@ class PostgresRunRepository:
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         }
         try:
-            self._client.table(self.PIPELINE_RUNS).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.PIPELINE_RUNS).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_save_pipeline_run_failed | pipeline_run_id={} error={}", run.id, e)
             raise
 
-    def save_step_run(self, run: StepRun) -> None:
+    async def save_step_run(self, run: StepRun) -> None:
         _validate_run_status(run.status)
         uid = str(_ensure_uuid(run.owner_user_id))
-        pipeline_run_uuid = resolve_or_create_mapping(
+        pipeline_run_uuid = await resolve_or_create_mapping(
             self._client, "pipeline_run", run.pipeline_run_id
         )
         job_run_uuid = UUID(run.job_run_id)
-        stage_run_uuid = resolve_or_create_mapping(
+        stage_run_uuid = await resolve_or_create_mapping(
             self._client, "stage_run", run.stage_run_id
         )
-        step_run_uuid = resolve_or_create_mapping(
+        step_run_uuid = await resolve_or_create_mapping(
             self._client, "step_run", run.id
         )
         row = {
@@ -462,12 +462,12 @@ class PostgresRunRepository:
             "error_summary": run.error_summary,
         }
         try:
-            self._client.table(self.STEP_RUNS).upsert(row, on_conflict="id").execute()
+            await self._client.table(self.STEP_RUNS).upsert(row, on_conflict="id").execute()
         except Exception as e:
             logger.exception("postgres_save_step_run_failed | step_run_id={} error={}", run.id, e)
             raise
 
-    def list_step_runs_for_job_run(
+    async def list_step_runs_for_job_run(
         self, job_run_id: str, owner_user_id: str
     ) -> list[StepRun]:
         try:
@@ -476,7 +476,7 @@ class PostgresRunRepository:
         except ValueError:
             return []
         try:
-            r = (
+            r = await (
                 self._client.table(self.STEP_RUNS)
                 .select(
                     "id, pipeline_run_id, step_id, step_template_id, job_run_id, stage_run_id, "
@@ -501,7 +501,7 @@ class PostgresRunRepository:
         pr_ids = list({str(row["pipeline_run_id"]) for row in rows})
         pipeline_ids: dict[str, str] = {}
         try:
-            pr = (
+            pr = await (
                 self._client.table(self.PIPELINE_RUNS)
                 .select("id, pipeline_id")
                 .in_("id", pr_ids)
@@ -521,7 +521,7 @@ class PostgresRunRepository:
             out.append(_row_to_step_run(row, pipeline_id=pid))
         return out
 
-    def list_stage_runs_for_job_run(
+    async def list_stage_runs_for_job_run(
         self, job_run_id: str, owner_user_id: str
     ) -> list[StageRun]:
         try:
@@ -530,7 +530,7 @@ class PostgresRunRepository:
         except ValueError:
             return []
         try:
-            r = (
+            r = await (
                 self._client.table(self.STAGE_RUNS)
                 .select("*")
                 .eq("job_run_id", str(job_run_uuid))
@@ -547,7 +547,7 @@ class PostgresRunRepository:
             raise
         return [_row_to_stage_run(row) for row in (r.data or [])]
 
-    def list_pipeline_run_executions_for_job_run(
+    async def list_pipeline_run_executions_for_job_run(
         self, job_run_id: str, owner_user_id: str
     ) -> list[PipelineRun]:
         try:
@@ -556,7 +556,7 @@ class PostgresRunRepository:
         except ValueError:
             return []
         try:
-            r = (
+            r = await (
                 self._client.table(self.PIPELINE_RUNS)
                 .select("*")
                 .eq("job_run_id", str(job_run_uuid))
@@ -573,7 +573,7 @@ class PostgresRunRepository:
             raise
         return [_row_to_pipeline_run(row) for row in (r.data or [])]
 
-    def list_usage_records_for_job_run(
+    async def list_usage_records_for_job_run(
         self, job_run_id: str, owner_user_id: str
     ) -> list[UsageRecord]:
         try:
@@ -582,7 +582,7 @@ class PostgresRunRepository:
         except ValueError:
             return []
         try:
-            r = (
+            r = await (
                 self._client.table(self.USAGE_RECORDS)
                 .select("*")
                 .eq("job_run_id", str(job_run_uuid))
@@ -599,7 +599,7 @@ class PostgresRunRepository:
             raise
         return [_row_to_usage_record(row) for row in (r.data or [])]
 
-    def count_run_structure_for_job_run(self, job_run_id: str, owner_user_id: str) -> dict[str, int]:
+    async def count_run_structure_for_job_run(self, job_run_id: str, owner_user_id: str) -> dict[str, int]:
         """Count stage_runs, pipeline_run_executions, and step_runs rows for a job run."""
         try:
             uid = str(_ensure_uuid(owner_user_id))
@@ -608,7 +608,7 @@ class PostgresRunRepository:
             return {"stages": 0, "pipelines": 0, "steps": 0}
         out = {"stages": 0, "pipelines": 0, "steps": 0}
         try:
-            rs = (
+            rs = await (
                 self._client.table(self.STAGE_RUNS)
                 .select("id", count="exact", head=True)
                 .eq("job_run_id", jrid)
@@ -624,7 +624,7 @@ class PostgresRunRepository:
             )
             raise
         try:
-            rp = (
+            rp = await (
                 self._client.table(self.PIPELINE_RUNS)
                 .select("id", count="exact", head=True)
                 .eq("job_run_id", jrid)
@@ -640,7 +640,7 @@ class PostgresRunRepository:
             )
             raise
         try:
-            rst = (
+            rst = await (
                 self._client.table(self.STEP_RUNS)
                 .select("id", count="exact", head=True)
                 .eq("job_run_id", jrid)
@@ -657,15 +657,15 @@ class PostgresRunRepository:
             raise
         return out
 
-    def save_usage_record(self, record: UsageRecord) -> None:
+    async def save_usage_record(self, record: UsageRecord) -> None:
         uid = str(_ensure_uuid(record.owner_user_id))
         job_run_uuid = UUID(record.job_run_id)
         step_run_uuid = None
         if record.step_run_id:
-            step_run_uuid = resolve_or_create_mapping(
+            step_run_uuid = await resolve_or_create_mapping(
                 self._client, "step_run", record.step_run_id
             )
-        usage_uuid = resolve_or_create_mapping(
+        usage_uuid = await resolve_or_create_mapping(
             self._client, "usage_record", record.id
         )
         row = {
@@ -680,14 +680,14 @@ class PostgresRunRepository:
             "metadata": record.metadata,
         }
         try:
-            self._client.table(self.USAGE_RECORDS).insert(row).execute()
+            await self._client.table(self.USAGE_RECORDS).insert(row).execute()
         except Exception as e:
             logger.exception("postgres_save_usage_record_failed | record_id={} error={}", record.id, e)
             raise
 
     # ---- Lifecycle API (worker/route) ----
 
-    def create_job(
+    async def create_job(
         self,
         job_id: str,
         *,
@@ -702,7 +702,7 @@ class PostgresRunRepository:
         definition_snapshot_ref: str | None = None,
     ) -> None:
         if run_id and owner_user_id:
-            self.create_run(
+            await self.create_run(
                 job_id=job_id,
                 run_id=run_id,
                 status="pending",
@@ -715,7 +715,7 @@ class PostgresRunRepository:
                 definition_snapshot_ref=definition_snapshot_ref,
             )
 
-    def create_run(
+    async def create_run(
         self,
         job_id: str,
         run_id: str,
@@ -754,7 +754,7 @@ class PostgresRunRepository:
             retry_count=0,
         )
         try:
-            self.save_job_run(run)
+            await self.save_job_run(run)
             logger.info(
                 "postgres_run_create_run | run_id={} platform_job_id={} owner={} definition_snapshot_ref={}",
                 run_id,
@@ -771,7 +771,7 @@ class PostgresRunRepository:
             )
             raise
 
-    def enqueue_production_job_run_with_quota(
+    async def enqueue_production_job_run_with_quota(
         self,
         job_id: str,
         *,
@@ -815,7 +815,7 @@ class PostgresRunRepository:
             "p_month_cap": month_cap,
         }
         try:
-            self._client.rpc("enqueue_job_run_with_quota_check", params).execute()
+            await self._client.rpc("enqueue_job_run_with_quota_check", params).execute()
         except Exception as e:
             msg = str(e)
             parsed = parse_run_quota_error_message(msg)
@@ -841,7 +841,7 @@ class PostgresRunRepository:
             definition_snapshot_ref,
         )
 
-    def update_job_status(
+    async def update_job_status(
         self,
         job_id: str,
         status: str,
@@ -851,7 +851,7 @@ class PostgresRunRepository:
         error_message: str | None = None,
         retry_count: int | None = None,
     ) -> None:
-        run = self.find_job_run_by_platform_job_id(job_id)
+        run = await self.find_job_run_by_platform_job_id(job_id)
         if not run:
             logger.warning(
                 "postgres_run_update_job_status_no_run | platform_job_id={}",
@@ -868,7 +868,7 @@ class PostgresRunRepository:
         if retry_count is not None:
             run.retry_count = retry_count
         try:
-            self.save_job_run(run)
+            await self.save_job_run(run)
         except Exception as e:
             logger.exception(
                 "postgres_run_update_job_status_failed | platform_job_id={} status={} error={}",
@@ -878,21 +878,21 @@ class PostgresRunRepository:
             )
             raise
 
-    def increment_job_retry_count(
+    async def increment_job_retry_count(
         self,
         job_id: str,
         retry_count: int,
         *,
         error_message: str | None = None,
     ) -> None:
-        run = self.find_job_run_by_platform_job_id(job_id)
+        run = await self.find_job_run_by_platform_job_id(job_id)
         if not run:
             return
         run.retry_count = retry_count
         if error_message is not None:
             run.error_summary = error_message
         try:
-            self.save_job_run(run)
+            await self.save_job_run(run)
         except Exception as e:
             logger.exception(
                 "postgres_run_increment_retry_failed | platform_job_id={} retry_count={} error={}",
@@ -902,7 +902,7 @@ class PostgresRunRepository:
             )
             raise
 
-    def update_run(
+    async def update_run(
         self,
         run_id: str,
         *,
@@ -910,7 +910,7 @@ class PostgresRunRepository:
         result_json: dict | None = None,
         completed_at: datetime | None = None,
     ) -> None:
-        run = self.find_job_run_by_id(run_id)
+        run = await self.find_job_run_by_id(run_id)
         if not run:
             logger.warning(
                 "postgres_run_update_run_no_run | run_id={}",
@@ -924,7 +924,7 @@ class PostgresRunRepository:
         if result_json is not None:
             run.result_json = result_json
         try:
-            self.save_job_run(run)
+            await self.save_job_run(run)
         except Exception as e:
             logger.exception(
                 "postgres_run_update_run_failed | run_id={} status={} error={}",
@@ -934,15 +934,15 @@ class PostgresRunRepository:
             )
             raise
 
-    def get_run_status(self, run_id: str) -> str | None:
-        run = self.find_job_run_by_id(run_id)
+    async def get_run_status(self, run_id: str) -> str | None:
+        run = await self.find_job_run_by_id(run_id)
         return run.status if run else None
 
-    def get_job_retry_count(self, job_id: str) -> int:
-        run = self.find_job_run_by_platform_job_id(job_id)
+    async def get_job_retry_count(self, job_id: str) -> int:
+        run = await self.find_job_run_by_platform_job_id(job_id)
         return run.retry_count if run else 0
 
-    def insert_event(
+    async def insert_event(
         self,
         run_id: str,
         event_type: str,

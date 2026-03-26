@@ -25,7 +25,7 @@ def _render_template(template: str, values: dict[str, str]) -> str:
 class TemplaterHandler(StepRuntime):
     """Render a string from a template and configurable values. Values can reference cache or signals."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

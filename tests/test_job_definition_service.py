@@ -48,7 +48,7 @@ def test_resolved_job_snapshot_to_dict_returns_copy():
     assert snap.snapshot["job"]["id"] == "j1"
 
 
-def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
+async def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
     """JobDefinitionService resolves complete snapshot when tenant has target."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -93,7 +93,7 @@ def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
         )
         target_repo = YamlTargetRepository(base=base)
         schema_repo = YamlTargetSchemaRepository(base=base)
-        target_repo.save(target)
+        await target_repo.save(target)
 
         job_repo = YamlJobRepository(base=base)
         trigger_repo = YamlTriggerRepository(base=base)
@@ -108,7 +108,7 @@ def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
             target_service=target_service,
         )
 
-        snapshot = service.resolve_for_run(
+        snapshot = await service.resolve_for_run(
             "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is not None
@@ -124,7 +124,7 @@ def test_job_definition_service_resolves_bootstrap_job_with_tenant_target():
         assert snapshot.snapshot["active_schema"] is None
 
 
-def test_job_definition_service_returns_none_when_target_missing():
+async def test_job_definition_service_returns_none_when_target_missing():
     """JobDefinitionService returns None when target cannot be resolved."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -168,13 +168,13 @@ def test_job_definition_service_returns_none_when_target_missing():
             target_service=target_service,
         )
 
-        snapshot = service.resolve_for_run(
+        snapshot = await service.resolve_for_run(
             "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is None
 
 
-def test_job_definition_service_returns_none_when_job_missing():
+async def test_job_definition_service_returns_none_when_job_missing():
     """JobDefinitionService returns None when job cannot be resolved."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -195,11 +195,13 @@ def test_job_definition_service_returns_none_when_job_missing():
             target_service=target_service,
         )
 
-        snapshot = service.resolve_for_run("job_nonexistent", "user_1", "trigger_http_locations")
+        snapshot = await service.resolve_for_run(
+            "job_nonexistent", "user_1", "trigger_http_locations"
+        )
         assert snapshot is None
 
 
-def test_job_definition_service_includes_active_schema_when_present():
+async def test_job_definition_service_includes_active_schema_when_present():
     """JobDefinitionService snapshot includes active_schema when target has one."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -252,8 +254,8 @@ def test_job_definition_service_includes_active_schema_when_present():
         )
         target_repo = YamlTargetRepository(base=base)
         schema_repo = YamlTargetSchemaRepository(base=base)
-        target_repo.save(target)
-        schema_repo.save(schema)
+        await target_repo.save(target)
+        await schema_repo.save(schema)
 
         job_repo = YamlJobRepository(base=base)
         trigger_repo = YamlTriggerRepository(base=base)
@@ -268,7 +270,7 @@ def test_job_definition_service_includes_active_schema_when_present():
             target_service=target_service,
         )
 
-        snapshot = service.resolve_for_run(
+        snapshot = await service.resolve_for_run(
             "job_notion_place_inserter", "user_1", "trigger_http_locations"
         )
         assert snapshot is not None
@@ -276,7 +278,7 @@ def test_job_definition_service_includes_active_schema_when_present():
         assert snapshot.snapshot["active_schema"]["id"] == "schema_1"
 
 
-def test_job_definition_service_snapshot_ref_stable_for_same_content():
+async def test_job_definition_service_snapshot_ref_stable_for_same_content():
     """Same snapshot content produces same snapshot_ref."""
     with tempfile.TemporaryDirectory() as tmp:
         base = str(Path(tmp) / "product_model")
@@ -319,7 +321,7 @@ def test_job_definition_service_snapshot_ref_stable_for_same_content():
         )
         target_repo = YamlTargetRepository(base=base)
         schema_repo = YamlTargetSchemaRepository(base=base)
-        target_repo.save(target)
+        await target_repo.save(target)
 
         job_repo = YamlJobRepository(base=base)
         trigger_repo = YamlTriggerRepository(base=base)
@@ -334,8 +336,12 @@ def test_job_definition_service_snapshot_ref_stable_for_same_content():
             target_service=target_service,
         )
 
-        snap1 = service.resolve_for_run("job_notion_place_inserter", "user_1", "trigger_http_locations")
-        snap2 = service.resolve_for_run("job_notion_place_inserter", "user_1", "trigger_http_locations")
+        snap1 = await service.resolve_for_run(
+            "job_notion_place_inserter", "user_1", "trigger_http_locations"
+        )
+        snap2 = await service.resolve_for_run(
+            "job_notion_place_inserter", "user_1", "trigger_http_locations"
+        )
         assert snap1 is not None
         assert snap2 is not None
         assert snap1.snapshot_ref == snap2.snapshot_ref

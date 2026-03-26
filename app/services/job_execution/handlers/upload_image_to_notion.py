@@ -56,7 +56,7 @@ def _is_google_photo_name(value: str) -> bool:
 class UploadImageToNotionHandler(StepRuntime):
     """Fetch image (URL or Google photo name) and upload to Notion; return payload for icon/cover."""
 
-    def execute(
+    async def execute(
         self,
         step_id: str,
         config: dict[str, Any],

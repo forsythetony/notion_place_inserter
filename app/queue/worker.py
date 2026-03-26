@@ -66,7 +66,7 @@ def _is_non_retriable(error: BaseException) -> bool:
     return code in _NON_RETRIABLE_SQLSTATES if code else False
 
 
-def _run_pipeline_sync(
+async def _run_pipeline_async(
     job_execution_service: "JobExecutionService",
     job_definition_service: "JobDefinitionService",
     job_definition_id: str,
@@ -78,12 +78,12 @@ def _run_pipeline_sync(
     trigger_id: str | None,
     live_test: dict[str, Any] | None = None,
 ) -> dict:
-    """Run snapshot-driven pipeline (call from worker thread)."""
+    """Run snapshot-driven pipeline on the worker event loop."""
     if not trigger_id:
         raise RuntimeError(
             f"trigger_id required for resolve_for_run: job_id={job_definition_id} owner={owner_user_id}"
         )
-    snapshot_obj = job_definition_service.resolve_for_run(
+    snapshot_obj = await job_definition_service.resolve_for_run(
         job_definition_id, owner_user_id, trigger_id
     )
     if not snapshot_obj:
@@ -114,7 +114,7 @@ def _run_pipeline_sync(
         raw_api = live_test.get("api_overrides")
         api_overrides = raw_api if isinstance(raw_api, dict) else None
 
-    return job_execution_service.execute_snapshot_run(
+    return await job_execution_service.execute_snapshot_run(
         snapshot=snapshot,
         run_id=run_id,
         job_id=job_id,
@@ -249,14 +249,13 @@ async def run_worker_loop(
     Bounded retries with backoff; final failure marks job/run failed and archives message.
     Runs until cancelled; use asyncio.create_task and cancel on shutdown.
     """
-    loop = asyncio.get_event_loop()
     last_heartbeat = time.monotonic()
     last_idle_debug_at = 0.0
     crossed_thresholds: set[float] = set()
 
     while True:
         try:
-            messages = queue_repo.read(batch_size=1, vt_seconds=vt_seconds)
+            messages = await queue_repo.read(batch_size=1, vt_seconds=vt_seconds)
         except Exception:
             logger.exception("worker_queue_read_failed")
             await asyncio.sleep(poll_interval_seconds)
@@ -360,7 +359,6 @@ async def run_worker_loop(
                     job_execution_service,
                     job_definition_service,
                     event_bus,
-                    loop,
                     retry_delays_seconds=retry_delays_seconds,
                     memory_diagnostics_enabled=memory_diagnostics_enabled,
                     memory_tracemalloc_enabled=memory_tracemalloc_enabled,
@@ -374,10 +372,10 @@ async def run_worker_loop(
                     e,
                 )
                 # Bounded retries exhausted or non-retriable: mark failed and archive
-                _handle_final_failure(msg, queue_repo, run_repo, event_bus, e)
+                await _handle_final_failure(msg, queue_repo, run_repo, event_bus, e)
 
 
-def _handle_final_failure(
+async def _handle_final_failure(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
     run_repo: "PostgresRunRepository",
@@ -387,7 +385,7 @@ def _handle_final_failure(
     """Best-effort: persist failed, emit event, archive. Called when _process_message raises."""
     extracted = _extract_payload(msg)
     if extracted is None:
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
         return
     (
         job_id,
@@ -405,11 +403,11 @@ def _handle_final_failure(
     err_msg = _normalize_error(error)
     now = datetime.now(timezone.utc)
     try:
-        run_repo.update_job_status(
+        await run_repo.update_job_status(
             job_id, "failed", completed_at=now, error_message=err_msg
         )
-        run_repo.update_run(run_id, status="failed", completed_at=now)
-        run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
+        await run_repo.update_run(run_id, status="failed", completed_at=now)
+        await run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
     except Exception:
         logger.exception(
             "worker_final_failure_persist_failed | job_id={} run_id={}",
@@ -429,7 +427,7 @@ def _handle_final_failure(
     except Exception:
         logger.exception("worker_final_failure_event_failed | job_id={}", job_id)
     try:
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
     except Exception:
         logger.exception("worker_final_failure_archive_failed | msg_id={}", msg.message_id)
         raise
@@ -442,7 +440,6 @@ async def _process_message(
     job_execution_service: "JobExecutionService",
     job_definition_service: "JobDefinitionService",
     event_bus: EventBus,
-    loop: asyncio.AbstractEventLoop,
     *,
     retry_delays_seconds: tuple[int, ...] = (5, 30, 60),
     memory_diagnostics_enabled: bool = False,
@@ -490,7 +487,7 @@ async def _process_message(
             msg.message_id,
             list((msg.payload or {}).keys()),
         )
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
         return
 
     (
@@ -527,7 +524,7 @@ async def _process_message(
 
     # Idempotency: skip if run already terminal
     try:
-        current_status = run_repo.get_run_status(run_id)
+        current_status = await run_repo.get_run_status(run_id)
     except Exception:
         logger.exception("worker_idempotency_check_failed | run_id={}", run_id)
         raise
@@ -540,11 +537,11 @@ async def _process_message(
             current_status,
         )
         _log_delta("duplicate_skip", 0)
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
         return
 
     # Bounded retry loop
-    retry_count = run_repo.get_job_retry_count(job_id)
+    retry_count = await run_repo.get_job_retry_count(job_id)
     max_retries = len(retry_delays_seconds)
 
     # Defense-in-depth: force terminal if queue read_count exceeds ceiling
@@ -557,7 +554,7 @@ async def _process_message(
             _READ_COUNT_CEILING,
         )
         _log_delta("failed_terminal", retry_count, "read_count_ceiling")
-        _mark_failed_and_archive(
+        await _mark_failed_and_archive(
             msg,
             queue_repo,
             run_repo,
@@ -576,16 +573,16 @@ async def _process_message(
         now = datetime.now(timezone.utc)
         try:
             # Persist running
-            run_repo.update_job_status(
+            await run_repo.update_job_status(
                 job_id, "running", started_at=now, retry_count=retry_count
             )
-            run_repo.update_run(run_id, status="running")
+            await run_repo.update_run(run_id, status="running")
             event_payload: dict = {"keywords_preview": log_preview[:80]}
             if job_definition_id:
                 event_payload["job_definition_id"] = job_definition_id
             if job_slug:
                 event_payload["job_slug"] = job_slug
-            run_repo.insert_event(run_id, "pipeline_started", event_payload)
+            await run_repo.insert_event(run_id, "pipeline_started", event_payload)
         except Exception as e:
             logger.exception(
                 "worker_persist_running_failed | job_id={} run_id={}",
@@ -601,7 +598,7 @@ async def _process_message(
                     _extract_sqlstate(e),
                 )
                 _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
-                _mark_failed_and_archive(
+                await _mark_failed_and_archive(
                     msg,
                     queue_repo,
                     run_repo,
@@ -616,7 +613,7 @@ async def _process_message(
                 )
                 return
             new_retry_count = retry_count + 1
-            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+            if new_retry_count <= max_retries and await _persist_retry_and_schedule(
                 run_repo, job_id, run_id, new_retry_count, err_msg
             ):
                 delay = retry_delays_seconds[retry_count]
@@ -631,7 +628,7 @@ async def _process_message(
                 retry_count = new_retry_count
                 continue
             _log_delta("failed_terminal", retry_count + 1)
-            _mark_failed_and_archive(
+            await _mark_failed_and_archive(
                 msg,
                 queue_repo,
                 run_repo,
@@ -653,20 +650,17 @@ async def _process_message(
             )
         try:
             tp_for_run = trigger_payload
-            result = await loop.run_in_executor(
-                None,
-                lambda lt=live_test_block: _run_pipeline_sync(
-                    job_execution_service,
-                    job_definition_service,
-                    job_definition_id,
-                    owner_user_id,
-                    run_id,
-                    job_id,
-                    tp_for_run,
-                    definition_snapshot_ref,
-                    trigger_id,
-                    live_test=lt,
-                ),
+            result = await _run_pipeline_async(
+                job_execution_service,
+                job_definition_service,
+                job_definition_id,
+                owner_user_id,
+                run_id,
+                job_id,
+                tp_for_run,
+                definition_snapshot_ref,
+                trigger_id,
+                live_test=live_test_block,
             )
         except Exception as e:
             err_msg = _normalize_error(e)
@@ -688,7 +682,7 @@ async def _process_message(
                     _extract_sqlstate(e),
                 )
                 _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
-                _mark_failed_and_archive(
+                await _mark_failed_and_archive(
                     msg,
                     queue_repo,
                     run_repo,
@@ -703,7 +697,7 @@ async def _process_message(
                 )
                 return
             new_retry_count = retry_count + 1
-            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+            if new_retry_count <= max_retries and await _persist_retry_and_schedule(
                 run_repo, job_id, run_id, new_retry_count, err_msg
             ):
                 delay = retry_delays_seconds[retry_count]
@@ -718,7 +712,7 @@ async def _process_message(
                 retry_count = new_retry_count
                 continue
             _log_delta("failed_terminal", retry_count + 1)
-            _mark_failed_and_archive(
+            await _mark_failed_and_archive(
                 msg,
                 queue_repo,
                 run_repo,
@@ -744,14 +738,14 @@ async def _process_message(
             if live_test_block and result.get("run_cache"):
                 result_meta["run_cache"] = result["run_cache"]
         try:
-            run_repo.update_job_status(job_id, "succeeded", completed_at=now)
-            run_repo.update_run(
+            await run_repo.update_job_status(job_id, "succeeded", completed_at=now)
+            await run_repo.update_run(
                 run_id,
                 status="succeeded",
                 result_json=result_meta or result if isinstance(result, dict) else {},
                 completed_at=now,
             )
-            run_repo.insert_event(
+            await run_repo.insert_event(
                 run_id,
                 "pipeline_succeeded",
                 {"result_preview": result_meta},
@@ -771,7 +765,7 @@ async def _process_message(
                     _extract_sqlstate(e),
                 )
                 _log_delta("failed_terminal", retry_count + 1, _extract_sqlstate(e))
-                _mark_failed_and_archive(
+                await _mark_failed_and_archive(
                     msg,
                     queue_repo,
                     run_repo,
@@ -786,7 +780,7 @@ async def _process_message(
                 )
                 return
             new_retry_count = retry_count + 1
-            if new_retry_count <= max_retries and _persist_retry_and_schedule(
+            if new_retry_count <= max_retries and await _persist_retry_and_schedule(
                 run_repo, job_id, run_id, new_retry_count, err_msg
             ):
                 delay = retry_delays_seconds[retry_count]
@@ -801,7 +795,7 @@ async def _process_message(
                 retry_count = new_retry_count
                 continue
             _log_delta("failed_terminal", retry_count + 1)
-            _mark_failed_and_archive(
+            await _mark_failed_and_archive(
                 msg,
                 queue_repo,
                 run_repo,
@@ -826,11 +820,11 @@ async def _process_message(
                 recipient_whatsapp=recipient_whatsapp,
             )
         )
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
         return
 
 
-def _persist_retry_and_schedule(
+async def _persist_retry_and_schedule(
     run_repo: "PostgresRunRepository",
     job_id: str,
     run_id: str,
@@ -839,7 +833,7 @@ def _persist_retry_and_schedule(
 ) -> bool:
     """Persist retry_count for next attempt. Returns True on success, False on failure."""
     try:
-        run_repo.increment_job_retry_count(
+        await run_repo.increment_job_retry_count(
             job_id, new_retry_count, error_message=err_msg
         )
         return True
@@ -852,7 +846,7 @@ def _persist_retry_and_schedule(
         return False
 
 
-def _mark_failed_and_archive(
+async def _mark_failed_and_archive(
     msg: QueueMessage,
     queue_repo: SupabaseQueueRepository,
     run_repo: "PostgresRunRepository",
@@ -867,11 +861,11 @@ def _mark_failed_and_archive(
 ) -> None:
     """Best-effort persist failed status, emit event, and archive."""
     try:
-        run_repo.update_job_status(
+        await run_repo.update_job_status(
             job_id, "failed", completed_at=now, error_message=err_msg
         )
-        run_repo.update_run(run_id, status="failed", completed_at=now)
-        run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
+        await run_repo.update_run(run_id, status="failed", completed_at=now)
+        await run_repo.insert_event(run_id, "pipeline_failed", {"error": err_msg})
     except Exception:
         logger.exception(
             "worker_persist_failure_failed | job_id={} run_id={}",
@@ -891,7 +885,7 @@ def _mark_failed_and_archive(
     except Exception:
         logger.exception("worker_failure_event_publish_failed | job_id={}", job_id)
     try:
-        queue_repo.archive(msg.message_id)
+        await queue_repo.archive(msg.message_id)
     except Exception:
         logger.exception("worker_failure_archive_failed | msg_id={}", msg.message_id)
         raise

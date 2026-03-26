@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -108,7 +108,7 @@ def test_apply_cache_fixtures_root_key():
     assert ctx.run_cache["k1"] == {"x": 1}
 
 
-def test_execute_snapshot_run_skips_notion_when_disallowed():
+async def test_execute_snapshot_run_skips_notion_when_disallowed():
     snap = _minimal_snapshot(stage_ids=["s1"], pipeline_ids=["p1"], step_ids=["st1"])
     # minimal step that does nothing destructive — use cache_set-like is complex;
     # use registry with a handler that returns empty — actually data_transform might need bindings.
@@ -116,15 +116,17 @@ def test_execute_snapshot_run_skips_notion_when_disallowed():
     # Use one step template that exists and minimal: property_set would fail without allow - skip
     # Instead set stages empty and allow_destination_writes False - execute still hits create_page check
     snap["job"]["stages"][0]["pipelines"][0]["steps"] = []
+    notion = MagicMock()
+    notion.create_page = AsyncMock()
     svc = JobExecutionService(
-        notion_service=MagicMock(),
+        notion_service=notion,
         claude_service=None,
         google_places_service=None,
         dry_run=False,
         run_repository=None,
         get_notion_token_fn=lambda _uid: None,
     )
-    result = svc.execute_snapshot_run(
+    result = await svc.execute_snapshot_run(
         snap,
         run_id="run1",
         job_id="platform1",
@@ -134,10 +136,10 @@ def test_execute_snapshot_run_skips_notion_when_disallowed():
         invocation_source="editor_live_test",
     )
     assert result.get("destination_write_skipped") is True
-    svc._notion.create_page.assert_not_called()
+    notion.create_page.assert_not_awaited()
 
 
-def test_scope_violation_raises():
+async def test_scope_violation_raises():
     snap = _minimal_snapshot(stage_ids=["s1"], pipeline_ids=["p1"], step_ids=["st1"])
     # Put a step that will run
     svc = JobExecutionService(
@@ -150,7 +152,7 @@ def test_scope_violation_raises():
     # Wrong step id in boundary triggers assert before handler
     boundary = {"stage_ids": ["s1"], "pipeline_ids": ["p1"], "step_ids": ["other"]}
     with pytest.raises(RuntimeError, match="Scope violation"):
-        svc.execute_snapshot_run(
+        await svc.execute_snapshot_run(
             snap,
             run_id="run1",
             job_id="pj",

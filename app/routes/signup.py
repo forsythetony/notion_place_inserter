@@ -28,7 +28,7 @@ class SignupWithInvitationRequest(BaseModel):
 
 
 @router.post("/signup")
-def signup_with_invitation(request: Request, body: SignupWithInvitationRequest):
+async def signup_with_invitation(request: Request, body: SignupWithInvitationRequest):
     """
     Signup orchestration: validate invitation code first, then create auth user,
     claim code, and provision profile. Invalid or already-claimed codes fail
