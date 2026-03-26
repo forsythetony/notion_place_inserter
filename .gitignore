@@ -64,6 +64,9 @@ dmypy.run
 resources/
 
 # Notion puller output (may contain sensitive page data)
+# Shared venv for scripts/ (see scripts/README.md)
+scripts/.venv/
+
 scripts/notion_puller/output/*
 !scripts/notion_puller/output/.gitkeep
 

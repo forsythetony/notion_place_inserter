@@ -27,7 +27,12 @@ from app.repositories.yaml_loader import (
     parse_step_template,
     parse_target_template,
 )
-from app.services.validation_service import JobGraph, ValidationError, ValidationService
+from app.services.validation_service import (
+    JobGraph,
+    ValidationError,
+    ValidationService,
+    collect_output_contract_metadata_errors,
+)
 
 
 def test_load_yaml_file_bootstrap_job():
@@ -130,6 +135,40 @@ def test_parse_step_template():
     assert isinstance(t, StepTemplate)
     assert t.id == "step_opt"
     assert t.step_kind == "optimize"
+
+
+def test_parse_step_template_preserves_output_contract_field_metadata():
+    """Nested keys under output_contract.fields (title, summary, example, pick_hint) are preserved."""
+    data = {
+        "id": "step_meta",
+        "slug": "meta",
+        "display_name": "Meta",
+        "step_kind": "lookup",
+        "description": "",
+        "input_contract": {},
+        "output_contract": {
+            "fields": {
+                "foo": {
+                    "type": "object",
+                    "title": "Foo title",
+                    "summary": "Short",
+                    "pick_hint": "Hint",
+                    "example": {"a": 1},
+                }
+            }
+        },
+        "config_schema": {},
+        "runtime_binding": "x",
+        "category": "lookup",
+        "status": "active",
+    }
+    t = parse_step_template(data)
+    foo = t.output_contract["fields"]["foo"]
+    assert foo["title"] == "Foo title"
+    assert foo["summary"] == "Short"
+    assert foo["pick_hint"] == "Hint"
+    assert foo["example"] == {"a": 1}
+    assert collect_output_contract_metadata_errors(t.output_contract, template_id=t.id) == []
 
 
 async def test_yaml_connector_template_repository_list_all():

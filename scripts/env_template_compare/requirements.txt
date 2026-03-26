@@ -1,3 +1,0 @@
-rich>=13.0
-loguru>=0.7
-icecream>=2.0

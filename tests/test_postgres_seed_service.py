@@ -4,7 +4,64 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.postgres_seed_service import PostgresBootstrapProvisioningService
+from app.services.postgres_seed_service import (
+    AUTO_SEEDED_DISPLAY_SUFFIX,
+    PostgresBootstrapProvisioningService,
+    _append_auto_seeded_label,
+    _apply_auto_seeded_labels,
+)
+from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition
+from app.domain.triggers import TriggerDefinition
+from app.services.validation_service import JobGraph
+
+
+def test_append_auto_seeded_label_idempotent():
+    assert _append_auto_seeded_label("Foo") == f"Foo{AUTO_SEEDED_DISPLAY_SUFFIX}"
+    doubled = _append_auto_seeded_label("Foo")
+    assert _append_auto_seeded_label(doubled) == doubled
+
+
+def test_apply_auto_seeded_labels_job_and_pipelines():
+    tr = TriggerDefinition(
+        id="t1",
+        owner_user_id="u",
+        trigger_type="http",
+        display_name="HTTP Trigger",
+        path="/p",
+        method="POST",
+        request_body_schema={"type": "object"},
+        status="active",
+        auth_mode="bearer",
+        secret_value="x",
+    )
+    job = JobDefinition(
+        id="j1",
+        owner_user_id="u",
+        display_name="My Job",
+        target_id="d1",
+        status="active",
+        stage_ids=["s1"],
+    )
+    st = StageDefinition(
+        id="s1",
+        job_id="j1",
+        display_name="Stage",
+        sequence=1,
+        pipeline_ids=["p1"],
+    )
+    pl = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="Pipeline One",
+        sequence=1,
+        step_ids=[],
+    )
+    graph = JobGraph(job=job, stages=[st], pipelines=[pl], steps=[])
+    _apply_auto_seeded_labels(tr, graph)
+    assert tr.display_name.endswith(AUTO_SEEDED_DISPLAY_SUFFIX)
+    assert job.display_name.endswith(AUTO_SEEDED_DISPLAY_SUFFIX)
+    assert pl.display_name.endswith(AUTO_SEEDED_DISPLAY_SUFFIX)
+    assert st.display_name == "Stage"
 
 
 @pytest.fixture

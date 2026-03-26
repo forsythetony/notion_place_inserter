@@ -24,6 +24,7 @@ from app.domain.yaml_layout import (
     catalog_target_template_path,
 )
 from app.domain.repositories import TriggerJobLinkRepository
+from app.services.validation_service import JobGraph
 from app.repositories.postgres_repositories import (
     PostgresAppConfigRepository,
     PostgresConnectorInstanceRepository,
@@ -56,6 +57,25 @@ STARTER_JOB_ID = "job_notion_place_inserter"
 PLACEHOLDER_EXTERNAL_TARGET_ID = "9592d56b-899e-440e-9073-b2f0768669ad"
 # Placeholder for Locations target until user selects via OAuth. Same convention as above.
 PLACEHOLDER_LOCATIONS_EXTERNAL_TARGET_ID = "cfecaf05-306e-48ac-9d8b-bb14e8243d44"
+
+# Display suffix for definitions provisioned from bundled bootstrap YAML (distinct from user-created).
+AUTO_SEEDED_DISPLAY_SUFFIX = " [auto added]"
+
+
+def _append_auto_seeded_label(display_name: str) -> str:
+    """Mark account-seeded trigger/job/pipeline names so they are easy to spot in the UI."""
+    if not display_name:
+        return display_name
+    if display_name.endswith(AUTO_SEEDED_DISPLAY_SUFFIX):
+        return display_name
+    return f"{display_name}{AUTO_SEEDED_DISPLAY_SUFFIX}"
+
+
+def _apply_auto_seeded_labels(trigger: TriggerDefinition, graph: JobGraph) -> None:
+    trigger.display_name = _append_auto_seeded_label(trigger.display_name)
+    graph.job.display_name = _append_auto_seeded_label(graph.job.display_name)
+    for pipeline in graph.pipelines:
+        pipeline.display_name = _append_auto_seeded_label(pipeline.display_name)
 
 
 def _project_root() -> Path:
@@ -219,6 +239,8 @@ class PostgresBootstrapProvisioningService:
         graph = parse_job_graph(job_data, owner_user_id_override=uid)
         graph.job.owner_user_id = uid
         # target_id comes from YAML (e.g. target_places_to_visit); do not overwrite with unrelated ids
+
+        _apply_auto_seeded_labels(trigger, graph)
 
         # Ensure all step templates referenced by the bootstrap graph exist.
         # This protects owner provisioning when catalog seeding is partial.

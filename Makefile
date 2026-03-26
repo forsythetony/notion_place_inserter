@@ -4,8 +4,10 @@ PORT ?= 8000
 SECRET ?= dev-secret
 BASE_URL ?= http://localhost:8000
 KEYWORDS ?= stone arch bridge minneapolis
-# Python venv for scripts/env_template_compare (make env-compare-template)
-ENV_TEMPLATE_COMPARE_VENV ?= scripts/env_template_compare/env
+# Shared Python venv for scripts/ (see scripts/README.md; make env-compare-template)
+SCRIPTS_VENV ?= scripts/.venv
+# Backward compat: override this if you still use a venv under env_template_compare/
+ENV_TEMPLATE_COMPARE_VENV ?= $(SCRIPTS_VENV)
 # Path segment POST /triggers/{user_id}/locations — must be a UUID (Supabase auth user id). The string
 # "bootstrap" is not a valid UUID; Postgres bootstrap provisioning skips it and the trigger will 503.
 TRIGGER_USER_ID ?= 811eb854-89cd-4919-bb1e-a97dcdda5c34
@@ -217,6 +219,14 @@ test-cors:
 test-whatsapp:
 	@bash -c 'set -a && [ -f envs/local.env ] && source envs/local.env; set +a && python scripts/test_whatsapp.py'
 
+# Raw Google Places API JSON (searchText / optional placeDetails). Loads key from env file (not shell).
+# Default QUERY: stone arch bridge Minneapolis. Optional: QUERY="..." ENV_FILE=envs/prod.env DETAILS=1
+ENV_FILE ?= envs/local.env
+DETAILS ?=
+QUERY ?= stone arch bridge Minneapolis
+probe-google-places:
+	@python scripts/integration_probes/google_places_probe.py --env-file "$(ENV_FILE)" $(if $(DETAILS),--details,) "$(QUERY)"
+
 test-api-%:
 	@bash -c 'set -a && source envs/$*.env && set +a && LOG_LEVEL=$${LOG_LEVEL:-$(LOG_LEVEL)} python -m pytest http-test/ -v'
 
@@ -244,7 +254,7 @@ env-source-prod:
 
 # Compare env.template keys to envs/local.env or envs/prod.env (pick with fzf, or TARGET=local|prod).
 env-compare-template:
-	@$(ENV_TEMPLATE_COMPARE_VENV)/bin/pip install -q -r scripts/env_template_compare/requirements.txt && \
+	@$(ENV_TEMPLATE_COMPARE_VENV)/bin/pip install -q -r scripts/requirements.txt && \
 		$(ENV_TEMPLATE_COMPARE_VENV)/bin/python scripts/env_template_compare/compare_env_template.py \
 		$(if $(TARGET),--target $(TARGET),)
 

@@ -12,11 +12,119 @@ output_contract:
   fields:
     search_response:
       type: object
+      title: Raw text-search payload
+      summary: >-
+        The structured response from the Places text search call (multiple candidates,
+        pagination metadata, etc.). Use when you need the full API envelope or downstream
+        steps expect the search response shape—not the single merged place object.
+      pick_hint: Advanced — full API envelope
+      example:
+        places:
+          - id: ChIJf2ekX5wys1IRi0SY3SQDO-M
+            types:
+              - historical_landmark
+              - bridge
+              - tourist_attraction
+              - point_of_interest
+              - establishment
+            nationalPhoneNumber: "(612) 230-6400"
+            internationalPhoneNumber: "+1 612-230-6400"
+            formattedAddress: "100 Portland Ave, Minneapolis, MN 55401, USA"
+            addressComponents:
+              - longText: "100"
+                shortText: "100"
+                types: [street_number]
+                languageCode: en-US
+              - longText: Portland Avenue
+                shortText: Portland Ave
+                types: [route]
+                languageCode: en
+              - longText: Saint Anthony Main
+                shortText: Saint Anthony Main
+                types: [neighborhood, political]
+                languageCode: en
+              - longText: Minneapolis
+                shortText: Minneapolis
+                types: [locality, political]
+                languageCode: en
+            location:
+              latitude: 44.9807491
+              longitude: -93.2536972
+            rating: 4.8
+            googleMapsUri: "https://maps.google.com/?cid=16373684327107019915&g_mp=…"
+            websiteUri: "https://www.minneapolisparks.org/parks__destinations/historical_sites/stone_arch_bridge/"
+            displayName:
+              text: Historic Stone Arch Bridge
+              languageCode: en
+            primaryType: historical_landmark
+            photos:
+              - name: places/ChIJf2ekX5wys1IRi0SY3SQDO-M/photos/ATCDNfShortExample
+                widthPx: 4032
+                heightPx: 3024
+                authorAttributions:
+                  - displayName: Example Author
+                    uri: "https://maps.google.com/maps/contrib/114896397616159936942"
+                    photoUri: "https://lh3.googleusercontent.com/a-/ALV-UjExample"
+            generativeSummary:
+              overview:
+                text: Curved stone bridge for pedestrians, with views of the city skyline, falls and river.
+                languageCode: en-US
+              overviewFlagContentUri: "https://www.google.com/local/content/rap/report?…"
+              disclosureText:
+                text: Summarized with Gemini
+                languageCode: en-US
     selected_place:
       type: object
+      title: Resolved place (first hit + optional details)
+      summary: >-
+        The place the runtime selected (first search result), merged with Place Details
+        when enabled. Use for typical mappings (name, address, photos, summaries).
+      pick_hint: Recommended for most bindings
+      example:
+        id: ChIJf2ekX5wys1IRi0SY3SQDO-M
+        displayName: Historic Stone Arch Bridge
+        formattedAddress: "100 Portland Ave, Minneapolis, MN 55401, USA"
+        addressComponents:
+          - longText: Saint Anthony Main
+            shortText: Saint Anthony Main
+            types: [neighborhood, political]
+            languageCode: en
+          - longText: Minneapolis
+            shortText: Minneapolis
+            types: [locality, political]
+            languageCode: en
+        neighborhood: Saint Anthony Main
+        neighborhood_signal_type: neighborhood
+        google_neighborhood_signals:
+          - text: Saint Anthony Main
+            types: [neighborhood, political]
+            source: addressComponents
+          - text: Minneapolis
+            types: [locality, political]
+            source: addressComponents
+        rating: 4.8
+        websiteUri: "https://www.minneapolisparks.org/parks__destinations/historical_sites/stone_arch_bridge/"
+        googleMapsUri: "https://maps.google.com/?cid=16373684327107019915&g_mp=…"
+        nationalPhoneNumber: "(612) 230-6400"
+        internationalPhoneNumber: "+1 612-230-6400"
+        latitude: 44.9807491
+        longitude: -93.2536972
+        primaryType: historical_landmark
+        types:
+          - historical_landmark
+          - bridge
+          - tourist_attraction
+          - point_of_interest
+        generativeSummary: Curved stone bridge for pedestrians, with views of the city skyline, falls and river.
+        editorialSummary: null
+        photos:
+          - name: places/ChIJf2ekX5wys1IRi0SY3SQDO-M/photos/ATCDNfShortExample
+            widthPx: 4032
+            heightPx: 3024
 config_schema:
   connector_instance_id:
     type: string
+    hidden: true
   fetch_details_if_needed:
     type: boolean
     default: true

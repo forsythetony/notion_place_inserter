@@ -27,7 +27,12 @@ from app.repositories import (
     YamlTriggerRepository,
 )
 from app.repositories.yaml_loader import load_yaml_file, parse_job_graph
-from app.services.validation_service import JobGraph, ValidationError, ValidationService
+from app.services.validation_service import (
+    JobGraph,
+    ValidationError,
+    ValidationService,
+    collect_output_contract_metadata_errors,
+)
 
 
 def _step_template_repo(base: str | None = None) -> YamlStepTemplateRepository:
@@ -661,6 +666,62 @@ async def test_validation_service_rejects_signal_ref_across_pipelines():
     with pytest.raises(ValidationError) as exc_info:
         await svc.validate_job_graph(graph, skip_reference_checks=True)
     assert "same pipeline" in str(exc_info.value).lower()
+
+
+def test_collect_output_contract_metadata_errors_accepts_google_places_catalog():
+    """Bundled Google Places template output metadata passes validation."""
+    from app.repositories.yaml_loader import load_yaml_file, parse_step_template
+
+    data = load_yaml_file("product_model/catalog/step_templates/step_template_google_places_lookup.yaml")
+    assert data is not None
+    tmpl = parse_step_template(data)
+    errs = collect_output_contract_metadata_errors(tmpl.output_contract, template_id=tmpl.id)
+    assert errs == []
+
+
+def test_collect_output_contract_metadata_errors_rejects_title_too_long():
+    errs = collect_output_contract_metadata_errors(
+        {"fields": {"out": {"type": "object", "title": "x" * 201}}},
+        template_id="t1",
+    )
+    assert any("title exceeds" in e for e in errs)
+
+
+def test_collect_output_contract_metadata_errors_rejects_non_json_example():
+    errs = collect_output_contract_metadata_errors(
+        {
+            "fields": {
+                "out": {
+                    "type": "object",
+                    "example": object(),
+                }
+            }
+        },
+        template_id="t1",
+    )
+    assert any("JSON-serializable" in e for e in errs)
+
+
+def test_validation_service_validate_step_template_output_metadata_raises():
+    from app.domain import StepTemplate
+
+    bad = StepTemplate(
+        id="step_bad",
+        slug="bad",
+        display_name="Bad",
+        step_kind="test",
+        description="",
+        input_contract={},
+        output_contract={"fields": {"out": {"type": "object", "title": "y" * 300}}},
+        config_schema={},
+        runtime_binding="",
+        category="transform",
+        status="active",
+    )
+    svc = ValidationService()
+    with pytest.raises(ValidationError) as exc_info:
+        svc.validate_step_template_output_metadata(bad)
+    assert any("title exceeds" in e for e in exc_info.value.errors)
 
 
 async def test_validation_service_rejects_property_set_data_target_id_mismatch():

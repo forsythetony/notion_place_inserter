@@ -84,6 +84,9 @@ def test_management_pipelines_200_list_shape(client):
         ),
     ])
     app.state.job_repository = mock_job_repo
+    mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=[])
+    app.state.trigger_job_link_repository = mock_link_repo
 
     resp = client.get(
         "/management/pipelines",
@@ -97,8 +100,58 @@ def test_management_pipelines_200_list_shape(client):
     assert item["id"] == "job-1"
     assert item["display_name"] == "Notion Place Inserter"
     assert item["status"] == "active"
+    assert item["trigger_name"] is None
+    assert item.get("trigger_display_name") is None
     assert "2026-03-15" in (item["updated_at"] or "")
     mock_job_repo.list_by_owner.assert_awaited_once_with(user_id)
+    mock_link_repo.list_trigger_ids_for_job.assert_awaited_once_with("job-1", user_id)
+
+
+def test_management_pipelines_200_list_includes_trigger_name_when_linked(client):
+    """GET /management/pipelines includes trigger_name and trigger_display_name from linked trigger."""
+    user_id = _setup_auth(client)
+    mock_job_repo = MagicMock()
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[
+        JobDefinition(
+            id="job-1",
+            owner_user_id=user_id,
+            display_name="My Job",
+            target_id="tgt1",
+            status="active",
+            stage_ids=["s1"],
+            updated_at=None,
+        ),
+    ])
+    app.state.job_repository = mock_job_repo
+    mock_link_repo = MagicMock()
+    mock_link_repo.list_trigger_ids_for_job = AsyncMock(return_value=["on_place_save"])
+    app.state.trigger_job_link_repository = mock_link_repo
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id = AsyncMock(
+        return_value=TriggerDefinition(
+            id="on_place_save",
+            owner_user_id=user_id,
+            trigger_type="http",
+            display_name="On place save",
+            path="/locations",
+            method="POST",
+            request_body_schema={},
+            status="active",
+            auth_mode="bearer",
+            secret_value="x",
+        )
+    )
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.get(
+        "/management/pipelines",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert item["trigger_name"] == "on_place_save"
+    assert item["trigger_display_name"] == "On place save"
+    mock_trigger_repo.get_by_id.assert_awaited_once_with("on_place_save", user_id)
 
 
 def test_management_reprovision_starter_401_without_auth(client):

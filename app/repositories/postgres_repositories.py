@@ -915,6 +915,44 @@ class PostgresTriggerJobLinkRepository:
         ids = [row["trigger_id"] for row in (r.data or [])]
         return sorted(ids)
 
+    async def map_trigger_ids_for_jobs(
+        self, owner_user_id: str, job_ids: list[str]
+    ) -> dict[str, list[str]]:
+        """
+        Return sorted trigger_id lists per job_id in one query (owner-scoped).
+        Jobs with no rows map to an empty list.
+        """
+        if not job_ids:
+            return {}
+        try:
+            uid = str(_ensure_uuid(owner_user_id))
+            r = await (
+                self._client.table(self.TABLE)
+                .select("job_id, trigger_id")
+                .eq("owner_user_id", uid)
+                .in_("job_id", job_ids)
+                .execute()
+            )
+        except ValueError:
+            return {jid: [] for jid in job_ids}
+        except Exception as e:
+            logger.exception(
+                "postgres_trigger_job_links_map_jobs_failed | owner={} n_jobs={} error={}",
+                owner_user_id,
+                len(job_ids),
+                e,
+            )
+            raise
+        by_job: dict[str, list[str]] = {jid: [] for jid in job_ids}
+        for row in r.data or []:
+            jid = row.get("job_id")
+            tid = row.get("trigger_id")
+            if jid and tid and jid in by_job:
+                by_job[jid].append(tid)
+        for jid in by_job:
+            by_job[jid] = sorted(by_job[jid])
+        return by_job
+
     async def attach(self, trigger_id: str, job_id: str, owner_user_id: str) -> None:
         existing = await self.list_trigger_ids_for_job(job_id, owner_user_id)
         validate_one_trigger_per_job_attach(existing, trigger_id)

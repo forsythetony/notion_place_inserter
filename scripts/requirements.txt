@@ -1,0 +1,9 @@
+# Single dependency set for all Python tooling under scripts/ (one venv).
+# Do not add requirements.txt in subfolders — extend this file instead.
+#
+# Setup (from repo root):
+#   python -m venv scripts/.venv
+#   scripts/.venv/bin/pip install -r scripts/requirements.txt
+#
+# Includes the main app stack so scripts can `import app` when run from the repo root.
+-r ../requirements.txt

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +45,112 @@ if TYPE_CHECKING:
 
 # Terminal step kinds: pipeline must end with one of these
 _TERMINAL_STEP_KINDS = frozenset({"cache_set", "property_set"})
+
+# Optional binding-picker metadata under output_contract.fields.<name> (see docs)
+_OUTPUT_META_TITLE_MAX = 200
+_OUTPUT_META_SUMMARY_MAX = 2000
+_OUTPUT_META_PICK_HINT_MAX = 80
+_OUTPUT_META_EXAMPLE_MAX_DEPTH = 12
+_OUTPUT_META_EXAMPLE_MAX_BYTES = 16 * 1024
+
+
+def _example_nesting_depth(obj: Any) -> int:
+    """Depth of dict/list nesting in JSON-like structures (scalars depth 0)."""
+    if isinstance(obj, dict):
+        return 1 + max((_example_nesting_depth(v) for v in obj.values()), default=0)
+    if isinstance(obj, list):
+        return 1 + max((_example_nesting_depth(x) for x in obj), default=0)
+    return 0
+
+
+def collect_output_contract_metadata_errors(
+    output_contract: Any,
+    *,
+    template_id: str = "",
+) -> list[str]:
+    """
+    Validate optional title/summary/pick_hint/example on each output_contract.fields entry.
+    Returns a list of human-readable error strings (empty if valid).
+    """
+    prefix = f"step template '{template_id}' " if template_id else ""
+    errors: list[str] = []
+    if not isinstance(output_contract, dict):
+        return errors
+    fields = output_contract.get("fields")
+    if not isinstance(fields, dict):
+        return errors
+
+    for fname, spec in fields.items():
+        if not isinstance(spec, dict):
+            errors.append(
+                f"{prefix}output_contract.fields.{fname} must be an object when present"
+            )
+            continue
+        field_path = f"output_contract.fields.{fname}"
+
+        title = spec.get("title")
+        if title is not None:
+            if not isinstance(title, str):
+                errors.append(f"{prefix}{field_path}.title must be a string")
+            elif len(title) > _OUTPUT_META_TITLE_MAX:
+                errors.append(
+                    f"{prefix}{field_path}.title exceeds {_OUTPUT_META_TITLE_MAX} characters"
+                )
+
+        summary = spec.get("summary")
+        if summary is not None:
+            if not isinstance(summary, str):
+                errors.append(f"{prefix}{field_path}.summary must be a string")
+            elif len(summary) > _OUTPUT_META_SUMMARY_MAX:
+                errors.append(
+                    f"{prefix}{field_path}.summary exceeds {_OUTPUT_META_SUMMARY_MAX} characters"
+                )
+
+        pick_hint = spec.get("pick_hint")
+        if pick_hint is not None:
+            if not isinstance(pick_hint, str):
+                errors.append(f"{prefix}{field_path}.pick_hint must be a string")
+            elif len(pick_hint) > _OUTPUT_META_PICK_HINT_MAX:
+                errors.append(
+                    f"{prefix}{field_path}.pick_hint exceeds {_OUTPUT_META_PICK_HINT_MAX} characters"
+                )
+
+        if "example" not in spec:
+            continue
+        example = spec["example"]
+        field_type = spec.get("type")
+        if field_type not in ("object", "array", None) and example is not None:
+            logger.warning(
+                "{}{} has example but type is {} (expected object/array for structured examples)",
+                prefix,
+                field_path,
+                field_type,
+            )
+
+        try:
+            json.dumps(example)
+        except (TypeError, ValueError):
+            errors.append(f"{prefix}{field_path}.example must be JSON-serializable")
+            continue
+
+        depth = _example_nesting_depth(example)
+        if depth > _OUTPUT_META_EXAMPLE_MAX_DEPTH:
+            errors.append(
+                f"{prefix}{field_path}.example nesting depth {depth} exceeds "
+                f"{_OUTPUT_META_EXAMPLE_MAX_DEPTH}"
+            )
+
+        try:
+            raw = json.dumps(example, ensure_ascii=False).encode("utf-8")
+        except (TypeError, ValueError):
+            errors.append(f"{prefix}{field_path}.example must be JSON-serializable")
+            continue
+        if len(raw) > _OUTPUT_META_EXAMPLE_MAX_BYTES:
+            errors.append(
+                f"{prefix}{field_path}.example serialized size exceeds {_OUTPUT_META_EXAMPLE_MAX_BYTES} bytes"
+            )
+
+    return errors
 
 
 class ValidationError(ValueError):
@@ -477,3 +584,15 @@ class ValidationService:
                 )
         if errors:
             raise ValidationError("data target validation failed", errors)
+
+    def validate_step_template_output_metadata(self, template: "StepTemplate") -> None:
+        """
+        Validate optional binding-picker metadata nested under output_contract.fields.
+        Raises ValidationError when catalog copy/examples violate size or shape rules.
+        """
+        errs = collect_output_contract_metadata_errors(
+            template.output_contract,
+            template_id=template.id,
+        )
+        if errs:
+            raise ValidationError("step template output_contract metadata invalid", errs)

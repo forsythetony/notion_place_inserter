@@ -1,5 +1,6 @@
 """Management list endpoints for dashboard surfaces (p5_pr03). Owner-scoped, Bearer auth."""
 
+import asyncio
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
 from app.domain.errors import TriggerJobLinkPolicyError
+from app.repositories.postgres_repositories import PostgresTriggerJobLinkRepository
 from app.domain.runs import StepRun
 from app.domain.triggers import TriggerDefinition
 from app.repositories.yaml_loader import job_graph_to_yaml_dict, parse_job_graph
@@ -210,7 +212,8 @@ async def list_pipelines(
 ):
     """
     List job definitions for the authenticated owner.
-    Returns id, display_name, status, updated_at.
+    Returns id, display_name, status, updated_at, trigger_name (linked trigger id, if any),
+    and trigger_display_name (TriggerDefinition.display_name) when the trigger row exists.
     """
     job_repo = getattr(request.app.state, "job_repository", None)
     if not job_repo:
@@ -219,15 +222,47 @@ async def list_pipelines(
             content={"detail": "Server misconfiguration: job repository not available"},
         )
     jobs = await job_repo.list_by_owner(ctx.user_id)
-    items = [
-        {
-            "id": j.id,
-            "display_name": j.display_name,
-            "status": j.status,
-            "updated_at": _serialize_datetime(j.updated_at),
-        }
-        for j in jobs
-    ]
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    if link_repo and isinstance(link_repo, PostgresTriggerJobLinkRepository):
+        job_ids = [j.id for j in jobs]
+        link_map = await link_repo.map_trigger_ids_for_jobs(ctx.user_id, job_ids)
+    elif link_repo:
+        link_lists = await asyncio.gather(
+            *[link_repo.list_trigger_ids_for_job(j.id, ctx.user_id) for j in jobs]
+        )
+        link_map = {j.id: tids for j, tids in zip(jobs, link_lists)}
+    else:
+        link_map = {}
+
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    job_rows = []
+    for j in jobs:
+        tids = link_map.get(j.id) or []
+        tid = tids[0] if tids else None
+        job_rows.append((j, tid))
+
+    unique_trigger_ids = sorted({tid for _, tid in job_rows if tid})
+    id_to_display: dict[str, str] = {}
+    if trigger_repo and unique_trigger_ids:
+        fetched = await asyncio.gather(
+            *[trigger_repo.get_by_id(tid, ctx.user_id) for tid in unique_trigger_ids]
+        )
+        for tid, tr in zip(unique_trigger_ids, fetched):
+            if tr is not None and (tr.display_name or "").strip():
+                id_to_display[tid] = tr.display_name.strip()
+
+    items = []
+    for j, tid in job_rows:
+        items.append(
+            {
+                "id": j.id,
+                "display_name": j.display_name,
+                "status": j.status,
+                "updated_at": _serialize_datetime(j.updated_at),
+                "trigger_name": tid,
+                "trigger_display_name": id_to_display.get(tid) if tid else None,
+            }
+        )
     return {"items": items}
 
 
