@@ -89,7 +89,7 @@ async def submit_public_waitlist(request: Request, body: PublicWaitlistRequest):
             raise HTTPException(status_code=400, detail="Captcha verification failed")
 
     try:
-        service.persist_submission(
+        await service.persist_submission(
             email=body.email,
             name=body.name,
             heard_about=body.heard_about,

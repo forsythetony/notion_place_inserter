@@ -26,9 +26,9 @@ class SupabaseBetaWaitlistRepository:
     def _table(self) -> str:
         return self._config.table_beta_waitlist_submissions
 
-    def get_by_email_normalized(self, email_normalized: str) -> dict[str, Any] | None:
+    async def get_by_email_normalized(self, email_normalized: str) -> dict[str, Any] | None:
         try:
-            resp = (
+            resp = await (
                 self._client.table(self._table)
                 .select("*")
                 .eq("email_normalized", email_normalized)
@@ -44,16 +44,16 @@ class SupabaseBetaWaitlistRepository:
         row = data[0] if isinstance(data, list) else data
         return dict(row) if isinstance(row, dict) else None
 
-    def insert_submission(self, row: dict[str, Any]) -> None:
+    async def insert_submission(self, row: dict[str, Any]) -> None:
         try:
-            self._client.table(self._table).insert(row).execute()
+            await self._client.table(self._table).insert(row).execute()
         except Exception:
             logger.exception("waitlist_insert_failed")
             raise
 
-    def update_resubmission(self, row_id: str, row: dict[str, Any]) -> None:
+    async def update_resubmission(self, row_id: str, row: dict[str, Any]) -> None:
         try:
-            self._client.table(self._table).update(row).eq("id", row_id).execute()
+            await self._client.table(self._table).update(row).eq("id", row_id).execute()
         except Exception:
             logger.exception("waitlist_update_failed")
             raise

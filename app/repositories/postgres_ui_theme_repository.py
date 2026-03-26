@@ -49,7 +49,7 @@ class PostgresUiThemeRepository:
 
     async def list_presets_metadata(self) -> list[dict[str, Any]]:
         """List presets with id, name, is_system, updated_at (no config)."""
-        r = (
+        r = await (
             self._client.table(self.TABLE_PRESETS)
             .select("id, name, is_system, updated_at")
             .order("updated_at", desc=True)
@@ -69,7 +69,7 @@ class PostgresUiThemeRepository:
         return out
 
     async def get_preset_by_id(self, preset_id: str) -> dict[str, Any] | None:
-        r = (
+        r = await (
             self._client.table(self.TABLE_PRESETS)
             .select("*")
             .eq("id", preset_id)
@@ -82,7 +82,7 @@ class PostgresUiThemeRepository:
         row = rows[0]
         return self._row_to_preset(row)
 
-    async def _row_to_preset(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _row_to_preset(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": str(row["id"]),
             "name": row["name"],
@@ -114,8 +114,8 @@ class PostgresUiThemeRepository:
         if created_by_user_id:
             row["created_by_user_id"] = created_by_user_id
         # postgrest-py: neither insert().select() nor update().select() — use explicit id + fetch after write.
-        self._client.table(self.TABLE_PRESETS).insert(row).execute()
-        loaded = self.get_preset_by_id(new_id)
+        await self._client.table(self.TABLE_PRESETS).insert(row).execute()
+        loaded = await self.get_preset_by_id(new_id)
         if not loaded:
             logger.error("ui_theme_preset_insert_fetch_failed | id={}", new_id)
             raise RuntimeError("ui_theme_preset_insert_failed")
@@ -133,16 +133,16 @@ class PostgresUiThemeRepository:
             updates["name"] = name
         if config is not None:
             updates["config"] = config
-        self._client.table(self.TABLE_PRESETS).update(updates).eq("id", preset_id).execute()
-        return self.get_preset_by_id(preset_id)
+        await self._client.table(self.TABLE_PRESETS).update(updates).eq("id", preset_id).execute()
+        return await self.get_preset_by_id(preset_id)
 
     async def delete_preset(self, preset_id: str) -> bool:
-        r = self._client.table(self.TABLE_PRESETS).delete().eq("id", preset_id).execute()
+        r = await self._client.table(self.TABLE_PRESETS).delete().eq("id", preset_id).execute()
         rows = r.data or []
         return len(rows) > 0
 
     async def get_preset_is_system(self, preset_id: str) -> bool | None:
-        r = (
+        r = await (
             self._client.table(self.TABLE_PRESETS)
             .select("is_system")
             .eq("id", preset_id)
@@ -155,7 +155,7 @@ class PostgresUiThemeRepository:
         return bool(rows[0].get("is_system", False))
 
     async def get_active_preset_id(self) -> str | None:
-        r = (
+        r = await (
             self._client.table(self.TABLE_SETTINGS)
             .select("active_preset_id")
             .eq("id", self.SETTINGS_PK)
@@ -169,7 +169,7 @@ class PostgresUiThemeRepository:
         return str(aid) if aid else None
 
     async def set_active_preset_id(self, preset_id: str | None) -> None:
-        self._client.table(self.TABLE_SETTINGS).update(
+        await self._client.table(self.TABLE_SETTINGS).update(
             {
                 "active_preset_id": preset_id,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -183,11 +183,11 @@ class PostgresUiThemeRepository:
         *,
         created_by_user_id: str | None = None,
     ) -> dict[str, Any] | None:
-        src = self.get_preset_by_id(source_id)
+        src = await self.get_preset_by_id(source_id)
         if not src:
             return None
         new_name = (name or "").strip() or f"{src['name']} (copy)"
-        return self.create_preset(
+        return await self.create_preset(
             new_name,
             src["config"],
             is_system=False,

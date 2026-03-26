@@ -138,8 +138,8 @@ class UiThemeService:
         merged = deep_merge_tokens(DEFAULT_THEME_TOKENS, m.tokens)
         return sv, merged
 
-    def get_runtime_payload(self) -> dict[str, Any]:
-        active_id = self._repo.get_active_preset_id()
+    async def get_runtime_payload(self) -> dict[str, Any]:
+        active_id = await self._repo.get_active_preset_id()
         if not active_id:
             merged = copy.deepcopy(DEFAULT_THEME_TOKENS)
             css_vars = _flatten_tokens_to_css_vars(merged)
@@ -148,7 +148,7 @@ class UiThemeService:
                 "presetId": None,
                 "cssVars": css_vars,
             }
-        preset = self._repo.get_preset_by_id(active_id)
+        preset = await self._repo.get_preset_by_id(active_id)
         if not preset:
             merged = copy.deepcopy(DEFAULT_THEME_TOKENS)
             css_vars = _flatten_tokens_to_css_vars(merged)
@@ -170,13 +170,13 @@ class UiThemeService:
             "cssVars": css_vars,
         }
 
-    def get_active_for_admin(self) -> dict[str, Any]:
+    async def get_active_for_admin(self) -> dict[str, Any]:
         """Runtime resolution plus raw config for editor."""
-        runtime = self.get_runtime_payload()
-        active_id = self._repo.get_active_preset_id()
+        runtime = await self.get_runtime_payload()
+        active_id = await self._repo.get_active_preset_id()
         raw: dict[str, Any] | None = None
         if active_id:
-            p = self._repo.get_preset_by_id(active_id)
+            p = await self._repo.get_preset_by_id(active_id)
             if p:
                 raw = p.get("config")
         return {

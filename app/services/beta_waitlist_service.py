@@ -75,7 +75,7 @@ class BetaWaitlistService:
             raise ValueError(f"{field} is too long")
         return t
 
-    def persist_submission(
+    async def persist_submission(
         self,
         *,
         email: str,
@@ -121,7 +121,7 @@ class BetaWaitlistService:
                 "captcha_verified_at": None,
             }
 
-        existing = self._repo.get_by_email_normalized(email_norm)
+        existing = await self._repo.get_by_email_normalized(email_norm)
         if existing:
             prev_count = int(existing.get("submission_count") or 1)
             update_row: dict[str, Any] = {
@@ -139,7 +139,7 @@ class BetaWaitlistService:
                 "referrer": ref or None,
                 **captcha_fields,
             }
-            self._repo.update_resubmission(str(existing["id"]), update_row)
+            await self._repo.update_resubmission(str(existing["id"]), update_row)
             logger.info("waitlist_resubmission | email_normalized_prefix={}", email_norm[:3])
             return
 
@@ -161,5 +161,5 @@ class BetaWaitlistService:
             "referrer": ref or None,
             **captcha_fields,
         }
-        self._repo.insert_submission(insert_row)
+        await self._repo.insert_submission(insert_row)
         logger.info("waitlist_new_submission | email_normalized_prefix={}", email_norm[:3])

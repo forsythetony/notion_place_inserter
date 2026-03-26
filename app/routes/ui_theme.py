@@ -45,7 +45,7 @@ async def get_theme_runtime(
     _ctx: AuthContext = Depends(require_managed_auth),
 ):
     """Merged cssVars for the active preset (any authenticated user)."""
-    return _svc(request).get_runtime_payload()
+    return await _svc(request).get_runtime_payload()
 
 
 # --- Admin request bodies ---
@@ -87,7 +87,7 @@ async def list_presets(
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     repo = _svc(request)._repo
-    rows = repo.list_presets_metadata()
+    rows = await repo.list_presets_metadata()
     return {
         "items": [
             {
@@ -117,7 +117,7 @@ async def create_preset(
         return _validation_422(verr)
     repo = _svc(request)._repo
     try:
-        row = repo.create_preset(
+        row = await repo.create_preset(
             body.name.strip(),
             raw,
             created_by_user_id=ctx.user_id,
@@ -134,7 +134,7 @@ async def get_preset(
     preset_id: str,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
-    row = _svc(request)._repo.get_preset_by_id(preset_id)
+    row = await _svc(request)._repo.get_preset_by_id(preset_id)
     if not row:
         raise HTTPException(status_code=404, detail="Preset not found")
     return _preset_response(row)
@@ -148,7 +148,7 @@ async def update_preset(
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     repo = _svc(request)._repo
-    existing = repo.get_preset_by_id(preset_id)
+    existing = await repo.get_preset_by_id(preset_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Preset not found")
     name = body.name
@@ -163,7 +163,7 @@ async def update_preset(
     if name is None and config is None:
         raise HTTPException(status_code=400, detail="No fields to update")
     try:
-        row = repo.update_preset(
+        row = await repo.update_preset(
             preset_id,
             name=name.strip() if name is not None else None,
             config=config,
@@ -183,12 +183,12 @@ async def delete_preset(
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     repo = _svc(request)._repo
-    is_sys = repo.get_preset_is_system(preset_id)
+    is_sys = await repo.get_preset_is_system(preset_id)
     if is_sys is None:
         raise HTTPException(status_code=404, detail="Preset not found")
     if is_sys:
         raise HTTPException(status_code=403, detail="Cannot delete system preset")
-    ok = repo.delete_preset(preset_id)
+    ok = await repo.delete_preset(preset_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Preset not found")
     return {"ok": True}
@@ -202,7 +202,7 @@ async def duplicate_preset(
     ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
     repo = _svc(request)._repo
-    row = repo.duplicate_preset(
+    row = await repo.duplicate_preset(
         preset_id,
         body.name.strip() if body.name else None,
         created_by_user_id=ctx.user_id,
@@ -217,7 +217,7 @@ async def get_active(
     request: Request,
     _ctx: AuthContext = Depends(require_admin_managed_auth),
 ):
-    return _svc(request).get_active_for_admin()
+    return await _svc(request).get_active_for_admin()
 
 
 @admin_router.put("/active")
@@ -229,10 +229,10 @@ async def set_active(
     repo = _svc(request)._repo
     pid = body.preset_id
     if pid is not None:
-        if not repo.get_preset_by_id(pid):
+        if not await repo.get_preset_by_id(pid):
             raise HTTPException(status_code=404, detail="Preset not found")
-    repo.set_active_preset_id(pid)
-    return _svc(request).get_active_for_admin()
+    await repo.set_active_preset_id(pid)
+    return await _svc(request).get_active_for_admin()
 
 
 @admin_router.post("/actions/preview-derived")
