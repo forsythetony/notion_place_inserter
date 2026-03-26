@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -433,6 +434,22 @@ class RequestIdCorsDebugMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RequestIdCorsDebugMiddleware)
+
+
+# ── Global unhandled-exception handler ──────────────────────────────
+# Ensures every error response is a proper JSONResponse so that the
+# CORS middleware can add Access-Control-Allow-Origin headers to it.
+# Without this, unhandled exceptions bypass CORS headers and browsers
+# report them as CORS errors instead of showing the real status code.
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "unhandled_exception | method={} path={}", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 @app.get("/health")

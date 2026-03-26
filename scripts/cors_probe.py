@@ -14,7 +14,7 @@ import requests
 
 # ── URLs to test ────────────────────────────────────────────────────
 CUSTOM_DOMAIN_URL = "https://api.oleo.sh"
-DIRECT_RENDER_URL = "https://YOUR_SERVICE.onrender.com"  # TODO: set this
+DIRECT_RENDER_URL = "https://notion-pipeliner-api.onrender.com/"
 
 # Paths to probe (no auth needed for /health)
 PATHS = [

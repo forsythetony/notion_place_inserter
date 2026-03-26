@@ -81,7 +81,14 @@ def require_managed_auth(
         logger.warning("managed_auth_rejected | reason=missing_user_id")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    profile = auth_repo.get_profile(user_id)
+    try:
+        profile = auth_repo.get_profile(user_id)
+    except Exception:
+        logger.exception(
+            "managed_auth_error | reason=profile_fetch_failed user_id={}", user_id
+        )
+        raise HTTPException(status_code=502, detail="Upstream service unavailable")
+
     if not profile:
         logger.warning(
             "managed_auth_rejected | reason=profile_not_found user_id={}", user_id
