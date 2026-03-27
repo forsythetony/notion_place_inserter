@@ -263,6 +263,7 @@ async def lifespan(app: FastAPI):
             "waitlist_ip_hash_salt_missing | set WAITLIST_IP_HASH_SALT or SECRET"
         )
         ip_salt = "waitlist-ip-placeholder-unsafe"
+    app.state.beta_waitlist_repository = waitlist_repo
     app.state.beta_waitlist_service = BetaWaitlistService(
         waitlist_repo,
         ip_hash_salt=ip_salt,

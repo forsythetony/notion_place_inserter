@@ -1,6 +1,7 @@
 # Architecture push: Beta UI general polish
 
 **Status:** Open (execution is iterative QA)  
+**Scheduling:** **Later in Launch stage 1** — run after core beta scope (admin flows, homepage/demo, etc.) is far enough along; see **Open pushes (Launch stage 1)** in [`work-log.md`](../../work-log.md).  
 **Audience:** Frontend engineers and anyone running a beta visual pass; product for scope boundaries  
 **Primary code:** [`notion_pipeliner_ui`](../../../../../notion_pipeliner_ui/) — routes under [`src/routes/`](../../../../../notion_pipeliner_ui/src/routes/), shell in [`AppShell.tsx`](../../../../../notion_pipeliner_ui/src/layouts/AppShell.tsx), global styles in [`App.css`](../../../../../notion_pipeliner_ui/src/App.css) / [`index.css`](../../../../../notion_pipeliner_ui/src/index.css)
 

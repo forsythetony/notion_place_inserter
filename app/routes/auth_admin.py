@@ -1,5 +1,7 @@
 """Admin-only auth directory: user profiles and cohorts."""
 
+import base64
+import json
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -15,7 +17,12 @@ from app.services.effective_limits import (
     limits_resolution_summary,
     resolve_effective_app_limits,
 )
-from app.services.supabase_auth_repository import SupabaseAuthRepository
+from app.repositories.supabase_beta_waitlist_repository import (
+    WAITLIST_ADMIN_SORTS,
+    SupabaseBetaWaitlistRepository,
+)
+from app.routes.invitations import _issue_response_body
+from app.services.supabase_auth_repository import SupabaseAuthRepository, USER_TYPES
 from app.services.usage_cost_estimation_service import (
     RateCardRow,
     estimate_usage_record_usd,
@@ -46,6 +53,8 @@ def _profile_row_to_item(row: dict) -> dict:
         else None,
         "cohortId": str(row["cohort_id"]) if row.get("cohort_id") else None,
         "cohortKey": row.get("cohort_key"),
+        "betaWaveId": str(row["beta_wave_id"]) if row.get("beta_wave_id") else None,
+        "betaWaveKey": row.get("beta_wave_key"),
         "eulaVersionId": str(row["eula_version_id"])
         if row.get("eula_version_id")
         else None,
@@ -344,6 +353,434 @@ async def delete_cohort_admin(
         ctx.user_id,
         cohort_id,
     )
+
+
+WAITLIST_STATUSES = frozenset(
+    {
+        "PENDING_REVIEW",
+        "SHORTLISTED",
+        "INVITED",
+        "DECLINED",
+        "SPAM",
+    }
+)
+
+
+def _decode_waitlist_cursor(cursor: str | None) -> int:
+    if not cursor or not cursor.strip():
+        return 0
+    try:
+        raw_b64 = cursor.strip() + "=" * (-len(cursor.strip()) % 4)
+        raw = base64.urlsafe_b64decode(raw_b64.encode("ascii"))
+        data = json.loads(raw.decode("utf-8"))
+        offset = int(data.get("o", 0))
+        return max(0, offset)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid cursor",
+        ) from e
+
+
+def _encode_waitlist_cursor(offset: int) -> str:
+    return (
+        base64.urlsafe_b64encode(json.dumps({"o": offset}).encode())
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+
+def _beta_wave_row_to_item(row: dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "key": row["key"],
+        "label": row["label"],
+        "description": row.get("description"),
+        "sortOrder": row.get("sort_order", 0),
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def _waitlist_row_to_item(row: dict, notion_preview_len: int = 120) -> dict:
+    nuc = row.get("notion_use_case") or ""
+    preview = (
+        nuc
+        if len(nuc) <= notion_preview_len
+        else nuc[: notion_preview_len - 1] + "…"
+    )
+    return {
+        "id": str(row["id"]),
+        "email": row.get("email"),
+        "emailNormalized": row.get("email_normalized"),
+        "name": row.get("name"),
+        "heardAbout": row.get("heard_about"),
+        "heardAboutOther": row.get("heard_about_other"),
+        "workRole": row.get("work_role"),
+        "notionUseCase": row.get("notion_use_case"),
+        "notionUseCasePreview": preview,
+        "status": row.get("status"),
+        "submissionCount": row.get("submission_count"),
+        "firstSubmittedAt": row.get("first_submitted_at"),
+        "lastSubmittedAt": row.get("last_submitted_at"),
+        "invitationCodeId": str(row["invitation_code_id"])
+        if row.get("invitation_code_id")
+        else None,
+        "invitedAt": row.get("invited_at"),
+        "reviewedAt": row.get("reviewed_at"),
+        "adminNotes": row.get("admin_notes"),
+        "betaWaveId": str(row["beta_wave_id"]) if row.get("beta_wave_id") else None,
+        "betaWaveKey": row.get("beta_wave_key"),
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+@router.get("/beta-waves")
+async def list_beta_waves_admin(
+    request: Request,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    logger.info("admin_list_beta_waves | admin_user_id={}", ctx.user_id)
+    rows = await auth_repo.list_beta_waves()
+    return {"items": [_beta_wave_row_to_item(r) for r in rows]}
+
+
+class WaveCreateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    key: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=1)
+    description: str | None = None
+    sort_order: int | None = Field(None, alias="sortOrder")
+
+
+class WavePatchRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    label: str = Field(..., min_length=1)
+    description: str | None = None
+    sort_order: int = Field(..., alias="sortOrder")
+
+
+@router.post("/beta-waves", status_code=201)
+async def create_beta_wave_admin(
+    request: Request,
+    body: WaveCreateRequest,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    if await auth_repo.get_beta_wave_by_key(body.key):
+        raise HTTPException(
+            status_code=409,
+            detail="A wave with this key already exists",
+        )
+    sort_order = body.sort_order
+    if sort_order is None:
+        sort_order = await auth_repo.compute_next_beta_wave_sort_order()
+    try:
+        row = await auth_repo.create_beta_wave(
+            body.key, body.label, body.description, sort_order
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    logger.info(
+        "admin_create_beta_wave | admin_user_id={} wave_id={} wave_key={}",
+        ctx.user_id,
+        row.get("id"),
+        row.get("key"),
+    )
+    return _beta_wave_row_to_item(row)
+
+
+@router.patch("/beta-waves/{wave_id}")
+async def patch_beta_wave_admin(
+    request: Request,
+    wave_id: UUID,
+    body: WavePatchRequest,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    try:
+        updated = await auth_repo.update_beta_wave(
+            wave_id,
+            label=body.label,
+            description=body.description,
+            sort_order=body.sort_order,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Wave not found")
+    logger.info(
+        "admin_patch_beta_wave | admin_user_id={} wave_id={}",
+        ctx.user_id,
+        wave_id,
+    )
+    return _beta_wave_row_to_item(updated)
+
+
+@router.delete("/beta-waves/{wave_id}", status_code=204)
+async def delete_beta_wave_admin(
+    request: Request,
+    wave_id: UUID,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    result = await auth_repo.delete_beta_wave_if_unused(wave_id)
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="Wave not found")
+    if result == "in_use":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot delete wave: still referenced by waitlist submissions, "
+                "invitation codes, or user profiles"
+            ),
+        )
+    logger.info(
+        "admin_delete_beta_wave | admin_user_id={} wave_id={}",
+        ctx.user_id,
+        wave_id,
+    )
+
+
+@router.get("/waitlist-submissions")
+async def list_waitlist_submissions_admin(
+    request: Request,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+    q: str | None = None,
+    status: str | None = Query(
+        None,
+        description="Comma-separated status values (e.g. PENDING_REVIEW,INVITED)",
+    ),
+    beta_wave_id: UUID | None = Query(None, alias="betaWaveId"),
+    heard_about: str | None = Query(None, alias="heardAbout"),
+    invited: bool | None = Query(None),
+    sort: str = Query("last_submitted_at_desc"),
+    limit: int = Query(50, ge=1, le=200),
+    cursor: str | None = None,
+):
+    wl_repo: SupabaseBetaWaitlistRepository = request.app.state.beta_waitlist_repository
+    offset = _decode_waitlist_cursor(cursor)
+    sort_key = sort if sort in WAITLIST_ADMIN_SORTS else "last_submitted_at_desc"
+    statuses_list: list[str] | None = None
+    if status and status.strip():
+        statuses_list = [s.strip() for s in status.split(",") if s.strip()]
+        invalid = [s for s in statuses_list if s not in WAITLIST_STATUSES]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status value(s): {', '.join(invalid)}",
+            )
+    rows, has_more = await wl_repo.list_for_admin(
+        q=q,
+        statuses=statuses_list,
+        beta_wave_id=str(beta_wave_id) if beta_wave_id else None,
+        heard_about=heard_about,
+        invited=invited,
+        sort=sort_key,
+        limit=limit,
+        offset=offset,
+    )
+    items = [_waitlist_row_to_item(r) for r in rows]
+    next_cursor = (
+        _encode_waitlist_cursor(offset + len(items)) if has_more else None
+    )
+    logger.info(
+        "admin_list_waitlist_submissions | admin_user_id={} count={}",
+        ctx.user_id,
+        len(items),
+    )
+    return {"items": items, "nextCursor": next_cursor}
+
+
+class WaitlistPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    admin_notes: str | None = Field(None, alias="adminNotes")
+    beta_wave_id: UUID | None = Field(None, alias="betaWaveId")
+    status: str | None = None
+    reviewed_at: datetime | None = Field(None, alias="reviewedAt")
+
+
+@router.patch("/waitlist-submissions/{submission_id}")
+async def patch_waitlist_submission_admin(
+    request: Request,
+    submission_id: UUID,
+    body: WaitlistPatchRequest,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    wl_repo: SupabaseBetaWaitlistRepository = request.app.state.beta_waitlist_repository
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    updates: dict = {}
+    if "admin_notes" in body.model_fields_set:
+        updates["admin_notes"] = body.admin_notes
+    if "beta_wave_id" in body.model_fields_set:
+        if body.beta_wave_id is not None:
+            wave = await auth_repo.get_beta_wave_by_id(body.beta_wave_id)
+            if wave is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="betaWaveId does not reference an existing beta wave",
+                )
+        updates["beta_wave_id"] = body.beta_wave_id
+    if "status" in body.model_fields_set:
+        if body.status is not None and body.status not in WAITLIST_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"status must be one of {sorted(WAITLIST_STATUSES)}",
+            )
+        updates["status"] = body.status
+    if "reviewed_at" in body.model_fields_set:
+        updates["reviewed_at"] = (
+            body.reviewed_at.isoformat() if body.reviewed_at is not None else None
+        )
+    updated = await wl_repo.patch_submission_admin(submission_id, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Waitlist submission not found")
+    logger.info(
+        "admin_patch_waitlist_submission | admin_user_id={} submission_id={}",
+        ctx.user_id,
+        submission_id,
+    )
+    return _waitlist_row_to_item(updated)
+
+
+class IssueFromWaitlistRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    user_type: str = Field(alias="userType")
+    issued_to: str | None = Field(None, alias="issuedTo")
+    platform_issued_on: str | None = Field(None, alias="platformIssuedOn")
+    cohort_id: UUID | None = Field(None, alias="cohortId")
+    beta_wave_id: UUID | None = Field(None, alias="betaWaveId")
+
+
+@router.post("/waitlist-submissions/{submission_id}/issue-invitation")
+async def issue_invitation_from_waitlist_admin(
+    request: Request,
+    submission_id: UUID,
+    body: IssueFromWaitlistRequest,
+    ctx: AuthContext = Depends(require_admin_managed_auth),
+):
+    if body.user_type not in USER_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"userType must be one of {USER_TYPES}, got {body.user_type!r}",
+        )
+    wl_repo: SupabaseBetaWaitlistRepository = request.app.state.beta_waitlist_repository
+    auth_repo: SupabaseAuthRepository = request.app.state.supabase_auth_repository
+    row = await wl_repo.get_by_id(submission_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Waitlist submission not found")
+
+    issued_to = (
+        body.issued_to.strip()
+        if body.issued_to and body.issued_to.strip()
+        else (row.get("email") or "").strip()
+    )
+    if not issued_to:
+        raise HTTPException(
+            status_code=400,
+            detail="issuedTo or waitlist email is required to issue an invitation",
+        )
+
+    cohort_id_str: str | None = None
+    if body.cohort_id is not None:
+        cohort = await auth_repo.get_cohort_by_id(body.cohort_id)
+        if cohort is None:
+            raise HTTPException(
+                status_code=400,
+                detail="cohortId does not reference an existing cohort",
+            )
+        cohort_id_str = str(body.cohort_id)
+
+    beta_wave_id_str: str | None = None
+    if body.beta_wave_id is not None:
+        wave = await auth_repo.get_beta_wave_by_id(body.beta_wave_id)
+        if wave is None:
+            raise HTTPException(
+                status_code=400,
+                detail="betaWaveId does not reference an existing beta wave",
+            )
+        beta_wave_id_str = str(body.beta_wave_id)
+
+    cur_inv = row.get("invitation_code_id")
+    if cur_inv:
+        cur_s = str(cur_inv)
+        inv_for_email = await auth_repo.get_invitation_by_issued_to(issued_to)
+        if inv_for_email is None or str(inv_for_email["id"]) != cur_s:
+            raise HTTPException(
+                status_code=409,
+                detail="Waitlist submission already linked to an invitation",
+            )
+        ex = dict(inv_for_email)
+        if ex.get("beta_wave_id"):
+            w = await auth_repo.get_beta_wave_by_id(ex["beta_wave_id"])
+            if w:
+                ex["beta_wave_key"] = w.get("key")
+        logger.info(
+            "admin_issue_waitlist_invite_idempotent | admin_user_id={} submission_id={}",
+            ctx.user_id,
+            submission_id,
+        )
+        return {
+            "invitation": _issue_response_body(ex),
+            "waitlist": _waitlist_row_to_item(row),
+        }
+
+    existing = await auth_repo.get_invitation_by_issued_to(issued_to)
+    if existing is not None:
+        inv_id = str(existing["id"])
+        updated = await wl_repo.link_invitation_to_submission(
+            submission_id,
+            inv_id,
+            beta_wave_id=beta_wave_id_str if beta_wave_id_str else None,
+        )
+        ex = dict(existing)
+        if ex.get("beta_wave_id"):
+            w = await auth_repo.get_beta_wave_by_id(ex["beta_wave_id"])
+            if w:
+                ex["beta_wave_key"] = w.get("key")
+        logger.info(
+            "admin_issue_waitlist_invite_linked_existing | admin_user_id={} submission_id={}",
+            ctx.user_id,
+            submission_id,
+        )
+        return {
+            "invitation": _issue_response_body(ex),
+            "waitlist": _waitlist_row_to_item(updated) if updated else {},
+        }
+
+    code = await auth_repo.generate_invitation_code()
+    inv_row = await auth_repo.create_invitation_code(
+        code=code,
+        user_type=body.user_type,
+        issued_to=issued_to,
+        platform_issued_on=body.platform_issued_on,
+        cohort_id=cohort_id_str,
+        beta_wave_id=beta_wave_id_str,
+    )
+    updated = await wl_repo.link_invitation_to_submission(
+        submission_id,
+        str(inv_row["id"]),
+        beta_wave_id=beta_wave_id_str if beta_wave_id_str else None,
+    )
+    if beta_wave_id_str:
+        w = await auth_repo.get_beta_wave_by_id(beta_wave_id_str)
+        if w:
+            inv_row = {**inv_row, "beta_wave_key": w.get("key")}
+    logger.info(
+        "admin_issue_waitlist_invite_created | admin_user_id={} submission_id={}",
+        ctx.user_id,
+        submission_id,
+    )
+    return {
+        "invitation": _issue_response_body(inv_row),
+        "waitlist": _waitlist_row_to_item(updated) if updated else {},
+    }
 
 
 @router.get("/usage-providers")

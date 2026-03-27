@@ -31,6 +31,7 @@ from app.services.validation_service import (
     JobGraph,
     ValidationError,
     ValidationService,
+    collect_input_contract_metadata_errors,
     collect_output_contract_metadata_errors,
 )
 
@@ -169,6 +170,33 @@ def test_parse_step_template_preserves_output_contract_field_metadata():
     assert foo["pick_hint"] == "Hint"
     assert foo["example"] == {"a": 1}
     assert collect_output_contract_metadata_errors(t.output_contract, template_id=t.id) == []
+
+
+def test_parse_step_template_preserves_input_contract_field_title():
+    """Nested keys under input_contract.fields (title, etc.) are preserved."""
+    data = {
+        "id": "step_in_meta",
+        "slug": "in_meta",
+        "display_name": "In Meta",
+        "step_kind": "lookup",
+        "description": "",
+        "input_contract": {
+            "fields": {
+                "value": {
+                    "type": "string",
+                    "title": "Image URL",
+                }
+            }
+        },
+        "output_contract": {},
+        "config_schema": {},
+        "runtime_binding": "x",
+        "category": "lookup",
+        "status": "active",
+    }
+    t = parse_step_template(data)
+    assert t.input_contract["fields"]["value"]["title"] == "Image URL"
+    assert collect_input_contract_metadata_errors(t.input_contract, template_id=t.id) == []
 
 
 async def test_yaml_connector_template_repository_list_all():

@@ -17,24 +17,44 @@ Top-level buckets for delegating work. Each goal can list **pushes** — scoped 
 
 Architecture pushes stay indexed in the **Architecture document index** when they have (or will have) a doc. Pushes without a linked technical doc use **Notes** instead of **Doc**. For linked specs, **Status** can include delivery state (*Complete on …*, *Open*, etc.) and review readiness (*Unexpanded*, *Ready for review*, *Reviewed*) in one value (use — when not applicable).
 
-### Goal 1: Beta user launch
+### Launch stages
 
-Work we believe we must complete (or have a clear architecture or decision for) before a **small-group beta**. Linked docs live under [`productization-technical/beta-launch-readiness/`](./productization-technical/beta-launch-readiness/README.md) unless noted otherwise.
+Product launches are phased using **launch stage** (ordinal) terminology:
 
-**Open pushes**
+| Launch stage | What it is | Scale / ops posture |
+|--------------|------------|---------------------|
+| **Launch stage 1** | The **beta** phase — validate the **product idea** with blunt, qualitative feedback | **At most ten concurrent beta users** (hard cap for this stage). Deliberately **not** a gate for horizontal worker scaling or full observability/telemetry programs; use existing logs and direct feedback to learn whether the idea lands. |
+| **Launch stage 2** | **Expanded beta** — grow the cohort and harden operations | **Scalability** (e.g. worker horizontal scaling, queue/DB coordination) and **observability** (error handling, metrics, traces, operator telemetry) become explicit priorities before further expansion. |
+
+**Goal 1** below maps to **Launch stage 1** only. Pushes that belong to **Launch stage 2** are listed in a separate table so they are not confused with the initial beta gate.
+
+### Goal 1: Beta user launch (Launch stage 1)
+
+Work we believe we must complete (or have a clear architecture or decision for) before **Launch stage 1** — beta with **at most ten users**, focused on **idea validation**. Linked docs live under [`productization-technical/beta-launch-readiness/`](./productization-technical/beta-launch-readiness/README.md) unless noted otherwise.
+
+**Open pushes (Launch stage 1)**
+
+Rows are ordered **core scope first**, **polish last** — visual polish passes are scheduled **toward the end of Launch stage 1**, after the features below are far enough along.
+
+| Type | Push | Doc | Notes | Status |
+|------|------|-----|-------|--------|
+| Architecture | **First pipeline — time to value** (signup → Notion → template → create → test run) | [first-pipeline-time-to-value-architecture.md](./productization-technical/beta-launch-readiness/first-pipeline-time-to-value-architecture.md) | Template docs, Connections path, `create-from-template` / triggers work, **test trigger** + see run; optional **step-through** on Dashboard | **Open** · **Ready for review** |
+| Architecture | **Tech Deck:** Admin Providers page — usage providers & rate cards | [tech-deck-admin-providers-page.md](./productization-technical/beta-launch-readiness/tech-deck-admin-providers-page.md) | `/admin/providers`; edit `usage_provider_definitions` + `usage_rate_cards` without SQL; complements Monitoring cost estimates | **Open** · **Ready for review** |
+| Architecture | Admin Users directory — **user detail modal** (limits, last sign-in, EULA vs published) | [admin-users-directory-user-detail-modal.md](./productization-technical/beta-launch-readiness/admin-users-directory-user-detail-modal.md) | `/admin/users` Users tab; `GET /auth/admin/user-profiles` already returns EULA ids — extend TS + add Auth `last_sign_in` + detail endpoint or list enrichment | **Not started** · **Ready for review** |
+| Architecture | **Oleo marketing homepage** — scrollytelling design & animation (8 sections) | [oleo-homepage-scrollytelling-architecture.md](./productization-technical/beta-launch-readiness/oleo-homepage-scrollytelling-architecture.md) | **Nearly complete:** scrollytelling shipped (2026-03-23+); **remaining:** add **live demo** to `/` per [live demo](./productization-technical/beta-launch-readiness/landing-page-live-demo-see-it-in-action-architecture.md). §02/§05/§06 full spec deferred | **In progress** · **Ready for review** |
+| Architecture | Cross-page UI polish pass | [beta-ui-general-polish.md](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) | **Later in Launch stage 1** — after core beta scope above (admin flows, homepage/demo, etc.); broad Calm Graphite consistency pass | **Open** · **Ready for review** |
+| Architecture | Pipeline cell / step detail UI — general + template-specific polish | [pipeline-cell-step-detail-ui-polish.md](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) | **Latest in Launch stage 1** — after **cross-page UI polish** and stable editor contracts; **not** blocked on Launch stage 2 (scaling/observability) | **Open** · **Ready for review** |
+
+**Open pushes (Launch stage 2 — expanded beta)**
+
+Work we intend to prioritize **after** Launch stage 1, when growing beyond the ten-user cap and requiring operational rigor.
 
 | Type | Push | Doc | Notes | Status |
 |------|------|-----|-------|--------|
 | Architecture | Worker horizontal scaling vs queue/DB constraints | [worker-horizontal-scaling-and-queue-coordination.md](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) | — | **Open** · **Ready for review** |
 | Architecture | Error handling, metrics, traces, OTEL vs bespoke, user-visible logs | [error-handling-observability-and-telemetry.md](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) | — | **Open** · **Ready for review** |
-| Architecture | Cross-page UI polish pass | [beta-ui-general-polish.md](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) | — | **Open** · **Ready for review** |
-| Architecture | Pipeline cell / step detail UI — general + template-specific polish | [pipeline-cell-step-detail-ui-polish.md](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) | **Late in beta prep** — after limits, worker/scaling, observability, and cross-page polish are far enough along | **Open** · **Ready for review** |
-| Architecture | **Tech Deck:** Admin Providers page — usage providers & rate cards | [tech-deck-admin-providers-page.md](./productization-technical/beta-launch-readiness/tech-deck-admin-providers-page.md) | `/admin/providers`; edit `usage_provider_definitions` + `usage_rate_cards` without SQL; complements Monitoring cost estimates | **Open** · **Ready for review** |
-| Architecture | Admin **waitlist** directory (search/filter), **invite from waitlist**, **beta waves** (rollout tranches) | [admin-waitlist-waves-and-invitations-architecture.md](./productization-technical/beta-launch-readiness/admin-waitlist-waves-and-invitations-architecture.md) | `/admin/users` new **Waitlist** tab; `GET/PATCH` admin waitlist APIs; `POST …/issue-invitation`; `beta_waves` + FKs on waitlist + invites + profiles; claim copies wave like cohort | **Not started** · **Ready for review** |
-| Architecture | Admin Users directory — **user detail modal** (limits, last sign-in, EULA vs published) | [admin-users-directory-user-detail-modal.md](./productization-technical/beta-launch-readiness/admin-users-directory-user-detail-modal.md) | `/admin/users` Users tab; `GET /auth/admin/user-profiles` already returns EULA ids — extend TS + add Auth `last_sign_in` + detail endpoint or list enrichment | **Not started** · **Ready for review** |
-| Architecture | **Oleo marketing homepage** — scrollytelling design & animation (8 sections) | [oleo-homepage-scrollytelling-architecture.md](./productization-technical/beta-launch-readiness/oleo-homepage-scrollytelling-architecture.md) | **MVP shipped (2026-03-23):** `/` public for all users; GSAP hero + sections 3/4/7/8; card stack, AI funnel, notifications deferred | **In progress** · **Ready for review** |
 
-**Complete pushes**
+**Complete pushes (Launch stage 1 and shared prerequisites)**
 
 | Type | Push | Doc | Notes | Status |
 |------|------|-----|-------|--------|
@@ -52,8 +72,10 @@ Work we believe we must complete (or have a clear architecture or decision for) 
 | Architecture | **Landing page — live demo video** (“See it in action”) | [landing-page-live-demo-see-it-in-action-architecture.md](./productization-technical/beta-launch-readiness/landing-page-live-demo-see-it-in-action-architecture.md) | `notion_pipeliner_ui`: `SeeItInActionSection`, `LandingDemoVideoModal`, `landingDemoConfig`, `VITE_LANDING_DEMO_*`; lazy `useSectionInView`; `usePrefersReducedMotion`; tests | **Complete on 2026-03-24** · **Ready for review** |
 | Architecture | **Beta example demo video** — recording + hosting (creative assets) | [beta-example-demo-video-recording-and-hosting-plan.md](./productization-technical/beta-launch-readiness/beta-example-demo-video-recording-and-hosting-plan.md) | Master MP4 + preview loop + poster (+ optional WebVTT); **preferred host:** Cloudflare R2; wire `VITE_LANDING_DEMO_*` on Render | **In progress** · **Ready for review** |
 | Architecture | Public beta waitlist page + unauthenticated submission security | [public-beta-waitlist-submission-architecture.md](./productization-technical/beta-launch-readiness/public-beta-waitlist-submission-architecture.md) | Migration `beta_waitlist_submissions`; `POST /public/waitlist` (Turnstile, honeypot, in-memory rate limit); `notion_pipeliner_ui` `/waitlist`, `submitBetaWaitlist`, landing CTA → `/waitlist`; `VITE_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | **Complete on 2026-03-24** · **Ready for review** |
+| Architecture | Admin **waitlist** directory, **beta waves**, **invite-from-waitlist** | [admin-waitlist-waves-and-invitations-architecture.md](./productization-technical/beta-launch-readiness/admin-waitlist-waves-and-invitations-architecture.md) | Migration `20260327120000_beta_waves_and_waitlist_admin.sql` (`beta_waves` + FKs; status `CHECK`; seeded `WAVE_1`–`WAVE_3`); `GET /auth/admin/beta-waves`, `GET/PATCH /auth/admin/waitlist-submissions`, `POST .../issue-invitation`; `betaWaveId` on `POST /auth/invitations`; claim copies `beta_wave_id` to `user_profiles`; `app.state.beta_waitlist_repository`; `notion_pipeliner_ui` `/admin/users/waitlist`, `CreateInvitationModal` wave selector, tests | **Complete on 2026-03-26** · **Ready for review** |
+| Architecture | Admin Users — **Waves** tab (`beta_waves` catalog CRUD) | [admin-users-waves-tab-architecture.md](./productization-technical/beta-launch-readiness/admin-users-waves-tab-architecture.md) | `POST/PATCH/DELETE /auth/admin/beta-waves`; `SupabaseAuthRepository` create/update/delete-if-unused (refs: waitlist, invites, profiles); `notion_pipeliner_ui` `/admin/users/waves`, `WaveCard`, `CreateBetaWaveModal`, `EditBetaWaveModal`, `api.ts`, tests | **Complete on 2026-03-26** · **Ready for review** |
 
-_Audit (2026-03-22): **Status** values for review readiness include **Unexpanded** (brief + “Detailed design (TBD)” only), **Ready for review** (full architecture/spec written; no human sign-off recorded here), **Reviewed** (none yet). Combine with delivery state where relevant (e.g. **Complete on …** · **Ready for review**)._
+_Audit (2026-03-22): **Status** values for review readiness include **Unexpanded** (brief + “Detailed design (TBD)” only), **Ready for review** (full architecture/spec written; no human sign-off recorded here), **Reviewed** (none yet). Combine with delivery state where relevant (e.g. **Complete on …** · **Ready for review**). **Goal 1** uses three tables: **Open pushes (Launch stage 1)**, **Open pushes (Launch stage 2)**, **Complete pushes**._
 
 ---
 
@@ -64,6 +86,17 @@ Significant decisions with rationale, alternatives considered, and context.
 **Format:** Date | Title | Context | Options considered | Decision | Consequences
 
 <!-- Add new entries at the top, most recent first -->
+
+### 2026-03-26 - Launch stages: ten-user beta vs expanded beta
+
+- **Date** — 2026-03-26
+- **Title** — Launch stage 1 vs launch stage 2 (beta scope)
+- **Context** — Initial beta should prioritize **honest feedback on the product idea** without front-loading platform work. A **maximum of ten** concurrent beta users is the intended cap for that first phase.
+- **Options considered** — Treat worker scaling and full observability as beta blockers; vs defer them until after idea validation.
+- **Decision** — Use **launch stage** terminology: **Launch stage 1** is the beta phase (**≤10 users**, idea validation; scaling and observability programs are **not** gating). **Launch stage 2** is an **expanded beta** where **scalability** (e.g. worker horizontal scaling) and **observability** (metrics, traces, operator telemetry) become explicit priorities. **Goal 1** maps to Launch stage 1 only; Launch stage 2 open pushes are tracked in a separate table in [`work-log.md`](./work-log.md).
+- **Consequences** — Docs and planning separate “get the idea right” from “run it at scale”; architecture specs for scaling/observability remain valid but are scheduled for Launch stage 2.
+
+---
 
 ### 2026-03-24 - Public product name: Oleo
 
@@ -96,6 +129,8 @@ Significant decisions with rationale, alternatives considered, and context.
 
 ## Next thing to work on
 
+**Scheduled (2026-03-27):** **HTTP Get step template — Trafilatura exploration** — New step template to fetch an HTTP(S) response body; optional **main-content extraction** for HTML via [Trafilatura](https://trafilatura.readthedocs.io/) (toggle in the step UI). Investigation scope and checklist: [http-get-step-template-trafilatura-exploration.md](./http-get-step-template-trafilatura-exploration.md).
+
 **Now:** Landing page — active issue in `notion_pipeliner_ui` (switched from backend).
 
 **Resume here (backend, 2026-03-24):** After a **DB reset / new user**, the **starter pipeline** (`job_notion_place_inserter`) and **HTTP `/locations` trigger** are **not** recreated by API restart alone — startup only runs `seed_catalog_if_needed` (shared templates). Per-user copies come from **`ensure_owner_starter_definitions`** (lazy, e.g. locations flow) or explicitly **`POST /management/bootstrap/reprovision-starter`** with a normal management JWT — from repo root: **`make reprovision-starter`** (clipboard = access token only; optional `BASE_URL=`). Requires `ENABLE_BOOTSTRAP_PROVISIONING` (default on). Details: [starter-job-reprovision-runbook.md](./productization-technical/phase-4-datastore-backed-definitions/starter-job-reprovision-runbook.md); implementation `app/services/postgres_seed_service.py`.
@@ -110,6 +145,7 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 
 ### Top-level
 
+- [HTTP Get step template — Trafilatura exploration](./http-get-step-template-trafilatura-exploration.md) — **Open** (exploration scheduled **2026-03-27**; main-content extraction for new **HTTP Get** step template)
 - [Technical architecture](./README.md) — **Reference**
 - [Frontend session cache for account context (admin chrome + runtime theme)](./frontend-session-account-context-cache.md) — **Complete on 2026-03-23** · **Ready for review** (`sessionStorage` in `notion_pipeliner_ui`; `accountChromeCache.ts`, `AppShell`, `useRuntimeUiTheme`, `AuthProvider.signOut`)
 - [Landing page — bundled TypeScript source](./landing-page-source-bundle.md) — **Reference** (snapshot of `LandingPage.tsx` + `src/routes/landing/*` in `notion_pipeliner_ui`; edit sources in the frontend repo)
@@ -148,29 +184,31 @@ Inventory of Markdown under [`docs/technical-architecture/`](./). **Status:** *C
 - [Worker Memory Starvation Investigation (2026-03-13)](./incident_investigations/worker_memory_starvation_2026-03-13/findings_and_recommendations.md) — **Complete on 2026-03-13**
 - [Network FD Leak Remediation Findings](./incident_investigations/worker_memory_starvation_2026-03-13/network_fd_leak_remediation.md) — **Complete on 2026-03-13**
 
-### `productization-technical/beta-launch-readiness/` (beta gate)
+### `productization-technical/beta-launch-readiness/` (Launch stages 1–2)
 
-- [Beta launch readiness — hub](./productization-technical/beta-launch-readiness/README.md) — **Reference**
+- [Beta launch readiness — hub](./productization-technical/beta-launch-readiness/README.md) — **Reference** (see **Launch stages** in [Goals](#goals))
 - [Admin invitation management UI](./productization-technical/beta-launch-readiness/admin-invitation-management-ui.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Public product name and positioning](./productization-technical/beta-launch-readiness/public-product-name-and-positioning.md) — **Complete on 2026-03-24** (Oleo chosen) · **Ready for review**
 - [Global and per-user resource limits](./productization-technical/beta-launch-readiness/global-and-per-user-resource-limits.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Enhanced user monitoring and cost tracking](./productization-technical/beta-launch-readiness/enhanced-user-monitoring-and-cost-tracking.md) — **Complete on 2026-03-24** — `/admin/monitoring`, rate cards, est. USD; rollups backlog → [td-2026-03-24-monitoring-cost-rollups-aggregation.md](./tech-debt/td-2026-03-24-monitoring-cost-rollups-aggregation.md) · **Ready for review**
-- [Worker horizontal scaling and queue coordination](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) — **Open** · **Ready for review**
-- [Error handling, observability, and telemetry](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) — **Open** · **Ready for review**
-- [Oleo marketing homepage — scrollytelling](./productization-technical/beta-launch-readiness/oleo-homepage-scrollytelling-architecture.md) — **In progress (MVP 2026-03-23)** · **Ready for review**
+- [First pipeline — time to value (Launch stage 1)](./productization-technical/beta-launch-readiness/first-pipeline-time-to-value-architecture.md) — **Open** · **Ready for review** (signup → Notion → template → create → test run; optional step-through)
+- [Worker horizontal scaling and queue coordination](./productization-technical/beta-launch-readiness/worker-horizontal-scaling-and-queue-coordination.md) — **Open** · **Ready for review** · **Launch stage 2**
+- [Error handling, observability, and telemetry](./productization-technical/beta-launch-readiness/error-handling-observability-and-telemetry.md) — **Open** · **Ready for review** · **Launch stage 2**
+- [Oleo marketing homepage — scrollytelling](./productization-technical/beta-launch-readiness/oleo-homepage-scrollytelling-architecture.md) — **In progress** — scrollytelling shipped; **remaining:** demo on homepage · **Ready for review**
 - [Marketing landing page — mobile-friendly](./productization-technical/beta-launch-readiness/landing-page-mobile-friendly-architecture.md) — **Complete on 2026-03-23** · **Ready for review**
 - [Landing page — live demo video (“See it in action”)](./productization-technical/beta-launch-readiness/landing-page-live-demo-see-it-in-action-architecture.md) — **Complete on 2026-03-24** · **Ready for review** (`SeeItInActionSection`, modal, env URLs, reduced motion)
 - [Beta example demo video — recording and hosting plan](./productization-technical/beta-launch-readiness/beta-example-demo-video-recording-and-hosting-plan.md) — **In progress** · **Ready for review** (shot list, R2 hosting, `VITE_LANDING_DEMO_*` runbook)
 - [Public beta waitlist page and submission security](./productization-technical/beta-launch-readiness/public-beta-waitlist-submission-architecture.md) — **Complete on 2026-03-24** · **Ready for review** (`POST /public/waitlist`, `beta_waitlist_submissions`, Turnstile + honeypot + in-memory rate limit; UI `/waitlist`, landing CTA)
-- [Admin waitlist directory, beta waves, and invite-from-waitlist](./productization-technical/beta-launch-readiness/admin-waitlist-waves-and-invitations-architecture.md) — **Not started** · **Ready for review** (admin list/search/filter; `beta_waves`; issue invitation + link row)
+- [Admin Users — Waves tab](./productization-technical/beta-launch-readiness/admin-users-waves-tab-architecture.md) — **Complete on 2026-03-26** · **Ready for review** (`POST/PATCH/DELETE /auth/admin/beta-waves`, `/admin/users/waves`, modals + tests)
+- [Admin waitlist directory, beta waves, and invite-from-waitlist](./productization-technical/beta-launch-readiness/admin-waitlist-waves-and-invitations-architecture.md) — **Complete on 2026-03-26** · **Ready for review** (`/admin/users/waitlist`, admin APIs, `beta_waves` migration, invite orchestration + idempotent `issued_to` link, claim copies wave)
 - [Cloudflare Turnstile setup guide](./productization-technical/beta-launch-readiness/cloudflare-turnstile-setup-guide.md) — **Reference** (dashboard widget, hostnames, keys → `VITE_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`, test keys)
-- [Beta UI general polish](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) — **Open** · **Ready for review**
+- [Beta UI general polish](./productization-technical/beta-launch-readiness/beta-ui-general-polish.md) — **Open** — later in Launch stage 1 · **Ready for review**
 - [Data targets — source management modal](./productization-technical/beta-launch-readiness/data-targets-source-management-modal.md) — **Complete on 2026-03-25** · **Ready for review** (`app/routes/notion_oauth.py` enriched list/refresh payload; `DataSourceManagementModal`, `DataTargetsPage`, `api.ts`, tests)
 - [Invitations tab readability & accessibility](./productization-technical/beta-launch-readiness/invitations-tab-readability-and-accessibility.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Invitations — create invitation modal](./productization-technical/beta-launch-readiness/invitations-create-invitation-modal.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Users & cohorts tabs — UI parity with Invitations](./productization-technical/beta-launch-readiness/admin-users-and-cohorts-ui-parity-with-invitations.md) — **Complete on 2026-03-22** · **Ready for review**
 - [Admin Users directory — user detail modal](./productization-technical/beta-launch-readiness/admin-users-directory-user-detail-modal.md) — **Not started** · **Ready for review** (card click → modal: profile + limits summary + Auth last sign-in + EULA vs published)
-- [Pipeline cell / step detail UI polish](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) — **Open** (late in beta prep) · **Ready for review**
+- [Pipeline cell / step detail UI polish](./productization-technical/beta-launch-readiness/pipeline-cell-step-detail-ui-polish.md) — **Open** — latest in Launch stage 1 (after cross-page polish) · **Ready for review**
 - [EULA versioning, acceptance, and admin management](./productization-technical/beta-launch-readiness/eula-versioning-and-acceptance.md) — **Complete on 2026-03-23** · **Ready for review** · **Regression (P0 signup):** [EULA accept UI blocker](./tech-debt/td-2026-03-23-eula-accept-page-signup-blocker.md) — **Open**
 
 ### `productization-technical/` (phase docs)
@@ -269,6 +307,17 @@ Work completed. Add entries at the top, most recent first.
 
 | Date | Ticket / Task | Summary |
 |------|---------------|---------|
+| 2026-03-26 | admin-users-waves-tab | Shipped [admin-users-waves-tab-architecture.md](./productization-technical/beta-launch-readiness/admin-users-waves-tab-architecture.md): `SupabaseAuthRepository` `create_beta_wave`, `update_beta_wave`, `delete_beta_wave_if_unused`, `beta_wave_has_references`, `get_beta_wave_by_key`, `compute_next_beta_wave_sort_order`; FastAPI `POST/PATCH/DELETE /auth/admin/beta-waves`; `tests/test_admin_waitlist_routes.py`; `notion_pipeliner_ui` `/admin/users/waves`, `WaveCard`, `CreateBetaWaveModal`, `EditBetaWaveModal`, `api.ts`, `main.tsx`, `test-utils.tsx`, `api.test.ts`, `router.test.tsx`; Goal 1 + architecture doc + index + beta hub updated. |
+| 2026-03-26 | admin-waitlist-waves implementation | Shipped [admin-waitlist-waves-and-invitations-architecture.md](./productization-technical/beta-launch-readiness/admin-waitlist-waves-and-invitations-architecture.md): migration `20260327120000_beta_waves_and_waitlist_admin.sql`; FastAPI `GET /auth/admin/beta-waves`, `GET/PATCH /auth/admin/waitlist-submissions`, `POST .../issue-invitation`; `betaWaveId` on invitation issue; `SupabaseBetaWaitlistRepository` admin list/patch/link; `SupabaseAuthRepository` wave on invite + profile at claim; `notion_pipeliner_ui` Waitlist tab + API + modal waves; `tests/test_admin_waitlist_routes.py`; Goal 1 + beta hub + architecture index + doc status updated. |
+| 2026-03-26 | first-pipeline-time-to-value architecture | Added [first-pipeline-time-to-value-architecture.md](./productization-technical/beta-launch-readiness/first-pipeline-time-to-value-architecture.md): Launch stage 1 path from signup to first template run (Notion, template DB, `create-from-template`, test trigger); gaps, acceptance criteria, optional step-through; Goal 1 row + beta hub + architecture index. |
+| 2026-03-26 | Launch stage 1 polish scheduling | Goal 1: **core scope first, polish last** — reordered open table; **cross-page UI polish** = later in stage 1; **pipeline cell / step detail polish** = latest (after cross-page). Intro sentence + hub README + `beta-ui-general-polish.md` / `pipeline-cell-step-detail-ui-polish.md` scheduling; architecture index lines updated. |
+| 2026-03-26 | oleo-homepage progress + demo remaining | [oleo-homepage-scrollytelling-architecture.md](./productization-technical/beta-launch-readiness/oleo-homepage-scrollytelling-architecture.md): **Implementation progress** table — scrollytelling MVP shipped; **only remaining** tracked work = **live demo on homepage** (links to live-demo + beta video plan docs); §02/§05/§06 deferred. Goal 1 row, beta hub, architecture index updated. |
+| 2026-03-26 | launch stages (beta docs) | Defined **Launch stage 1** (beta, ≤10 users, idea validation) vs **Launch stage 2** (expanded beta: scaling + observability); moved worker scaling + observability open pushes to Launch stage 2 table in `work-log.md`; **Decisions** entry; beta hub + architecture index + `pipeline-cell-step-detail-ui-polish` scheduling; notes on worker/observability specs. |
+| 2026-03-26 | gated places insertion template | Email-gated (`forsythetony@gmail.com`) `POST /management/bootstrap/create-places-insertion-from-template`: clones bundled `notion_place_inserter.yaml` with prefixed ids via `job_graph_id_clone.py`, trigger `Places Trigger [From Template]` at `/places-from-template`, target `target_places_to_visit`. Dashboard second quick-start for allowlisted email + `createPlacesInsertionPipelineFromTemplate` in `api.ts`. |
+| 2026-03-26 | config select icon alignment | `step_template_property_set.yaml`: `options` on `target_kind` / `target_field`; `PipelineEditorPlaceholder.tsx`: `getConfigFieldChipStyle` + `hasOptions` on `StepInspectorConfigField` (list chip when schema has choices); `PROPERTY_SET_CONFIG_SCHEMA` fallback includes same options; special-case dropdowns unchanged. |
+| 2026-03-26 | step input title — inspector + DB | Follow-up: `PipelineEditorPlaceholder` always loads `GET /step-templates/{id}` after list (list-only shortcut hid catalog updates); migration `20260326120000_step_template_input_field_titles.sql` sets `input_contract` titles for property set + upload image when DB lagged YAML. |
+| 2026-03-26 | step input_contract field titles | Optional `input_contract.fields.<name>.title` in catalog YAML (same human-label idea as output `title`); `collect_input_contract_metadata_errors` + `ValidationService.validate_step_template_output_metadata` extended; `step_template_upload_image_to_notion` / `step_template_property_set` titles; `notion_pipeliner_ui`: `inputFieldDisplayLabel` (`bindingUtils.ts`), inspector INPUTS + binding picker modal use title with fallback to field key; tests. |
+| 2026-03-26 | input binding preview refresh | `notion_pipeliner_ui`: Step inspector INPUTS — `sourceUi` on `BindingSummary` (`bindingUtils.ts`); bound rows use source-aware chips (`getBindingSourceChipStyle` / Zap vs Boxes vs Database vs Type) and two-line `InputBindingSourcePreview` tree path; unbound rows stay compact with JSON type chip; CSS in `App.css`; tests in `bindingUtils.test.ts`, `bindingSourceUi.test.ts`, `InputBindingSourcePreview.test.tsx`. |
 | 2026-03-26 | graph add-step template flow | `notion_pipeliner_ui`: Draft steps auto-open `StepTemplatePicker` (`autoOpenOnceForDraftStepId`); `handleTemplateChange` pins `pendingSelectStepIdRef` so graph rebuild keeps the step selected and the inspector open; `router.test.tsx` coverage (inspector + graph + post-select inspector). |
 | 2026-03-26 | cell detail / step inspector visual refresh | `notion_pipeliner_ui`: Pipeline step inspector aligned with Target Inspector — shared `.step-inspector-*` / inspector card CSS in `App.css`, `StepTemplatePicker` card trigger + `stepCategoryStyle.ts`, `getJsonDataTypeStyle` in `propertyTypeStyle.ts`; `StepInspectorForm` in `PipelineEditorPlaceholder.tsx` — eyebrow/title/meta, expandable input/config cards, optional input filter (&gt;5 fields), readonly output cards, metadata tier; `NodeInspector` passes `stepTemplates`; tests in `propertyTypeStyle.test.ts`, `stepCategoryStyle.test.ts`. |
 | 2026-03-26 | pipeline list trigger display name | `GET /management/pipelines` adds `trigger_display_name` from `TriggerDefinition.display_name` (batched `get_by_id`); keeps `trigger_name` as id; `PipelinesPage` shows `trigger_display_name` with fallback to id. |

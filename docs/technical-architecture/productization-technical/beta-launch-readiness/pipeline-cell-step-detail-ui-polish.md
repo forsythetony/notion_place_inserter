@@ -4,7 +4,7 @@
 **Audience:** Frontend + platform engineers; product for scope trade-offs  
 **Primary code:** `notion_pipeliner_ui` — [`PipelineEditorPlaceholder.tsx`](../../../../../notion_pipeliner_ui/src/routes/PipelineEditorPlaceholder.tsx) (`StepInspectorForm`, graph nodes)
 
-**Scheduling:** Plan this push **toward the end of beta prep** — after resource limits, worker/scaling, observability, and cross-page UI polish are far enough along that contracts and editor scope are stable.
+**Scheduling:** **Latest in Launch stage 1** — after **cross-page UI polish** ([beta UI general polish](./beta-ui-general-polish.md)) and other core beta scope, so inspector and template contracts are stable. **Not** gated on Launch stage 2 (worker scaling / full observability program); see **Launch stages** in [`work-log.md`](../../work-log.md).
 
 ---
 

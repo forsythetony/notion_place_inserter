@@ -31,6 +31,7 @@ from app.services.validation_service import (
     JobGraph,
     ValidationError,
     ValidationService,
+    collect_input_contract_metadata_errors,
     collect_output_contract_metadata_errors,
 )
 
@@ -722,6 +723,46 @@ def test_validation_service_validate_step_template_output_metadata_raises():
     with pytest.raises(ValidationError) as exc_info:
         svc.validate_step_template_output_metadata(bad)
     assert any("title exceeds" in e for e in exc_info.value.errors)
+
+
+def test_collect_input_contract_metadata_errors_rejects_title_too_long():
+    errs = collect_input_contract_metadata_errors(
+        {"fields": {"value": {"type": "string", "title": "x" * 201}}},
+        template_id="t1",
+    )
+    assert any("title exceeds" in e for e in errs)
+
+
+def test_collect_input_contract_metadata_errors_accepts_upload_image_catalog():
+    from app.repositories.yaml_loader import load_yaml_file, parse_step_template
+
+    data = load_yaml_file("product_model/catalog/step_templates/step_template_upload_image_to_notion.yaml")
+    assert data is not None
+    tmpl = parse_step_template(data)
+    errs = collect_input_contract_metadata_errors(tmpl.input_contract, template_id=tmpl.id)
+    assert errs == []
+
+
+def test_validation_service_validate_step_template_metadata_raises_on_bad_input_title():
+    from app.domain import StepTemplate
+
+    bad = StepTemplate(
+        id="step_bad_in",
+        slug="bad_in",
+        display_name="Bad",
+        step_kind="test",
+        description="",
+        input_contract={"fields": {"value": {"type": "any", "title": "z" * 250}}},
+        output_contract={},
+        config_schema={},
+        runtime_binding="",
+        category="transform",
+        status="active",
+    )
+    svc = ValidationService()
+    with pytest.raises(ValidationError) as exc_info:
+        svc.validate_step_template_output_metadata(bad)
+    assert any("input_contract.fields" in e and "title exceeds" in e for e in exc_info.value.errors)
 
 
 async def test_validation_service_rejects_property_set_data_target_id_mismatch():

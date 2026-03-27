@@ -1,9 +1,17 @@
 # Architecture push: Oleo marketing homepage (scrollytelling)
 
-**Status:** In progress — MVP shipped 2026-03-23 (hero + sections 3/4/7/8; scroll-snap + IO play/pause; reduced motion). **Hero (2026-03-23+):** unified spec implementation in progress — word-origin SVG particles → processor card → fan-out → table (`HeroPipelineSection`, `heroScenes.ts`, `heroMeasure.ts`); vertical stream prototype replaced. Deferred: card stack (§2), AI funnel (§5), notifications (§6), full beta form backend.  
+**Status:** **In progress** — scrollytelling homepage is **essentially complete**; the **only remaining work** tracked here is **adding the live product demo to the homepage** (wire the “See it in action” / recorded demo into `/` per [landing page — live demo](./landing-page-live-demo-see-it-in-action-architecture.md) and env `VITE_LANDING_DEMO_*`). Optional spec sections never built for MVP remain **deferred** (card stack §2, AI funnel §5, notifications §6 — see **Implementation progress** below).  
 **Audience:** Frontend engineers and design; product for copy alignment  
 **Primary code:** [`notion_pipeliner_ui`](../../../../../notion_pipeliner_ui/) — public marketing surface, today [`LandingPage`](../../../../../notion_pipeliner_ui/src/routes/LandingPage.tsx) at `/`  
 **Source:** Design & animation architecture draft v1 (PDF *Oleo homepage architecture*, 2026; original working title referenced *Agate / Notion Place Inserter*). Final **public product name** remains governed by [public product name and positioning](./public-product-name-and-positioning.md).
+
+### Implementation progress (homepage)
+
+| Track | Status | Notes |
+|-------|--------|--------|
+| **Scrollytelling MVP** — hero, §03 triggers / §04 pipeline / §07 integrations / §08 beta CTA band; scroll-snap; `IntersectionObserver` play/pause; `prefers-reduced-motion` | **Shipped** (from 2026-03-23) | GSAP hero (`HeroPipelineSection`, `heroScenes.ts`, `heroMeasure.ts`), etc. |
+| **Live demo on `/`** — embed or link the recorded demo in the scroll narrative | **Remaining** | Align section order with [landing page — live demo](./landing-page-live-demo-see-it-in-action-architecture.md); assets/hosting: [beta example demo video plan](./beta-example-demo-video-recording-and-hosting-plan.md) |
+| **§02 card stack, §05 AI funnel, §06 notifications** (full spec depth) | **Deferred** | Not required for current homepage closeout; revisit if product wants those beats. |
 
 ---
 
@@ -185,4 +193,5 @@ Wire to existing **beta / invitation** flows when implemented (may defer to back
 
 | Version | Date | Notes |
 |---------|------|-------|
+| 2 | 2026-03-26 | **Implementation progress** table: remaining work = **demo on homepage**; deferred §02/§05/§06 called out explicitly. |
 | 1 | 2026-03-23 | Architecture push: PDF draft v1 transcribed into repo; status **Open**. |

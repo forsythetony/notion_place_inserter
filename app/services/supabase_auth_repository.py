@@ -23,6 +23,7 @@ INVITATION_CODE_LENGTH = 20
 MAX_ISSUE_RETRIES = 3
 
 _COHORT_UNSET = object()
+_WAVE_UNSET = object()
 
 _TABLE_EULA_VERSIONS = "eula_versions"
 
@@ -44,6 +45,7 @@ class SupabaseAuthRepository:
         *,
         invitation_code_id: UUID | str | None = None,
         cohort_id: Any = _COHORT_UNSET,
+        beta_wave_id: Any = _WAVE_UNSET,
         eula_version_id: UUID | str | None = None,
         eula_accepted_at: str | None = None,
     ) -> None:
@@ -81,6 +83,15 @@ class SupabaseAuthRepository:
             else:
                 payload["cohort_id"] = (
                     str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id
+                )
+        if beta_wave_id is not _WAVE_UNSET:
+            if beta_wave_id is None:
+                payload["beta_wave_id"] = None
+            else:
+                payload["beta_wave_id"] = (
+                    str(beta_wave_id)
+                    if isinstance(beta_wave_id, UUID)
+                    else beta_wave_id
                 )
 
         try:
@@ -125,6 +136,7 @@ class SupabaseAuthRepository:
         issued_to: str | None = None,
         platform_issued_on: str | None = None,
         cohort_id: UUID | str | None = None,
+        beta_wave_id: UUID | str | None = None,
     ) -> dict[str, Any]:
         """Insert an unclaimed invitation code. Returns created row."""
         if user_type not in USER_TYPES:
@@ -146,6 +158,10 @@ class SupabaseAuthRepository:
         if cohort_id is not None:
             payload["cohort_id"] = (
                 str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id
+            )
+        if beta_wave_id is not None:
+            payload["beta_wave_id"] = (
+                str(beta_wave_id) if isinstance(beta_wave_id, UUID) else beta_wave_id
             )
 
         try:
@@ -329,6 +345,7 @@ class SupabaseAuthRepository:
             row["user_type"],
             invitation_code_id=row["id"],
             cohort_id=row.get("cohort_id"),
+            beta_wave_id=row.get("beta_wave_id"),
             **kw,
         )
         return row
@@ -536,12 +553,18 @@ class SupabaseAuthRepository:
         key_by_id = await self._cohort_keys_by_id(
             [str(x) for x in cohort_ids if x is not None]
         )
+        wave_ids = {r.get("beta_wave_id") for r in rows if r.get("beta_wave_id")}
+        wave_key_by_id = await self._beta_wave_keys_by_id(
+            [str(x) for x in wave_ids if x is not None]
+        )
         email_map = await self._auth_user_id_to_email_map()
         out: list[dict[str, Any]] = []
         for r in rows:
             d = dict(r)
             cid = d.get("cohort_id")
             d["cohort_key"] = key_by_id.get(str(cid)) if cid else None
+            wid = d.get("beta_wave_id")
+            d["beta_wave_key"] = wave_key_by_id.get(str(wid)) if wid else None
             claimer = d.get("claimed_by_user_id")
             if claimer:
                 d["claimed_by_email"] = email_map.get(str(claimer))
@@ -589,12 +612,18 @@ class SupabaseAuthRepository:
         key_by_id = await self._cohort_keys_by_id(
             [str(x) for x in cohort_ids if x is not None]
         )
+        wave_ids = {r.get("beta_wave_id") for r in rows if r.get("beta_wave_id")}
+        wave_key_by_id = await self._beta_wave_keys_by_id(
+            [str(x) for x in wave_ids if x is not None]
+        )
         email_map = await self._auth_user_id_to_email_map()
         out: list[dict[str, Any]] = []
         for r in rows:
             d = dict(r)
             cid = d.get("cohort_id")
             d["cohort_key"] = key_by_id.get(str(cid)) if cid else None
+            wid = d.get("beta_wave_id")
+            d["beta_wave_key"] = wave_key_by_id.get(str(wid)) if wid else None
             uid = str(d.get("user_id") or "")
             d["email"] = email_map.get(uid) if uid else None
             out.append(d)
@@ -654,6 +683,207 @@ class SupabaseAuthRepository:
             if isinstance(c, dict) and c.get("id") is not None:
                 out[str(c["id"])] = str(c["key"])
         return out
+
+    async def _beta_wave_keys_by_id(self, wave_ids: list[str]) -> dict[str, str]:
+        if not wave_ids:
+            return {}
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .select("id, key")
+                .in_("id", wave_ids)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_beta_wave_keys_lookup_failed")
+            raise
+        out: dict[str, str] = {}
+        for c in resp.data or []:
+            if isinstance(c, dict) and c.get("id") is not None:
+                out[str(c["id"])] = str(c["key"])
+        return out
+
+    async def get_beta_wave_by_id(
+        self, beta_wave_id: UUID | str
+    ) -> dict[str, Any] | None:
+        wid = str(beta_wave_id) if isinstance(beta_wave_id, UUID) else beta_wave_id
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .select("*")
+                .eq("id", wid)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_beta_wave_by_id_failed | id={}", wid)
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else None
+
+    async def list_beta_waves(self) -> list[dict[str, Any]]:
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .select("*")
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_list_beta_waves_failed")
+            raise
+        rows = [dict(r) for r in (resp.data or []) if isinstance(r, dict)]
+        rows.sort(key=lambda r: (r.get("sort_order") or 0, str(r.get("key") or "")))
+        return rows
+
+    async def get_beta_wave_by_key(self, key: str) -> dict[str, Any] | None:
+        if not key or not key.strip():
+            return None
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .select("*")
+                .eq("key", key.strip())
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_get_beta_wave_by_key_failed")
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else None
+
+    async def compute_next_beta_wave_sort_order(self) -> int:
+        rows = await self.list_beta_waves()
+        if not rows:
+            return 10
+        mx = max((r.get("sort_order") or 0) for r in rows)
+        return mx + 10
+
+    async def create_beta_wave(
+        self,
+        key: str,
+        label: str,
+        description: str | None,
+        sort_order: int,
+    ) -> dict[str, Any]:
+        k = key.strip()
+        lab = label.strip()
+        if not k:
+            raise ValueError("beta wave key must be non-empty")
+        if not lab:
+            raise ValueError("beta wave label must be non-empty")
+        now = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, Any] = {
+            "key": k,
+            "label": lab,
+            "sort_order": sort_order,
+            "updated_at": now,
+        }
+        if description is not None:
+            payload["description"] = description
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .insert(payload)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_create_beta_wave_failed | key={}", k[:40])
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            raise RuntimeError("insert beta_wave returned no data")
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else {}
+
+    async def update_beta_wave(
+        self,
+        wave_id: UUID | str,
+        *,
+        label: str,
+        description: str | None,
+        sort_order: int,
+    ) -> dict[str, Any] | None:
+        wid = str(wave_id) if isinstance(wave_id, UUID) else wave_id
+        lab = label.strip()
+        if not lab:
+            raise ValueError("beta wave label must be non-empty")
+        payload: dict[str, Any] = {
+            "label": lab,
+            "description": description,
+            "sort_order": sort_order,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            resp = await (
+                self._client.table(self._config.table_beta_waves)
+                .update(payload)
+                .eq("id", wid)
+                .execute()
+            )
+        except Exception:
+            logger.exception("supabase_update_beta_wave_failed | id={}", wid)
+            raise
+        data = resp.data
+        if not data or (isinstance(data, list) and len(data) == 0):
+            return None
+        row = data[0] if isinstance(data, list) else data
+        return dict(row) if isinstance(row, dict) else None
+
+    async def beta_wave_has_references(self, wave_id: str) -> bool:
+        try:
+            wl = await (
+                self._client.table(self._config.table_beta_waitlist_submissions)
+                .select("id")
+                .eq("beta_wave_id", wave_id)
+                .limit(1)
+                .execute()
+            )
+            if wl.data:
+                return True
+            inv = await (
+                self._client.table(self._config.table_invitation_codes)
+                .select("id")
+                .eq("beta_wave_id", wave_id)
+                .limit(1)
+                .execute()
+            )
+            if inv.data:
+                return True
+            prof = await (
+                self._client.table(self._config.table_user_profiles)
+                .select("user_id")
+                .eq("beta_wave_id", wave_id)
+                .limit(1)
+                .execute()
+            )
+            return bool(prof.data)
+        except Exception:
+            logger.exception("supabase_beta_wave_references_check_failed | id={}", wave_id)
+            raise
+
+    async def delete_beta_wave_if_unused(self, wave_id: UUID | str) -> str:
+        """Returns 'not_found' | 'in_use' | 'deleted'."""
+        wid = str(wave_id) if isinstance(wave_id, UUID) else wave_id
+        row = await self.get_beta_wave_by_id(wid)
+        if row is None:
+            return "not_found"
+        if await self.beta_wave_has_references(wid):
+            return "in_use"
+        try:
+            await self._client.table(self._config.table_beta_waves).delete().eq(
+                "id", wid
+            ).execute()
+        except Exception:
+            logger.exception("supabase_delete_beta_wave_failed | id={}", wid)
+            raise
+        return "deleted"
 
     async def get_cohort_by_id(self, cohort_id: UUID | str) -> dict[str, Any] | None:
         cid = str(cohort_id) if isinstance(cohort_id, UUID) else cohort_id

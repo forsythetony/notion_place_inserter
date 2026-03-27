@@ -1,5 +1,7 @@
 # Architecture push: Error handling, observability, and telemetry
 
+**Launch gate:** This push is scheduled for **Launch stage 2** (expanded beta — observability), not a blocker for **Launch stage 1** (beta with at most ten users, idea validation). See **Launch stages** in [`work-log.md`](../../work-log.md).
+
 **Audience:** Backend / platform engineers, operators, and anyone designing pipeline failure UX and dashboards.
 
 **Status:** **Open** — detailed design below; most **implementation** beyond today’s logging and run events is **not started**. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).

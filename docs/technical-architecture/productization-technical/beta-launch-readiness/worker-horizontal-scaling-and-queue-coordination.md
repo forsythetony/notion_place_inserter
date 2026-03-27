@@ -1,5 +1,7 @@
 # Architecture push: Worker horizontal scaling and queue coordination
 
+**Launch gate:** This push is scheduled for **Launch stage 2** (expanded beta — scalability), not a blocker for **Launch stage 1** (beta with at most ten users, idea validation). See **Launch stages** in [`work-log.md`](../../work-log.md).
+
 **Audience:** Backend / platform engineers sizing Render workers and Supabase usage.
 
 **Related:** Phase 1 queue foundation ([p1_pr02](../phase-1-platform-migration/p1_pr02-schema-and-queue-foundation.md)), worker consumer ([p1_pr05](../phase-1-platform-migration/p1_pr05-worker-consumer-and-run-lifecycle-persistence.md)), [global and per-user resource limits](./global-and-per-user-resource-limits.md) (enqueue not yet capped), [worker memory / FD investigations](../../incident_investigations/worker_memory_starvation_2026-03-13/findings_and_recommendations.md).

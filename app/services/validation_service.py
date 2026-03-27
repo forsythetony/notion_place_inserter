@@ -153,6 +153,42 @@ def collect_output_contract_metadata_errors(
     return errors
 
 
+def collect_input_contract_metadata_errors(
+    input_contract: Any,
+    *,
+    template_id: str = "",
+) -> list[str]:
+    """
+    Validate optional human title on each input_contract.fields entry.
+    Same string rules as output_contract.fields title (see collect_output_contract_metadata_errors).
+    """
+    prefix = f"step template '{template_id}' " if template_id else ""
+    errors: list[str] = []
+    if not isinstance(input_contract, dict):
+        return errors
+    fields = input_contract.get("fields")
+    if not isinstance(fields, dict):
+        return errors
+
+    for fname, spec in fields.items():
+        if not isinstance(spec, dict):
+            errors.append(
+                f"{prefix}input_contract.fields.{fname} must be an object when present"
+            )
+            continue
+        field_path = f"input_contract.fields.{fname}"
+        title = spec.get("title")
+        if title is not None:
+            if not isinstance(title, str):
+                errors.append(f"{prefix}{field_path}.title must be a string")
+            elif len(title) > _OUTPUT_META_TITLE_MAX:
+                errors.append(
+                    f"{prefix}{field_path}.title exceeds {_OUTPUT_META_TITLE_MAX} characters"
+                )
+
+    return errors
+
+
 class ValidationError(ValueError):
     """Raised when definition validation fails. Supports single or aggregated errors."""
 
@@ -587,12 +623,19 @@ class ValidationService:
 
     def validate_step_template_output_metadata(self, template: "StepTemplate") -> None:
         """
-        Validate optional binding-picker metadata nested under output_contract.fields.
+        Validate optional binding-picker metadata nested under output_contract.fields,
+        and optional human titles under input_contract.fields.
         Raises ValidationError when catalog copy/examples violate size or shape rules.
         """
         errs = collect_output_contract_metadata_errors(
             template.output_contract,
             template_id=template.id,
         )
+        errs.extend(
+            collect_input_contract_metadata_errors(
+                template.input_contract,
+                template_id=template.id,
+            )
+        )
         if errs:
-            raise ValidationError("step template output_contract metadata invalid", errs)
+            raise ValidationError("step template contract metadata invalid", errs)

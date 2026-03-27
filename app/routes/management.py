@@ -4,10 +4,11 @@ import asyncio
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -16,7 +17,8 @@ from app.domain.errors import TriggerJobLinkPolicyError
 from app.repositories.postgres_repositories import PostgresTriggerJobLinkRepository
 from app.domain.runs import StepRun
 from app.domain.triggers import TriggerDefinition
-from app.repositories.yaml_loader import job_graph_to_yaml_dict, parse_job_graph
+from app.repositories.yaml_loader import job_graph_to_yaml_dict, load_yaml_file, parse_job_graph
+from app.services.job_graph_id_clone import clone_job_graph_with_prefixed_ids
 from app.services.pipeline_live_test.analyze import analyzer_payload_hash, analyze_live_test
 from app.services.trigger_request_body import (
     build_trigger_payload,
@@ -1317,6 +1319,29 @@ async def rotate_trigger_secret(
     }
 
 
+@router.delete("/triggers/{trigger_id}")
+async def delete_trigger(
+    request: Request,
+    trigger_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Permanently delete an HTTP trigger owned by the authenticated user.
+    Trigger–pipeline links are removed; pipelines themselves are not deleted.
+    """
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    if not trigger_repo:
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: trigger repository not available",
+        )
+    existing = await trigger_repo.get_by_id(trigger_id, ctx.user_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    await trigger_repo.delete(trigger_id, ctx.user_id)
+    return {"status": "deleted", "id": trigger_id}
+
+
 @router.get("/account")
 async def get_account(
     request: Request,
@@ -1362,3 +1387,825 @@ async def get_account(
             }
 
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Template provisioning
+# ---------------------------------------------------------------------------
+
+TEMPLATE_DB_SEARCH_NAME = "Oleo Places Template Database"
+TEMPLATE_PIPELINE_DISPLAY_NAME = "Oleo Template Pipeline"
+PLACES_TEMPLATE_ALLOWED_EMAIL = "forsythetony@gmail.com"
+PLACES_INSERTION_TEMPLATE_JOB_DISPLAY_NAME = "Places Insertion Pipeline [From Template]"
+PLACES_INSERTION_TEMPLATE_TRIGGER_DISPLAY_NAME = "Places Trigger [From Template]"
+PLACES_INSERTION_TEMPLATE_TRIGGER_PATH = "/places-from-template"
+PLACES_INSERTION_TARGET_ID = "target_places_to_visit"
+# Cap how many objects we enumerate for TEMPLATE_DB_NOT_FOUND (Notion workspaces can be huge).
+_TEMPLATE_ERROR_MAX_DATABASES = 200
+_TEMPLATE_ERROR_MAX_PAGES = 100
+
+
+class _NotionVisibleItem(TypedDict):
+    id: str
+    title: str
+
+
+def _build_template_job_graph(
+    job_id: str, owner_user_id: str, target_id: str
+) -> "JobGraph":
+    """Build a trimmed-down job graph for the Oleo Places template database.
+
+    Notion target columns (only these are written): Name, Address, Coordinates, Description.
+
+    Stages:
+      1. Research -- optimize query -> Google Places lookup -> cache
+      2. Property Setting -- set those four schema properties only
+
+    Stage/pipeline/step IDs are prefixed with *job_id* so this job does not collide with
+    the bootstrap Notion Place Inserter graph (same unqualified ids, different sequences under
+    ``stage_property_setting``), which would violate ``uq_pipeline_sequence_per_stage``.
+    """
+    from app.domain.jobs import JobDefinition, PipelineDefinition, StageDefinition, StepInstance
+    from app.services.validation_service import JobGraph
+
+    def nid(local: str) -> str:
+        return f"{job_id}_{local}"
+
+    sid_stage_research = nid("stage_research")
+    sid_stage_ps = nid("stage_property_setting")
+    pid_research = nid("pipeline_research")
+    pid_name = nid("pipeline_name")
+    pid_address = nid("pipeline_address")
+    pid_coordinates = nid("pipeline_coordinates")
+    pid_description = nid("pipeline_description")
+
+    st_opt = nid("step_optimize_query")
+    st_gpl = nid("step_google_places_lookup")
+    st_cpl = nid("step_cache_places")
+    st_cpo = nid("step_cache_place")
+    st_sn = nid("step_property_set_name")
+    st_sa = nid("step_property_set_address")
+    st_ct = nid("step_coordinates_templater")
+    st_sc = nid("step_property_set_coordinates")
+    st_dtpl = nid("step_description_templater")
+    st_sd = nid("step_property_set_description")
+
+    # --- Stage 1: Research (identical to bootstrap) ---
+    steps_research = [
+        StepInstance(
+            id=st_opt,
+            pipeline_id=pid_research,
+            step_template_id="step_template_optimize_input_claude",
+            display_name="Optimize Query",
+            sequence=1,
+            input_bindings={"query": {"signal_ref": "trigger.payload.keywords"}},
+            config={
+                "prompt": "Rewrite this input into an optimized Google Places query.",
+                "linked_step_id": st_gpl,
+                # Oleo template DB has only four columns — do not inject full target schema into Claude.
+                "include_target_query_schema": False,
+            },
+        ),
+        StepInstance(
+            id=st_gpl,
+            pipeline_id=pid_research,
+            step_template_id="step_template_google_places_lookup",
+            display_name="Google Places Lookup",
+            sequence=2,
+            input_bindings={"query": {"signal_ref": f"step.{st_opt}.optimized_query"}},
+            config={
+                "connector_instance_id": "connector_instance_google_places_default",
+                "fetch_details_if_needed": True,
+            },
+        ),
+        StepInstance(
+            id=st_cpl,
+            pipeline_id=pid_research,
+            step_template_id="step_template_cache_set",
+            display_name="Cache Search Response",
+            sequence=3,
+            input_bindings={"value": {"signal_ref": f"step.{st_gpl}.search_response"}},
+            config={"cache_key": "google_places_response"},
+        ),
+        StepInstance(
+            id=st_cpo,
+            pipeline_id=pid_research,
+            step_template_id="step_template_cache_set",
+            display_name="Cache Selected Place",
+            sequence=4,
+            input_bindings={"value": {"signal_ref": f"step.{st_gpl}.selected_place"}},
+            config={"cache_key": "google_places_selected_place"},
+        ),
+    ]
+
+    # --- Stage 2: Property Setting (trimmed for template DB) ---
+    step_set_name = StepInstance(
+        id=st_sn,
+        pipeline_id=pid_name,
+        step_template_id="step_template_property_set",
+        display_name="Set Name",
+        sequence=1,
+        input_bindings={"value": {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "displayName"}}},
+        config={"schema_property_id": "prop_name"},
+    )
+    step_set_address = StepInstance(
+        id=st_sa,
+        pipeline_id=pid_address,
+        step_template_id="step_template_property_set",
+        display_name="Set Address",
+        sequence=1,
+        input_bindings={"value": {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "formattedAddress"}}},
+        config={"schema_property_id": "prop_address"},
+    )
+    step_coord_templater = StepInstance(
+        id=st_ct,
+        pipeline_id=pid_coordinates,
+        step_template_id="step_template_templater",
+        display_name="Format Coordinates",
+        sequence=1,
+        input_bindings={},
+        config={
+            "template": "{{latitude}}, {{longitude}}",
+            "values": {
+                "latitude": {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "latitude"}},
+                "longitude": {"cache_key_ref": {"cache_key": "google_places_selected_place", "path": "longitude"}},
+            },
+        },
+    )
+    step_set_coordinates = StepInstance(
+        id=st_sc,
+        pipeline_id=pid_coordinates,
+        step_template_id="step_template_property_set",
+        display_name="Set Coordinates",
+        sequence=2,
+        input_bindings={"value": {"signal_ref": f"step.{st_ct}.rendered_value"}},
+        config={"schema_property_id": "prop_coordinates"},
+    )
+    # Description: Google Places editorial / generative summaries only (no extra AI step).
+    step_description_templater = StepInstance(
+        id=st_dtpl,
+        pipeline_id=pid_description,
+        step_template_id="step_template_templater",
+        display_name="Place summaries to text",
+        sequence=1,
+        input_bindings={},
+        config={
+            "template": "{{generative}}{{editorial}}",
+            "values": {
+                "generative": {
+                    "cache_key_ref": {"cache_key": "google_places_selected_place", "path": "generativeSummary"}
+                },
+                "editorial": {
+                    "cache_key_ref": {"cache_key": "google_places_selected_place", "path": "editorialSummary"}
+                },
+            },
+        },
+    )
+    step_set_description = StepInstance(
+        id=st_sd,
+        pipeline_id=pid_description,
+        step_template_id="step_template_property_set",
+        display_name="Set Description",
+        sequence=2,
+        input_bindings={"value": {"signal_ref": f"step.{st_dtpl}.rendered_value"}},
+        config={"schema_property_id": "prop_description"},
+    )
+
+    steps_property = [
+        step_set_name, step_set_address,
+        step_coord_templater, step_set_coordinates,
+        step_description_templater, step_set_description,
+    ]
+
+    # Pipelines
+    pipeline_research = PipelineDefinition(
+        id=pid_research, stage_id=sid_stage_research,
+        display_name="Research Pipeline", sequence=1,
+        step_ids=[s.id for s in steps_research],
+    )
+    pipeline_name = PipelineDefinition(
+        id=pid_name, stage_id=sid_stage_ps,
+        display_name="Set Name", sequence=1, step_ids=[st_sn],
+    )
+    pipeline_address = PipelineDefinition(
+        id=pid_address, stage_id=sid_stage_ps,
+        display_name="Set Address", sequence=2, step_ids=[st_sa],
+    )
+    pipeline_coordinates = PipelineDefinition(
+        id=pid_coordinates, stage_id=sid_stage_ps,
+        display_name="Set Coordinates", sequence=3,
+        step_ids=[st_ct, st_sc],
+    )
+    pipeline_description = PipelineDefinition(
+        id=pid_description, stage_id=sid_stage_ps,
+        display_name="Set Description", sequence=4,
+        step_ids=[st_dtpl, st_sd],
+    )
+
+    prop_pipelines = [pipeline_name, pipeline_address, pipeline_coordinates, pipeline_description]
+
+    # Stages
+    stage_research = StageDefinition(
+        id=sid_stage_research, job_id=job_id, display_name="Research",
+        sequence=1, pipeline_ids=[pid_research], pipeline_run_mode="sequential",
+    )
+    stage_property_setting = StageDefinition(
+        id=sid_stage_ps, job_id=job_id, display_name="Property Setting",
+        sequence=2, pipeline_ids=[p.id for p in prop_pipelines], pipeline_run_mode="sequential",
+    )
+
+    job = JobDefinition(
+        id=job_id,
+        owner_user_id=owner_user_id,
+        display_name=TEMPLATE_PIPELINE_DISPLAY_NAME,
+        target_id=target_id,
+        status="active",
+        stage_ids=[sid_stage_research, sid_stage_ps],
+    )
+
+    return JobGraph(
+        job=job,
+        stages=[stage_research, stage_property_setting],
+        pipelines=[pipeline_research] + prop_pipelines,
+        steps=steps_research + steps_property,
+    )
+
+
+def _notion_data_source_or_database_display_name(item: dict[str, Any]) -> str:
+    """Display name for Notion search results with object database or data_source."""
+    name = (item.get("name") or "").strip()
+    if name:
+        return name
+    title_arr = item.get("title") or []
+    if isinstance(title_arr, list):
+        name = "".join(
+            b.get("plain_text", "") or b.get("text", {}).get("content", "")
+            for b in title_arr
+            if isinstance(b, dict)
+        )
+    return name.strip() or "Untitled"
+
+
+async def _search_notion_database(token: str, query: str) -> tuple[str, str] | None:
+    """Search Notion for a database / data source whose title matches *query* (substring).
+
+    Uses ``filter: data_source`` (Notion API 2025-09-03+): ``filter: database`` often returns
+    nothing even when the workspace has shared databases; ``data_source`` matches
+    ``refresh_sources`` / connector discovery.
+
+    Returns ``(data_source_id, display_name)`` or None.
+    """
+    from app.services.notion_oauth_service import NOTION_API_VERSION
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_API_VERSION,
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            "https://api.notion.com/v1/search",
+            json={
+                "query": query,
+                "filter": {"property": "object", "value": "data_source"},
+            },
+            headers=headers,
+            timeout=30,
+        )
+    if r.status_code != 200:
+        logger.warning("template_notion_search_failed | status={}", r.status_code)
+        return None
+
+    q = query.lower()
+    for item in r.json().get("results", []):
+        if not isinstance(item, dict):
+            continue
+        obj = item.get("object")
+        if obj not in ("database", "data_source"):
+            continue
+        name = _notion_data_source_or_database_display_name(item)
+        if q not in name.lower():
+            continue
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        if obj == "data_source":
+            return item_id, name
+        data_source_id = await _resolve_data_source_id(token, item_id)
+        if data_source_id:
+            return data_source_id, name
+    return None
+
+
+def _notion_search_item_display_title(item: dict[str, Any]) -> str:
+    """Best-effort title from a Notion /search result item (database, data_source, or page)."""
+    obj = item.get("object")
+    if obj in ("database", "data_source"):
+        return _notion_data_source_or_database_display_name(item)
+    if obj == "page":
+        props = item.get("properties") or {}
+        if isinstance(props, dict):
+            for prop in props.values():
+                if not isinstance(prop, dict) or prop.get("type") != "title":
+                    continue
+                parts = prop.get("title") or []
+                if isinstance(parts, list):
+                    name = "".join(
+                        b.get("plain_text", "") or b.get("text", {}).get("content", "")
+                        for b in parts
+                        if isinstance(b, dict)
+                    )
+                    return name.strip() or "Untitled page"
+        return "Untitled page"
+    return "Untitled"
+
+
+async def _list_notion_search_by_filter(
+    token: str,
+    object_filter: Literal["data_source", "page"],
+    *,
+    max_items: int | None = None,
+) -> tuple[list[_NotionVisibleItem], bool]:
+    """Paginate Notion /v1/search (no query = all objects the integration can access).
+
+    Returns (items, truncated) where truncated is True if stopped early due to *max_items*.
+    """
+    from app.services.notion_oauth_service import NOTION_API_VERSION
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_API_VERSION,
+        "Content-Type": "application/json",
+    }
+    items: list[_NotionVisibleItem] = []
+    seen_ids: set[str] = set()
+    cursor: str | None = None
+    async with httpx.AsyncClient() as client:
+        while True:
+            if max_items is not None and len(items) >= max_items:
+                return items, True
+            page_size = 100
+            if max_items is not None:
+                page_size = min(100, max_items - len(items))
+            body: dict[str, Any] = {
+                "filter": {"property": "object", "value": object_filter},
+                "page_size": page_size,
+            }
+            if cursor:
+                body["start_cursor"] = cursor
+            r = await client.post(
+                "https://api.notion.com/v1/search",
+                json=body,
+                headers=headers,
+                timeout=60,
+            )
+            if r.status_code != 200:
+                logger.warning(
+                    "template_notion_list_failed | filter={} status={}",
+                    object_filter,
+                    r.status_code,
+                )
+                return items, False
+
+            payload = r.json()
+            for item in payload.get("results") or []:
+                if not isinstance(item, dict):
+                    continue
+                if object_filter == "data_source":
+                    obj = item.get("object")
+                    if obj not in ("database", "data_source"):
+                        continue
+                oid = item.get("id")
+                if not oid or oid in seen_ids:
+                    continue
+                seen_ids.add(oid)
+                items.append(
+                    {
+                        "id": oid,
+                        "title": _notion_search_item_display_title(item),
+                    }
+                )
+                if max_items is not None and len(items) >= max_items:
+                    return items, True
+
+            if not payload.get("has_more"):
+                break
+            cursor = payload.get("next_cursor")
+            if not cursor:
+                break
+    return items, False
+
+
+def _format_template_db_not_found_detail(
+    databases: list[_NotionVisibleItem],
+    pages: list[_NotionVisibleItem],
+    databases_truncated: bool,
+    pages_truncated: bool,
+) -> str:
+    lines = [
+        f"Could not find a database named '{TEMPLATE_DB_SEARCH_NAME}' in your Notion workspace. "
+        "The quick-start search matches that phrase as a substring of the database title. "
+        "Make sure a database with that name exists and is shared with the Oleo integration.",
+        "",
+    ]
+    if databases:
+        suffix = f" ({len(databases)}"
+        suffix += ", list truncated" if databases_truncated else ""
+        suffix += ")"
+        lines.append(
+            f"Databases / data sources this integration can access{suffix} "
+            f"(Notion API lists these via the data_source search filter):"
+        )
+        for d in databases:
+            lines.append(f"  • {d['title']}")
+    else:
+        lines.append(
+            "Databases / data sources this integration can access: none listed — "
+            "share at least one database with the integration (Connections → Notion, "
+            "then “Add connections” on the database). If you already shared one, "
+            "Notion’s API may still be catching up; try again in a minute."
+        )
+    lines.append("")
+    if pages:
+        suffix = f" (showing {len(pages)}"
+        suffix += ", list truncated" if pages_truncated else ""
+        suffix += ")"
+        lines.append(f"Pages this integration can access{suffix}:")
+        for p in pages:
+            lines.append(f"  • {p['title']}")
+    else:
+        lines.append("Pages this integration can access: none listed.")
+    return "\n".join(lines)
+
+
+async def _resolve_data_source_id(token: str, database_id: str) -> str | None:
+    """Resolve a Notion database_id to its data_source_id for page creation."""
+    from app.services.notion_oauth_service import NOTION_API_VERSION
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_API_VERSION,
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"https://api.notion.com/v1/databases/{database_id}",
+            headers=headers,
+            timeout=30,
+        )
+    if r.status_code != 200:
+        return None
+    data_sources = r.json().get("data_sources") or []
+    if not data_sources:
+        return None
+    return data_sources[0].get("id")
+
+
+@router.post("/bootstrap/create-from-template")
+async def create_pipeline_from_template(
+    request: Request,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Idempotent one-click provisioning: searches Notion for the Oleo Places
+    Template Database, creates a data target + /hello-world trigger + trimmed
+    pipeline. Safe to call repeatedly.
+    """
+    # --- repos ---
+    notion_oauth = getattr(request.app.state, "notion_oauth_service", None)
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    job_repo = getattr(request.app.state, "job_repository", None)
+    target_repo = getattr(request.app.state, "target_repository", None)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    schema_sync = getattr(request.app.state, "schema_sync_service", None)
+
+    for name, repo in [
+        ("notion_oauth_service", notion_oauth),
+        ("trigger_repository", trigger_repo),
+        ("job_repository", job_repo),
+        ("target_repository", target_repo),
+        ("trigger_job_link_repository", link_repo),
+        ("schema_sync_service", schema_sync),
+    ]:
+        if repo is None:
+            return JSONResponse(status_code=500, content={"detail": f"Server misconfiguration: {name} not available"})
+
+    # --- idempotency: check existing job ---
+    existing_jobs = await job_repo.list_by_owner(ctx.user_id)
+    existing_job = next((j for j in existing_jobs if j.display_name == TEMPLATE_PIPELINE_DISPLAY_NAME), None)
+    if existing_job:
+        existing_trigger = await trigger_repo.get_by_path("/hello-world", ctx.user_id)
+        return {
+            "status": "already_exists",
+            "job_id": existing_job.id,
+            "trigger_id": existing_trigger.id if existing_trigger else None,
+            "trigger_path": "/hello-world",
+            "trigger_secret": None,
+            "target_id": existing_job.target_id,
+            "message": "Template pipeline already exists.",
+        }
+
+    # --- 1. verify Notion connected ---
+    token = await notion_oauth.get_access_token(ctx.user_id)
+    if not token:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Notion not connected. Please connect Notion first on the Connections page.",
+                "code": "NOTION_NOT_CONNECTED",
+            },
+        )
+
+    # --- 2. search for template database ---
+    result = await _search_notion_database(token, TEMPLATE_DB_SEARCH_NAME)
+    if not result:
+        visible_databases, databases_truncated = await _list_notion_search_by_filter(
+            token, "data_source", max_items=_TEMPLATE_ERROR_MAX_DATABASES
+        )
+        visible_pages, pages_truncated = await _list_notion_search_by_filter(
+            token, "page", max_items=_TEMPLATE_ERROR_MAX_PAGES
+        )
+        detail = _format_template_db_not_found_detail(
+            visible_databases, visible_pages, databases_truncated, pages_truncated
+        )
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": detail,
+                "code": "TEMPLATE_DB_NOT_FOUND",
+                "visible_databases": visible_databases,
+                "visible_pages": visible_pages,
+                "visible_databases_truncated": databases_truncated,
+                "visible_pages_truncated": pages_truncated,
+            },
+        )
+    data_source_id, db_title = result
+
+    # --- 3. create or reuse DataTarget (data_source_id from _search_notion_database) ---
+    from app.domain.targets import DataTarget
+
+    target_id = f"target_notion_{data_source_id.replace('-', '_')[:20]}"
+    existing_target = await target_repo.get_by_id(target_id, ctx.user_id)
+    if not existing_target:
+        target = DataTarget(
+            id=target_id,
+            owner_user_id=ctx.user_id,
+            target_template_id="notion_database",
+            connector_instance_id="connector_instance_notion_default",
+            display_name=db_title,
+            external_target_id=data_source_id,
+            status="active",
+        )
+        await target_repo.save(target)
+
+    # --- 5. sync schema ---
+    try:
+        await schema_sync.sync_for_target(target_id, ctx.user_id)
+    except Exception as e:
+        logger.warning("template_schema_sync_failed | target={} error={}", target_id, e)
+
+    # --- 6. create or reuse /hello-world trigger ---
+    existing_trigger = await trigger_repo.get_by_path("/hello-world", ctx.user_id)
+    trigger_secret_plaintext = None
+    if existing_trigger:
+        trigger_id = existing_trigger.id
+    else:
+        trigger_id = f"trigger_{uuid.uuid4().hex[:12]}"
+        trigger_secret_plaintext = secrets.token_hex(15)
+        now = datetime.now(timezone.utc)
+        trigger = TriggerDefinition(
+            id=trigger_id,
+            owner_user_id=ctx.user_id,
+            trigger_type="http",
+            display_name="Hello World",
+            path="/hello-world",
+            method="POST",
+            request_body_schema=default_keywords_request_body_schema(),
+            status="active",
+            auth_mode="bearer",
+            secret_value=trigger_secret_plaintext,
+            secret_last_rotated_at=now,
+            visibility="owner",
+            created_at=now,
+            updated_at=now,
+        )
+        await trigger_repo.save(trigger)
+
+    # --- 7. build + save job graph ---
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    graph = _build_template_job_graph(job_id, ctx.user_id, target_id)
+
+    try:
+        await job_repo.save_job_graph(graph, skip_reference_checks=True)
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Validation failed", "validation_errors": e.errors},
+        )
+
+    # --- 8. link trigger to job ---
+    try:
+        await link_repo.attach(trigger_id, job_id, ctx.user_id)
+    except TriggerJobLinkPolicyError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": e.message, "code": e.code},
+        )
+
+    logger.info(
+        "template_pipeline_created | user_id={} job_id={} trigger_id={} target_id={}",
+        ctx.user_id, job_id, trigger_id, target_id,
+    )
+
+    return {
+        "status": "created",
+        "job_id": job_id,
+        "trigger_id": trigger_id,
+        "trigger_path": "/hello-world",
+        "trigger_secret": trigger_secret_plaintext,
+        "target_id": target_id,
+        "target_display_name": db_title,
+        "message": "Template pipeline created successfully.",
+    }
+
+
+@router.post("/bootstrap/create-places-insertion-from-template")
+async def create_places_insertion_from_template(
+    request: Request,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Email-gated: provisions a full clone of ``notion_place_inserter.yaml`` (research + property
+    stages) against ``target_places_to_visit``, plus HTTP trigger
+    ``PLACES_INSERTION_TEMPLATE_TRIGGER_PATH``. Idempotent per job display name.
+    """
+    if (ctx.email or "").lower() != PLACES_TEMPLATE_ALLOWED_EMAIL.lower():
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": "This action is not available for your account.",
+                "code": "PLACES_TEMPLATE_FORBIDDEN",
+            },
+        )
+
+    notion_oauth = getattr(request.app.state, "notion_oauth_service", None)
+    trigger_repo = getattr(request.app.state, "trigger_repository", None)
+    job_repo = getattr(request.app.state, "job_repository", None)
+    target_repo = getattr(request.app.state, "target_repository", None)
+    link_repo = getattr(request.app.state, "trigger_job_link_repository", None)
+    schema_sync = getattr(request.app.state, "schema_sync_service", None)
+
+    for name, repo in [
+        ("notion_oauth_service", notion_oauth),
+        ("trigger_repository", trigger_repo),
+        ("job_repository", job_repo),
+        ("target_repository", target_repo),
+        ("trigger_job_link_repository", link_repo),
+        ("schema_sync_service", schema_sync),
+    ]:
+        if repo is None:
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Server misconfiguration: {name} not available"},
+            )
+
+    existing_jobs = await job_repo.list_by_owner(ctx.user_id)
+    existing_job = next(
+        (j for j in existing_jobs if j.display_name == PLACES_INSERTION_TEMPLATE_JOB_DISPLAY_NAME),
+        None,
+    )
+    if existing_job:
+        existing_trigger = await trigger_repo.get_by_path(
+            PLACES_INSERTION_TEMPLATE_TRIGGER_PATH, ctx.user_id
+        )
+        tgt = await target_repo.get_by_id(PLACES_INSERTION_TARGET_ID, ctx.user_id)
+        return {
+            "status": "already_exists",
+            "job_id": existing_job.id,
+            "trigger_id": existing_trigger.id if existing_trigger else None,
+            "trigger_path": PLACES_INSERTION_TEMPLATE_TRIGGER_PATH,
+            "trigger_secret": None,
+            "target_id": existing_job.target_id,
+            "target_display_name": getattr(tgt, "display_name", None) if tgt else None,
+            "message": "Places insertion template pipeline already exists.",
+        }
+
+    token = await notion_oauth.get_access_token(ctx.user_id)
+    if not token:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Notion not connected. Please connect Notion first on the Connections page.",
+                "code": "NOTION_NOT_CONNECTED",
+            },
+        )
+
+    places_target = await target_repo.get_by_id(PLACES_INSERTION_TARGET_ID, ctx.user_id)
+    if not places_target:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": (
+                    "Bootstrap target 'Places to Visit' is missing. "
+                    "Complete normal account provisioning first (e.g. first-time trigger setup)."
+                ),
+                "code": "TARGET_PLACES_NOT_PROVISIONED",
+            },
+        )
+
+    try:
+        await schema_sync.sync_for_target(PLACES_INSERTION_TARGET_ID, ctx.user_id)
+    except Exception as e:
+        logger.warning(
+            "places_insertion_template_schema_sync_failed | target={} error={}",
+            PLACES_INSERTION_TARGET_ID,
+            e,
+        )
+
+    job_data = load_yaml_file("product_model/bootstrap/jobs/notion_place_inserter.yaml")
+    if not job_data:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Bundled job definition not found."},
+        )
+
+    try:
+        base_graph = parse_job_graph(job_data, owner_user_id_override=ctx.user_id)
+    except Exception as e:
+        logger.exception("places_insertion_template_parse_failed | error={}", e)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Failed to parse bundled job definition."},
+        )
+
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    graph = clone_job_graph_with_prefixed_ids(
+        base_graph,
+        job_id,
+        owner_user_id=ctx.user_id,
+        display_name=PLACES_INSERTION_TEMPLATE_JOB_DISPLAY_NAME,
+        target_id=PLACES_INSERTION_TARGET_ID,
+    )
+
+    try:
+        await job_repo.save_job_graph(graph, skip_reference_checks=True)
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Validation failed", "validation_errors": e.errors},
+        )
+
+    existing_trigger = await trigger_repo.get_by_path(
+        PLACES_INSERTION_TEMPLATE_TRIGGER_PATH, ctx.user_id
+    )
+    trigger_secret_plaintext = None
+    if existing_trigger:
+        trigger_id = existing_trigger.id
+    else:
+        trigger_id = f"trigger_{uuid.uuid4().hex[:12]}"
+        trigger_secret_plaintext = secrets.token_hex(15)
+        now = datetime.now(timezone.utc)
+        trigger = TriggerDefinition(
+            id=trigger_id,
+            owner_user_id=ctx.user_id,
+            trigger_type="http",
+            display_name=PLACES_INSERTION_TEMPLATE_TRIGGER_DISPLAY_NAME,
+            path=PLACES_INSERTION_TEMPLATE_TRIGGER_PATH,
+            method="POST",
+            request_body_schema=default_keywords_request_body_schema(),
+            status="active",
+            auth_mode="bearer",
+            secret_value=trigger_secret_plaintext,
+            secret_last_rotated_at=now,
+            visibility="owner",
+            created_at=now,
+            updated_at=now,
+        )
+        await trigger_repo.save(trigger)
+
+    try:
+        await link_repo.attach(trigger_id, job_id, ctx.user_id)
+    except TriggerJobLinkPolicyError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": e.message, "code": e.code},
+        )
+
+    logger.info(
+        "places_insertion_template_created | user_id={} job_id={} trigger_id={} target_id={}",
+        ctx.user_id,
+        job_id,
+        trigger_id,
+        PLACES_INSERTION_TARGET_ID,
+    )
+
+    return {
+        "status": "created",
+        "job_id": job_id,
+        "trigger_id": trigger_id,
+        "trigger_path": PLACES_INSERTION_TEMPLATE_TRIGGER_PATH,
+        "trigger_secret": trigger_secret_plaintext,
+        "target_id": PLACES_INSERTION_TARGET_ID,
+        "target_display_name": places_target.display_name,
+        "message": "Places insertion template pipeline created successfully.",
+    }

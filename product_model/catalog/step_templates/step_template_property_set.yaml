@@ -7,6 +7,7 @@ input_contract:
   fields:
     value:
       type: any
+      title: Property value
 output_contract: {}
 config_schema:
   schema_property_id:
@@ -14,8 +15,18 @@ config_schema:
   target_kind:
     type: string
     default: schema_property
+    options:
+      - value: schema_property
+        label: Schema property
+      - value: page_metadata
+        label: Page metadata
   target_field:
     type: string
+    options:
+      - value: cover_image
+        label: Cover image
+      - value: icon_image
+        label: Icon image
 runtime_binding: property_set
 category: output
 status: active

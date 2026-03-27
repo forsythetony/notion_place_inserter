@@ -34,11 +34,15 @@ def _mock_user_response(user):
     return r
 
 
-def _setup_auth(client, user_id="550e8400-e29b-41d4-a716-446655440000"):
+def _setup_auth(
+    client,
+    user_id="550e8400-e29b-41d4-a716-446655440000",
+    email="user@example.com",
+):
     """Set app.state so require_managed_auth passes."""
     mock_supabase = MagicMock()
     mock_supabase.auth.get_user = AsyncMock(
-        return_value=_mock_user_response(_mock_user(user_id, "user@example.com"))
+        return_value=_mock_user_response(_mock_user(user_id, email))
     )
     mock_auth_repo = MagicMock()
     mock_auth_repo.get_profile = AsyncMock(
@@ -195,6 +199,80 @@ def test_management_reprovision_starter_503_when_bootstrap_disabled(client):
         assert "ENABLE_BOOTSTRAP_PROVISIONING" in (resp.json().get("detail") or "")
     finally:
         app.state.bootstrap_provisioning_service = prev
+
+
+def test_create_places_insertion_from_template_403_wrong_email(client):
+    """POST create-places-insertion-from-template returns 403 when email is not allowlisted."""
+    _setup_auth(client, email="other@example.com")
+    resp = client.post(
+        "/management/bootstrap/create-places-insertion-from-template",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 403
+    assert resp.json().get("code") == "PLACES_TEMPLATE_FORBIDDEN"
+
+
+def test_create_places_insertion_from_template_200_created(client):
+    """Allowlisted email provisions cloned job graph and trigger."""
+    from app.routes.management import (
+        PLACES_INSERTION_TEMPLATE_JOB_DISPLAY_NAME,
+        PLACES_INSERTION_TEMPLATE_TRIGGER_PATH,
+    )
+
+    user_id = _setup_auth(client, email="forsythetony@gmail.com")
+
+    mock_job_repo = MagicMock()
+    mock_job_repo.list_by_owner = AsyncMock(return_value=[])
+    mock_job_repo.save_job_graph = AsyncMock()
+    app.state.job_repository = mock_job_repo
+
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id = AsyncMock(
+        return_value=DataTarget(
+            id="target_places_to_visit",
+            owner_user_id=user_id,
+            target_template_id="notion_database",
+            connector_instance_id="connector_instance_notion_default",
+            display_name="Places to Visit",
+            external_target_id="ext",
+            status="active",
+        )
+    )
+    app.state.target_repository = mock_target_repo
+
+    mock_notion = MagicMock()
+    mock_notion.get_access_token = AsyncMock(return_value="notion-token")
+    app.state.notion_oauth_service = mock_notion
+
+    mock_schema = MagicMock()
+    mock_schema.sync_for_target = AsyncMock()
+    app.state.schema_sync_service = mock_schema
+
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_path = AsyncMock(return_value=None)
+    mock_trigger_repo.save = AsyncMock()
+    app.state.trigger_repository = mock_trigger_repo
+
+    mock_link = MagicMock()
+    mock_link.attach = AsyncMock()
+    app.state.trigger_job_link_repository = mock_link
+
+    resp = client.post(
+        "/management/bootstrap/create-places-insertion-from-template",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "created"
+    assert data["target_id"] == "target_places_to_visit"
+    assert data["trigger_path"] == PLACES_INSERTION_TEMPLATE_TRIGGER_PATH
+    assert data["target_display_name"] == "Places to Visit"
+    mock_job_repo.save_job_graph.assert_awaited_once()
+    mock_link.attach.assert_awaited_once()
+    saved_graph = mock_job_repo.save_job_graph.await_args[0][0]
+    assert saved_graph.job.display_name == PLACES_INSERTION_TEMPLATE_JOB_DISPLAY_NAME
+    assert saved_graph.job.target_id == "target_places_to_visit"
+    assert any(s.id.startswith(saved_graph.job.id + "_stage_research") for s in saved_graph.stages)
 
 
 def test_management_step_templates_401_without_auth(client):
@@ -442,6 +520,59 @@ def test_management_rotate_secret_404_when_trigger_not_found(client):
     )
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
+
+
+def test_management_delete_trigger_401_without_auth(client):
+    """DELETE /management/triggers/{id} without Authorization returns 401."""
+    resp = client.delete("/management/triggers/trigger-1")
+    assert resp.status_code == 401
+
+
+def test_management_delete_trigger_404_when_not_found(client):
+    """DELETE /management/triggers/{id} returns 404 when trigger not found."""
+    user_id = _setup_auth(client)
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=None)
+    mock_trigger_repo.delete = AsyncMock()
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.delete(
+        "/management/triggers/missing",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 404
+    mock_trigger_repo.delete.assert_not_awaited()
+
+
+def test_management_delete_trigger_200_deletes(client):
+    """DELETE /management/triggers/{id} removes trigger when owned."""
+    user_id = _setup_auth(client)
+    existing = TriggerDefinition(
+        id="trigger-1",
+        owner_user_id=user_id,
+        trigger_type="http",
+        display_name="T",
+        path="/t",
+        method="POST",
+        request_body_schema={},
+        status="active",
+        auth_mode="bearer",
+        secret_value="sec",
+    )
+    mock_trigger_repo = MagicMock()
+    mock_trigger_repo.get_by_id = AsyncMock(return_value=existing)
+    mock_trigger_repo.delete = AsyncMock()
+    app.state.trigger_repository = mock_trigger_repo
+
+    resp = client.delete(
+        "/management/triggers/trigger-1",
+        headers={"Authorization": "Bearer valid-jwt"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "deleted"
+    assert data["id"] == "trigger-1"
+    mock_trigger_repo.delete.assert_awaited_once_with("trigger-1", user_id)
 
 
 def test_management_create_trigger_401_without_auth(client):

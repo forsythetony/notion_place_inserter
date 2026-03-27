@@ -10,7 +10,7 @@
 
 Users create **HTTP triggers**, invoke them with a **personalized POST body**, and start a **job**. Jobs have **stages**; stages contain **pipelines**; pipelines call **external APIs** and **AI**; the outcome is **Notion-like pages** (structured content written to the user’s workspace).
 
-This doc tracks **what we call the product** and **how we position it** for Goal 1 (small-group beta), not implementation of triggers or pipelines.
+This doc tracks **what we call the product** and **how we position it** for Goal 1 / **Launch stage 1** (beta with **at most ten** users — see **Launch stages** in [`work-log.md`](../../work-log.md)), not implementation of triggers or pipelines.
 
 ---
 
@@ -33,7 +33,7 @@ This doc tracks **what we call the product** and **how we position it** for Goal
 
 ---
 
-## Deliverables before beta
+## Deliverables before Launch stage 1 (beta)
 
 | Deliverable | Notes |
 |-------------|--------|

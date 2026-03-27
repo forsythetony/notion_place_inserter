@@ -8,6 +8,7 @@ input_contract:
     value:
       type: string
       required: true
+      title: Image URL
 output_contract:
   fields:
     notion_image_url:

@@ -33,6 +33,8 @@ def _invitation_row_to_list_item(row: dict) -> dict:
         "userType": row["user_type"],
         "cohortId": str(row["cohort_id"]) if row.get("cohort_id") else None,
         "cohortKey": row.get("cohort_key"),
+        "betaWaveId": str(row["beta_wave_id"]) if row.get("beta_wave_id") else None,
+        "betaWaveKey": row.get("beta_wave_key"),
         "issuedTo": row.get("issued_to"),
         "platformIssuedOn": row.get("platform_issued_on"),
         "claimed": bool(row.get("claimed")),
@@ -60,6 +62,10 @@ def _issue_response_body(row: dict) -> dict:
     cid = row.get("cohort_id")
     out["cohortId"] = str(cid) if cid else None
     out["cohort_id"] = out["cohortId"]
+    wid = row.get("beta_wave_id")
+    out["betaWaveId"] = str(wid) if wid else None
+    out["beta_wave_id"] = out["betaWaveId"]
+    out["betaWaveKey"] = row.get("beta_wave_key")
     return out
 
 
@@ -72,6 +78,7 @@ class InvitationIssueRequest(BaseModel):
     issued_to: str | None = Field(default=None, alias="issuedTo")
     platform_issued_on: str | None = Field(default=None, alias="platformIssuedOn")
     cohort_id: UUID | None = Field(default=None, alias="cohortId")
+    beta_wave_id: UUID | None = Field(default=None, alias="betaWaveId")
 
 
 class InvitationValidateRequest(BaseModel):
@@ -152,11 +159,26 @@ async def issue_invitation(
             )
         cohort_id_str = str(body.cohort_id)
 
+    beta_wave_id_str: str | None = None
+    if body.beta_wave_id is not None:
+        wave = await auth_repo.get_beta_wave_by_id(body.beta_wave_id)
+        if wave is None:
+            raise HTTPException(
+                status_code=400,
+                detail="betaWaveId does not reference an existing beta wave",
+            )
+        beta_wave_id_str = str(body.beta_wave_id)
+
     # Idempotent: if issuedTo is non-empty and already exists, return existing row
     if body.issued_to and body.issued_to.strip():
         existing = await auth_repo.get_invitation_by_issued_to(body.issued_to)
         if existing is not None:
-            return _issue_response_body(existing)
+            ex = dict(existing)
+            if ex.get("beta_wave_id"):
+                w = await auth_repo.get_beta_wave_by_id(ex["beta_wave_id"])
+                if w:
+                    ex["beta_wave_key"] = w.get("key")
+            return _issue_response_body(ex)
 
     code = await auth_repo.generate_invitation_code()
     row = await auth_repo.create_invitation_code(
@@ -165,7 +187,12 @@ async def issue_invitation(
         issued_to=body.issued_to,
         platform_issued_on=body.platform_issued_on,
         cohort_id=cohort_id_str,
+        beta_wave_id=beta_wave_id_str,
     )
+    if beta_wave_id_str:
+        w = await auth_repo.get_beta_wave_by_id(beta_wave_id_str)
+        if w:
+            row = {**row, "beta_wave_key": w.get("key")}
     return _issue_response_body(row)
 
 

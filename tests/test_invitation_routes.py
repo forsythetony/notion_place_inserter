@@ -141,6 +141,7 @@ def test_issue_invitation_200_admin_success(client):
         issued_to="user@example.com",
         platform_issued_on="beta-signup",
         cohort_id=None,
+        beta_wave_id=None,
     )
 
 

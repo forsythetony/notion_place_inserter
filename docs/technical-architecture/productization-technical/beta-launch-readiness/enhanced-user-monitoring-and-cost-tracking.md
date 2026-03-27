@@ -1,6 +1,6 @@
 # Architecture push: Enhanced user monitoring and cost tracking
 
-**Status:** **Complete on 2026-03-24** for Goal 1 (small-group beta): Monitoring UI, rate cards, and estimated USD on admin run APIs are shipped — see **Implementation status** below. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
+**Status:** **Complete on 2026-03-24** for Goal 1 / Launch stage 1 (beta): Monitoring UI, rate cards, and estimated USD on admin run APIs are shipped — see **Implementation status** below. **Review:** Ready for review (no human sign-off recorded in [`work-log.md`](../../work-log.md)).
 
 ## Implementation status
 

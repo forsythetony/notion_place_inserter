@@ -1,7 +1,13 @@
 # Admin waitlist directory, beta waves, and invite-from-waitlist
 
-**Status:** **Not started** · **Ready for review** — design only; implementation tracked separately.  
+**Status:** **Complete on 2026-03-26** · **Ready for review** — shipped per §6–§7 (v1: seeded `beta_waves`, no Waves CRUD UI).  
 **Goal:** Beta user launch — operators can **see everyone on the public beta waitlist**, **search and filter** efficiently, **assign rollout waves**, and **issue invitation codes** from the same admin surface without leaving SQL or ad-hoc scripts.
+
+**Implementation notes:**
+
+- **Idempotent `issued_to`:** `POST .../issue-invitation` mirrors `POST /auth/invitations`: if an invite already exists for `issuedTo`, the waitlist row is **linked** to that invite when still unlinked; **409** if the row already points at a different invitation.
+- **Pagination:** `GET /auth/admin/waitlist-submissions` uses cursor = base64url `{"o": offset}` and `limit` (server-backed filters + `ILIKE` search).
+- **Waves:** `WAVE_1` / `WAVE_2` / `WAVE_3` seeded in migration; optional **`betaWaveId`** on invitation issue and on profiles after claim.
 
 **Related docs:**
 
@@ -194,7 +200,7 @@ Server:
 ### 7.4 Wave management UI
 
 - **Minimum v1:** Wave is a **dropdown** on waitlist rows and on the issue-invite modal, populated from **`GET`** admin list of `beta_waves` (new small endpoint or bundled into existing admin bootstrap).
-- **Optional v1.1:** A **“Waves”** sub-tab or a fifth tab **Beta waves** for CRUD — analogous to Cohorts tab for `user_cohorts`. If deferred, seed waves via migration SQL and document the runbook.
+- **Waves admin tab (catalog CRUD):** [admin-users-waves-tab-architecture.md](./admin-users-waves-tab-architecture.md) — tab **before** Cohorts on `/admin/users/waves`; `POST/PATCH/DELETE /auth/admin/beta-waves`. Operators can also seed waves via migration SQL when needed.
 
 ---
 

@@ -26,6 +26,7 @@ def config():
         table_invitation_codes="invitation_codes",
         table_user_cohorts="user_cohorts",
         table_beta_waitlist_submissions="beta_waitlist_submissions",
+        table_beta_waves="beta_waves",
     )
 
 
