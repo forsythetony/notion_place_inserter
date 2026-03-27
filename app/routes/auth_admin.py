@@ -158,8 +158,10 @@ def _usage_record_admin_dict(u: UsageRecord, *, estimated_cost_usd: float | None
     return d
 
 
-def _stage_run_admin_dict(s: StageRun) -> dict:
-    return {
+def _stage_run_admin_dict(
+    s: StageRun, stage_run_mode_map: dict[str, str] | None = None
+) -> dict:
+    d: dict = {
         "id": s.id,
         "jobRunId": s.job_run_id,
         "stageId": s.stage_id,
@@ -168,6 +170,9 @@ def _stage_run_admin_dict(s: StageRun) -> dict:
         "startedAt": _dt_iso(s.started_at),
         "completedAt": _dt_iso(s.completed_at),
     }
+    if stage_run_mode_map:
+        d["pipelineRunMode"] = stage_run_mode_map.get(s.stage_id, "parallel")
+    return d
 
 
 def _pipeline_run_admin_dict(p: PipelineRun) -> dict:
@@ -952,6 +957,21 @@ async def get_user_run_detail_admin(
     pipelines = await run_repo.list_pipeline_run_executions_for_job_run(jrid, uid)
     steps = await run_repo.list_step_runs_for_job_run(jrid, uid)
     rate_rows = await _load_rate_card_rows(request)
+
+    # Look up stage definitions for pipeline_run_mode
+    stage_run_mode_map: dict[str, str] = {}
+    if jr.job_id:
+        client = getattr(request.app.state, "supabase_client", None)
+        if client:
+            try:
+                r = await client.table("stage_definitions").select(
+                    "id,pipeline_run_mode"
+                ).eq("owner_user_id", uid).execute()
+                for row in r.data or []:
+                    stage_run_mode_map[row["id"]] = row.get("pipeline_run_mode", "parallel")
+            except Exception as e:
+                logger.warning("admin_run_detail_stage_mode_lookup_failed | error={}", e)
+
     return {
         "userId": uid,
         "jobRun": _job_run_admin_dict(jr),
@@ -968,7 +988,7 @@ async def get_user_run_detail_admin(
             )
             for u in usage_rows
         ],
-        "stageRuns": [_stage_run_admin_dict(s) for s in stages],
+        "stageRuns": [_stage_run_admin_dict(s, stage_run_mode_map) for s in stages],
         "pipelineRunExecutions": [_pipeline_run_admin_dict(p) for p in pipelines],
         "stepRuns": [_step_run_admin_dict(s) for s in steps],
     }

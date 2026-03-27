@@ -43,7 +43,7 @@ def _make_mock_pipeline(pipeline_id: str, docstring: str = ""):
     return MockPipeline()
 
 
-def _make_mock_stage(stage_id: str, pipelines_list: list, run_mode: str = "sequential", docstring: str = ""):
+def _make_mock_stage(stage_id: str, pipelines_list: list, run_mode: str = "parallel", docstring: str = ""):
     """Create a mock stage."""
     class MockStage(Stage):
         __doc__ = docstring

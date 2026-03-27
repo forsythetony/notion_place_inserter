@@ -1607,11 +1607,11 @@ def _build_template_job_graph(
     # Stages
     stage_research = StageDefinition(
         id=sid_stage_research, job_id=job_id, display_name="Research",
-        sequence=1, pipeline_ids=[pid_research], pipeline_run_mode="sequential",
+        sequence=1, pipeline_ids=[pid_research], pipeline_run_mode="parallel",
     )
     stage_property_setting = StageDefinition(
         id=sid_stage_ps, job_id=job_id, display_name="Property Setting",
-        sequence=2, pipeline_ids=[p.id for p in prop_pipelines], pipeline_run_mode="sequential",
+        sequence=2, pipeline_ids=[p.id for p in prop_pipelines], pipeline_run_mode="parallel",
     )
 
     job = JobDefinition(

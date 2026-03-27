@@ -1,0 +1,434 @@
+nneapolis", "raw_input": "terminal bar minneapolis"}, "job_definition_id": "job_d16407b4d1b1", "definition_snapshot_ref": "job_snapshot:a82a22c5-112e-4f10-8558-9664ca110c..."} trigger_payload_json={"keywords": "terminal bar minneapolis", "raw_input": "terminal bar minneapolis"}
+2026-03-27 18:12:26.244 | INFO | app.repositories.postgres_run_repository:insert_event:954 - postgres_run_event | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 event_type=pipeline_started payload={'keywords_preview': 'terminal bar minneapolis', 'job_definition_id': 'job_d16407b4d1b1', 'job_slug': 'notion_place_inserter'}
+2026-03-27 18:12:26.244 | DEBUG | app.repositories.postgres_run_repository:insert_event:960 - postgres_run_event_full_json | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 event_type=pipeline_started payload_json={"keywords_preview": "terminal bar minneapolis", "job_definition_id": "job_d16407b4d1b1", "job_slug": "notion_place_inserter"}
+2026-03-27 18:12:26.416 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude
+INPUT LOG:
+Input:
+  - query: terminal bar minneapolis
+Config values:
+  - include_target_query_schema: True
+  - linked_step_id: job_d16407b4d1b1_step_google_places_lookup
+  - prompt: Rewrite this input into an optimized Google Places query.
+2026-03-27 18:12:26.416 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_research pipeline_id=job_d16407b4d1b1_pipeline_research step_id=job_d16407b4d1b1_step_optimize_query template=step_template_optimize_input_claude
+2026-03-27 18:12:26.416 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude | Calling Claude optimize_input (mode=target_schema, linked_template_id='step_template_google_places_lookup').
+2026-03-27 18:12:27.841 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude | Claude API model=claude-sonnet-4-20250514 (optimize_input)
+2026-03-27 18:12:27.841 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude | Claude system prompt (preview): You are a search query optimizer. Rewrite the user's input into a query optimized for the target API.
+
+Target API: Text query for Google Places searchText API (textQuery field)
+
+Optimization hints:
+- Include place name and location when known (e.g. 'Stone Arch Bridge Minneapolis MN')
+- Avoid conversational or question-style phrasing
+- Prefer format: Place Name City Region
+
+Return only the query string, no explanation.
+2026-03-27 18:12:27.841 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude | Claude user message (preview): Rewrite this input into an optimized Google Places query.
+
+Input: terminal bar minneapolis
+2026-03-27 18:12:27.841 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude | Claude assistant text (preview): Terminal Bar Minneapolis MN
+2026-03-27 18:12:27.863 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_optimize_query | template=step_template_optimize_input_claude
+FINAL LOG:
+Output:
+  - optimized_query: Terminal Bar Minneapolis MN
+Status: succeeded
+Runtime_ms: 1446.46
+2026-03-27 18:12:27.898 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup
+INPUT LOG:
+Input:
+  - query: Terminal Bar Minneapolis MN
+Config values:
+  - connector_instance_id: connector_instance_google_places_default
+  - fetch_details_if_needed: True
+2026-03-27 18:12:27.898 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_research pipeline_id=job_d16407b4d1b1_pipeline_research step_id=job_d16407b4d1b1_step_google_places_lookup template=step_template_google_places_lookup
+2026-03-27 18:12:27.898 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Calling Google Places searchText with query preview='Terminal Bar Minneapolis MN' fetch_details=True
+2026-03-27 18:12:28.460 | DEBUG | app.services.job_execution.handlers.google_places_lookup:execute:123 - google_places_search_raw_response | raw_response={"places": [{"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "types": ["bar", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 623-4545", "internationalPhoneNumber": "+1 612-623-4545", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "East Hennepin Avenue", "shortText": "E Hennepin Ave", "types": ["route"], "languageCode": "en"}, {"longTex | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57
+2026-03-27 18:12:28.461 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Enriching place with details (place_id='ChIJs8rQrHkts1IRhLRjOHjs3h4').
+2026-03-27 18:12:28.487 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Google Places HTTP trace [1/1] searchText POST status=200
+2026-03-27 18:12:28.487 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | URL: https://places.googleapis.com/v1/places:searchText
+2026-03-27 18:12:28.487 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Request headers (redacted): {"Content-Type": "application/json", "X-Goog-Api-Key": "AIza…(redacted,len=39)", "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.id,places.rating,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.internationalPhoneNumber,places.location,places.primaryType,places.types,places.generativeSummary,places.addressComponents,places.photos"}
+2026-03-27 18:12:28.487 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Request body: {"textQuery": "Terminal Bar Minneapolis MN"}
+2026-03-27 18:12:28.487 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup | Response preview: {"places": [{"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "types": ["bar", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 623-4545", "internationalPhoneNumber": "+1 612-623-4545", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "East Hennepin Avenue", "shortText": "E Hennepin Ave", "types": ["route"], "languageCode": "en"}, {"longText": "Nicollet Island", "shortText": "Nicollet Island", "types": ["neighborhood", "political"], "languageCode": "en"}, {"longText": "Minneapolis", "shortText": "Minneapolis", "types": ["locality", "political"], "languageCode": "en"}, {"longText": "Hennepin County", "shortText": "Hennepin County", "types": ["administrative_area_level_2", "political"], "languageCode": "en"}, {"longText": "Minnesota", "shortText": "MN", "types": ["administrative_area_level_1", "political"], "languageCode": "en"}, {"longText": "United States", "shortText": "US", "types": ["country", "political"], "languageCode": "en"}, {"longText": "55414", "shortText": "55414", "types": ["postal_code"], "languageCode": "en-US"}, {"longText": "1005", "shortText": "1005", "types": ["postal_code_suffix"], "languageCode": "en-US"}], "location": {"latitude": 44.9887582, "longitude": -93.25453569999999}, "rating": 4.2, "googleMapsUri": "https://maps.google.com/?cid=2224475267053892740&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA", "websiteUri": "https://terminalbarmn.com/", "displayName": {"text": "The Terminal Bar", "languageCode": "en"}, "primaryType": "bar", "photos": [{"name": "places/ChIJs8rQrHkts1IRhLRjOHjs3h4/photos/AU_ZVEFQ6QxWScQkNlwXRDj8w53Q89U29bxtg7PUhzXyQh6v02KOix_v6AUiBimb0jYG3FkkuvDBkdkwQlQUeZgt1GrfplF7WKJ-D3VA5LzaJ7-4a0IbI81F7oypCvXmGHZi4_3GmcbLwm0dUqLH81CR6iinfMydse2qyWTAQU4GmVF4sMjptxeChA9J34HnoHKXywldJ5yuf1P2EpwWQFY8jObNwbceZMCVrhy9Y75r-SjCOiThr_8hj27oT5h_PWm8BJWquwN8DpxsAb6miQtqZ4lIVpFJRZKYo7480vPcxG477sk9kEievbaAlgLEDYD4-QwcHan0q52XeEisJnNU4maknxsWShAYoKE_LwcFR-TCg-1nEZBH9Gulm9ons3VYHURLZbnHKLO_pDqouG9IY6eQA7gMEJUylPMIkTZoKAo", "widthPx": 2294, "heightPx": 4080, "authorAttributions": [{"displayName": "Lecore Griffin", "uri": "https://maps.google.com/maps/contrib/100616011817464292966", "photoUri": "https://lh3.googleusercontent.com/a-/ALV-UjWiYcK7RspiwIjQ76-9R87862DS5NlhYDRf5sf30_VfSrsKJIr2QQ=s100-p-k-no-mo"}], "flagContentUri": "https://www.google.com/local/ima...
+2026-03-27 18:12:28.488 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_google_places_lookup | template=step_template_google_places_lookup
+FINAL LOG:
+Output:
+  - search_response: {"places": [{"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "types": ["bar", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 623-4545", "internationalPhoneNumber": "+1 612-623-4545", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "East Hennepin Avenue", "shortText": "E Hennepin Ave", "types": ["route"], "language...
+  - selected_place: {"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "displayName": "The Terminal Bar", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "East Hennepin Avenue", "shortText": "E Hennepin Ave", "types": ["route"], "languageCode": "en"}, {"longText": "Nicollet Island", "shortText": "Nicollet Island", "types": ["neighborhood", "political"], "la...
+Status: succeeded
+Runtime_ms: 589.90
+2026-03-27 18:12:28.558 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_places | template=step_template_cache_set
+INPUT LOG:
+Input:
+  - value: {"places": [{"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "types": ["bar", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 623-4545", "internationalPhoneNumber": "+1 612-623-4545", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "la...
+Config values:
+  - cache_key: google_places_response
+2026-03-27 18:12:28.558 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_research pipeline_id=job_d16407b4d1b1_pipeline_research step_id=job_d16407b4d1b1_step_cache_places template=step_template_cache_set
+2026-03-27 18:12:28.558 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_places | template=step_template_cache_set | Writing run cache (key='google_places_response').
+2026-03-27 18:12:28.559 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_places | template=step_template_cache_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.15
+2026-03-27 18:12:28.610 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_place | template=step_template_cache_set
+INPUT LOG:
+Input:
+  - value: {"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "displayName": "The Terminal Bar", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "East Hennepin Avenue", "shortText": "E Hennepin Ave", "types": ["route"], "languageC...
+Config values:
+  - cache_key: google_places_selected_place
+2026-03-27 18:12:28.611 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_research pipeline_id=job_d16407b4d1b1_pipeline_research step_id=job_d16407b4d1b1_step_cache_place template=step_template_cache_set
+2026-03-27 18:12:28.611 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_place | template=step_template_cache_set | Writing run cache (key='google_places_selected_place').
+2026-03-27 18:12:28.611 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_research | pipeline_id=job_d16407b4d1b1_pipeline_research | step_id=job_d16407b4d1b1_step_cache_place | template=step_template_cache_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.26
+2026-03-27 18:12:28.917 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_notes | step_id=job_d16407b4d1b1_step_property_set_notes | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Casual, divey venue, presenting live bands, comedy sets and open-mic nights in an unpretentious atmosphere.
+Config values:
+  - schema_property_id: prop_notes
+2026-03-27 18:12:28.917 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_notes step_id=job_d16407b4d1b1_step_property_set_notes template=step_template_property_set
+2026-03-27 18:12:28.917 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_notes | step_id=job_d16407b4d1b1_step_property_set_notes | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_notes').
+2026-03-27 18:12:28.917 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_notes | step_id=job_d16407b4d1b1_step_property_set_notes | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:28.947 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_google_maps | step_id=job_d16407b4d1b1_step_property_set_google_maps | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: https://maps.google.com/?cid=2224475267053892740&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA
+Config values:
+  - schema_property_id: prop_google_maps
+2026-03-27 18:12:28.948 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_google_maps step_id=job_d16407b4d1b1_step_property_set_google_maps template=step_template_property_set
+2026-03-27 18:12:28.948 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_google_maps | step_id=job_d16407b4d1b1_step_property_set_google_maps | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_google_maps').
+2026-03-27 18:12:28.948 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_google_maps | step_id=job_d16407b4d1b1_step_property_set_google_maps | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.07
+2026-03-27 18:12:28.991 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_constrain_tags | template=step_template_ai_constrain_values_claude
+INPUT LOG:
+Input:
+  - source_value: {"places": [{"id": "ChIJs8rQrHkts1IRhLRjOHjs3h4", "types": ["bar", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 623-4545", "internationalPhoneNumber": "+1 612-623-4545", "formattedAddress": "409 E Hennepin Ave, Minneapolis, MN 55414, USA", "addressComponents": [{"longText": "409", "shortText": "409", "types": ["street_number"], "la...
+Config values:
+  - allowable_value_eagerness: 3
+  - allowable_values_source: {"target_schema_ref": {"field": "options", "schema_property_id": "prop_tags"}}
+  - max_output_values: 3
+  - max_suggestible_values: 2
+2026-03-27 18:12:28.992 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_tags step_id=job_d16407b4d1b1_step_constrain_tags template=step_template_ai_constrain_values_claude
+2026-03-27 18:12:28.992 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_constrain_tags | template=step_template_ai_constrain_values_claude | Calling Claude to constrain values (options_count=43, allow_suggest=True).
+2026-03-27 18:12:28.992 | INFO | app.services.claude_service:choose_multi_select_from_context:374 - claude_multi_select_options | property_name=values options=Restaurant, Brewery, Dog Park, Bar, Food Truck, Movie Theater, Entertainment, Nature, Ramen, Pizza, Seafood, Distillery, Arcade, Museum, Always Free, Free Sometimes, Farm, Landmark, Church, History, Prison, Street, Park, Asylum, Beachside, Oktys-Birthday-Dinner-2024, Deli, House, Burger, Diner, Billiards, Art, Donuts, Chicken, Photography, Literature, Planetarium, Hot Dogs, Tacos, Michelin Starred, Shopping, Food, Attractions allow_suggest_new=True
+2026-03-27 18:12:28.992 | INFO | app.services.claude_service:choose_multi_select_from_context:384 - claude_multi_select_request
+2026-03-27 18:12:30.466 | INFO | app.services.claude_service:choose_multi_select_from_context:421 - claude_multi_select_response
+2026-03-27 18:12:30.466 | INFO | app.services.claude_service:choose_multi_select_from_context:427 - claude_multi_select_validated
+2026-03-27 18:12:30.466 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_constrain_tags | template=step_template_ai_constrain_values_claude
+FINAL LOG:
+Output:
+  - selected_values: ["Bar", "Entertainment"]
+Status: succeeded
+Runtime_ms: 1474.57
+2026-03-27 18:12:30.516 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_main_type | step_id=job_d16407b4d1b1_step_property_set_main_type | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: bar
+Config values:
+  - schema_property_id: prop_main_type
+2026-03-27 18:12:30.516 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_main_type step_id=job_d16407b4d1b1_step_property_set_main_type template=step_template_property_set
+2026-03-27 18:12:30.516 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_main_type | step_id=job_d16407b4d1b1_step_property_set_main_type | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_main_type').
+2026-03-27 18:12:30.516 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_main_type | step_id=job_d16407b4d1b1_step_property_set_main_type | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:30.537 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_longitude | step_id=job_d16407b4d1b1_step_property_set_longitude | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: -93.25453569999999
+Config values:
+  - schema_property_id: prop_longitude
+2026-03-27 18:12:30.537 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_longitude step_id=job_d16407b4d1b1_step_property_set_longitude template=step_template_property_set
+2026-03-27 18:12:30.537 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_longitude | step_id=job_d16407b4d1b1_step_property_set_longitude | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_longitude').
+2026-03-27 18:12:30.538 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_longitude | step_id=job_d16407b4d1b1_step_property_set_longitude | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:30.563 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_upload_notion | template=step_template_upload_image_to_notion
+INPUT LOG:
+Input:
+  - value: places/ChIJs8rQrHkts1IRhLRjOHjs3h4/photos/AU_ZVEFQ6QxWScQkNlwXRDj8w53Q89U29bxtg7PUhzXyQh6v02KOix_v6AUiBimb0jYG3FkkuvD...
+Config values:
+  (none)
+2026-03-27 18:12:30.564 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_cover_image step_id=job_d16407b4d1b1_step_cover_upload_notion template=step_template_upload_image_to_notion
+2026-03-27 18:12:30.564 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_upload_notion | template=step_template_upload_image_to_notion | Fetching image bytes from Google Places photo resource.
+2026-03-27 18:12:31.136 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_upload_notion | template=step_template_upload_image_to_notion | Uploading image bytes to Notion (file upload).
+2026-03-27 18:12:31.154 | INFO | app.services.job_execution.handlers.upload_image_to_notion:execute:176 - notion_upload_token_resolution | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 step_id=job_d16407b4d1b1_step_cover_upload_notion owner_user_id=a82a22c5-112e-4f10-8558-9664ca110cc7 resolution=oauth reason=none
+2026-03-27 18:12:31.163 | INFO | app.services.notion_service:upload_cover_from_bytes:318 - notion_file_upload_auth | auth_mode=oauth token_fp=8f5644571d66
+2026-03-27 18:12:31.163 | INFO | app.services.notion_service:upload_cover_from_bytes:323 - notion_file_upload_create_started | bytes_len=637049 filename=image.jpg content_type=image/jpeg
+2026-03-27 18:12:31.631 | INFO | app.services.notion_service:upload_cover_from_bytes:339 - notion_file_upload_send_started | upload_id=33086b6e-c531-8185-9360-00b2b230184a
+2026-03-27 18:12:32.435 | INFO | app.services.notion_service:upload_cover_from_bytes:346 - notion_file_upload_status_after_send | upload_id=33086b6e-c531-8185-9360-00b2b230184a status=uploaded
+2026-03-27 18:12:32.436 | INFO | app.services.notion_service:upload_cover_from_bytes:352 - notion_file_upload_uploaded | upload_id=33086b6e-c531-8185-9360-00b2b230184a
+2026-03-27 18:12:32.436 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_upload_notion | template=step_template_upload_image_to_notion
+FINAL LOG:
+Output:
+  - notion_image_url: {"type": "file_upload", "file_upload": {"id": "33086b6e-c531-8185-9360-00b2b230184a"}}
+Status: succeeded
+Runtime_ms: 1872.31
+2026-03-27 18:12:32.458 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_neighborhood | step_id=job_d16407b4d1b1_step_property_set_neighborhood | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Nicollet Island
+Config values:
+  - schema_property_id: prop_neighborhood
+2026-03-27 18:12:32.459 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_neighborhood step_id=job_d16407b4d1b1_step_property_set_neighborhood template=step_template_property_set
+2026-03-27 18:12:32.459 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_neighborhood | step_id=job_d16407b4d1b1_step_property_set_neighborhood | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_neighborhood').
+2026-03-27 18:12:32.460 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_neighborhood | step_id=job_d16407b4d1b1_step_property_set_neighborhood | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.19
+2026-03-27 18:12:32.462 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_coordinates_templater | template=step_template_templater
+INPUT LOG:
+Input:
+  (none)
+Config values:
+  - template: {{latitude}}, {{longitude}}
+  - values: {"latitude": {"cache_key_ref": {"path": "latitude", "cache_key": "google_places_selected_place"}}, "longitude": {"cache_key_ref": {"path": "longitude", "cache_key": "google_places_selected_place"}}}
+2026-03-27 18:12:32.463 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_coordinates step_id=job_d16407b4d1b1_step_coordinates_templater template=step_template_templater
+2026-03-27 18:12:32.463 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_coordinates_templater | template=step_template_templater | Rendering template (placeholder_keys=['latitude', 'longitude']).
+2026-03-27 18:12:32.463 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_coordinates_templater | template=step_template_templater
+FINAL LOG:
+Output:
+  - rendered_value: 44.9887582, -93.25453569999999
+Status: succeeded
+Runtime_ms: 0.16
+2026-03-27 18:12:32.467 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_name | step_id=job_d16407b4d1b1_step_property_set_name | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: The Terminal Bar
+Config values:
+  - schema_property_id: prop_name
+2026-03-27 18:12:32.467 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_name step_id=job_d16407b4d1b1_step_property_set_name template=step_template_property_set
+2026-03-27 18:12:32.467 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_name | step_id=job_d16407b4d1b1_step_property_set_name | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_name').
+2026-03-27 18:12:32.467 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_name | step_id=job_d16407b4d1b1_step_property_set_name | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.13
+2026-03-27 18:12:32.474 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_location_ai_select | template=step_template_ai_select_relation
+INPUT LOG:
+Input:
+  - source_value: 409 E Hennepin Ave, Minneapolis, MN 55414, USA
+Config values:
+  - key_lookup: title
+  - prompt: Match the place to the best Location page (city, neighborhood, or region) based on address. Consider aliases (e.g. Tw...
+  - related_db: target_locations
+2026-03-27 18:12:32.474 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_location step_id=job_d16407b4d1b1_step_location_ai_select template=step_template_ai_select_relation
+2026-03-27 18:12:33.005 | DEBUG | app.services.job_execution.handlers.ai_select_relation:execute:235 - ai_select_relation_resolved_id | step_id=job_d16407b4d1b1_step_location_ai_select related_db=target_locations id_source=display_name
+2026-03-27 18:12:33.005 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_location_ai_select | template=step_template_ai_select_relation | Querying Notion related data source for candidates (related_db='target_locations', key_lookup='title').
+2026-03-27 18:12:34.711 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_location_ai_select | template=step_template_ai_select_relation | Calling Claude to choose best relation (candidates_count=27).
+2026-03-27 18:12:35.952 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_location_ai_select | template=step_template_ai_select_relation
+FINAL LOG:
+Output:
+  - selected_page_pointer: {"id": "382a494a-909b-464d-b098-4dfa7b101782"}
+  - selected_relation: [{"id": "382a494a-909b-464d-b098-4dfa7b101782"}]
+Status: succeeded
+Runtime_ms: 3477.54
+2026-03-27 18:12:35.975 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_latitude | step_id=job_d16407b4d1b1_step_property_set_latitude | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 44.9887582
+Config values:
+  - schema_property_id: prop_latitude
+2026-03-27 18:12:35.975 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_latitude step_id=job_d16407b4d1b1_step_property_set_latitude template=step_template_property_set
+2026-03-27 18:12:35.975 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_latitude | step_id=job_d16407b4d1b1_step_property_set_latitude | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_latitude').
+2026-03-27 18:12:35.975 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_latitude | step_id=job_d16407b4d1b1_step_property_set_latitude | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.14
+2026-03-27 18:12:35.980 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_address | step_id=job_d16407b4d1b1_step_property_set_address | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 409 E Hennepin Ave, Minneapolis, MN 55414, USA
+Config values:
+  - schema_property_id: prop_address
+2026-03-27 18:12:35.981 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_address step_id=job_d16407b4d1b1_step_property_set_address template=step_template_property_set
+2026-03-27 18:12:35.981 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_address | step_id=job_d16407b4d1b1_step_property_set_address | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_address').
+2026-03-27 18:12:35.981 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_address | step_id=job_d16407b4d1b1_step_property_set_address | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.12
+2026-03-27 18:12:35.985 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_source | step_id=job_d16407b4d1b1_step_property_set_source | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Notion Place Inserter
+Config values:
+  - schema_property_id: prop_source
+2026-03-27 18:12:35.985 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_source step_id=job_d16407b4d1b1_step_property_set_source template=step_template_property_set
+2026-03-27 18:12:35.985 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_source | step_id=job_d16407b4d1b1_step_property_set_source | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_source').
+2026-03-27 18:12:35.985 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_source | step_id=job_d16407b4d1b1_step_property_set_source | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.07
+2026-03-27 18:12:36.020 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude
+INPUT LOG:
+Input:
+  - query: The Terminal Bar
+Config values:
+  - include_target_query_schema: False
+  - linked_step_id: job_d16407b4d1b1_step_icon_search
+  - prompt: Generate a short icon search query (1-3 words) for this place.
+2026-03-27 18:12:36.020 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_icon_image step_id=job_d16407b4d1b1_step_icon_optimize_query template=step_template_optimize_input_claude
+2026-03-27 18:12:36.020 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude | Calling Claude optimize_input (mode=place_query_fallback, linked_template_id=None).
+2026-03-27 18:12:37.225 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude API model=claude-sonnet-4-20250514 (optimize_input)
+2026-03-27 18:12:37.225 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude system prompt (preview): You are a search query optimizer. Rewrite the user's place search into a concise, effective Google Places text query. Return only the query string, no explanation.
+2026-03-27 18:12:37.225 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude user message (preview): Rewrite for Google Places search: The Terminal Bar
+2026-03-27 18:12:37.225 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude assistant text (preview): The Terminal Bar
+2026-03-27 18:12:37.277 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_url | step_id=job_d16407b4d1b1_step_property_set_url | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: https://terminalbarmn.com/
+Config values:
+  - schema_property_id: prop_url
+2026-03-27 18:12:37.277 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_url step_id=job_d16407b4d1b1_step_property_set_url template=step_template_property_set
+2026-03-27 18:12:37.277 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_url | step_id=job_d16407b4d1b1_step_property_set_url | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_url').
+2026-03-27 18:12:37.277 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_url | step_id=job_d16407b4d1b1_step_property_set_url | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:37.280 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_property_set_tags | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: ["Bar", "Entertainment"]
+Config values:
+  - schema_property_id: prop_tags
+2026-03-27 18:12:37.281 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_tags step_id=job_d16407b4d1b1_step_property_set_tags template=step_template_property_set
+2026-03-27 18:12:37.281 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_property_set_tags | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_tags').
+2026-03-27 18:12:37.281 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_tags | step_id=job_d16407b4d1b1_step_property_set_tags | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.05
+2026-03-27 18:12:37.314 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_optimize_query | template=step_template_optimize_input_claude
+FINAL LOG:
+Output:
+  - optimized_query: The Terminal Bar
+Status: succeeded
+Runtime_ms: 1294.29
+2026-03-27 18:12:37.316 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_property_set_location | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: [{"id": "382a494a-909b-464d-b098-4dfa7b101782"}]
+Config values:
+  - schema_property_id: prop_location
+2026-03-27 18:12:37.316 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_location step_id=job_d16407b4d1b1_step_property_set_location template=step_template_property_set
+2026-03-27 18:12:37.317 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_property_set_location | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_location').
+2026-03-27 18:12:37.317 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_location | step_id=job_d16407b4d1b1_step_property_set_location | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:37.327 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_property_set_coordinates | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 44.9887582, -93.25453569999999
+Config values:
+  - schema_property_id: prop_coordinates
+2026-03-27 18:12:37.327 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_coordinates step_id=job_d16407b4d1b1_step_property_set_coordinates template=step_template_property_set
+2026-03-27 18:12:37.327 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_property_set_coordinates | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_coordinates').
+2026-03-27 18:12:37.327 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_coordinates | step_id=job_d16407b4d1b1_step_property_set_coordinates | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:37.334 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_property_set | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: {"type": "file_upload", "file_upload": {"id": "33086b6e-c531-8185-9360-00b2b230184a"}}
+Config values:
+  - target_field: cover_image
+  - target_kind: page_metadata
+2026-03-27 18:12:37.334 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_cover_image step_id=job_d16407b4d1b1_step_cover_property_set template=step_template_property_set
+2026-03-27 18:12:37.335 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_property_set | template=step_template_property_set | Setting page metadata (target_field='cover_image').
+2026-03-27 18:12:37.335 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_cover_image | step_id=job_d16407b4d1b1_step_cover_property_set | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-27 18:12:37.368 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_search | template=step_template_search_icons
+INPUT LOG:
+Input:
+  - query: The Terminal Bar
+Config values:
+  (none)
+2026-03-27 18:12:37.368 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_icon_image step_id=job_d16407b4d1b1_step_icon_search template=step_template_search_icons
+2026-03-27 18:12:37.369 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_search | template=step_template_search_icons | Searching Freepik icons (query preview='The Terminal Bar').
+2026-03-27 18:12:38.099 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_search | template=step_template_search_icons
+FINAL LOG:
+Output:
+  - image_url: https://cdn-icons-png.freepik.com/128/6097/6097088.png
+Status: succeeded
+Runtime_ms: 730.89
+2026-03-27 18:12:38.160 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_upload_notion | template=step_template_upload_image_to_notion
+INPUT LOG:
+Input:
+  - value: https://cdn-icons-png.freepik.com/128/6097/6097088.png
+Config values:
+  (none)
+2026-03-27 18:12:38.160 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_icon_image step_id=job_d16407b4d1b1_step_icon_upload_notion template=step_template_upload_image_to_notion
+2026-03-27 18:12:38.160 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_upload_notion | template=step_template_upload_image_to_notion | Fetching image bytes from HTTP URL.
+2026-03-27 18:12:38.656 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_upload_notion | template=step_template_upload_image_to_notion | Uploading image bytes to Notion (file upload).
+2026-03-27 18:12:38.663 | INFO | app.services.job_execution.handlers.upload_image_to_notion:execute:176 - notion_upload_token_resolution | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 step_id=job_d16407b4d1b1_step_icon_upload_notion owner_user_id=a82a22c5-112e-4f10-8558-9664ca110cc7 resolution=oauth reason=none
+2026-03-27 18:12:38.671 | INFO | app.services.notion_service:upload_cover_from_bytes:318 - notion_file_upload_auth | auth_mode=oauth token_fp=8f5644571d66
+2026-03-27 18:12:38.671 | INFO | app.services.notion_service:upload_cover_from_bytes:323 - notion_file_upload_create_started | bytes_len=840 filename=image.jpg content_type=image/jpeg
+2026-03-27 18:12:38.975 | INFO | app.services.notion_service:upload_cover_from_bytes:339 - notion_file_upload_send_started | upload_id=33086b6e-c531-81e9-be51-00b25074bca2
+2026-03-27 18:12:40.146 | INFO | app.services.notion_service:upload_cover_from_bytes:346 - notion_file_upload_status_after_send | upload_id=33086b6e-c531-81e9-be51-00b25074bca2 status=uploaded
+2026-03-27 18:12:40.146 | INFO | app.services.notion_service:upload_cover_from_bytes:352 - notion_file_upload_uploaded | upload_id=33086b6e-c531-81e9-be51-00b25074bca2
+2026-03-27 18:12:40.147 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_upload_notion | template=step_template_upload_image_to_notion
+FINAL LOG:
+Output:
+  - notion_image_url: {"type": "file_upload", "file_upload": {"id": "33086b6e-c531-81e9-be51-00b25074bca2"}}
+Status: succeeded
+Runtime_ms: 1986.68
+2026-03-27 18:12:40.204 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:227 - pipeline_step | INPUT | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_property_set | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: {"type": "file_upload", "file_upload": {"id": "33086b6e-c531-81e9-be51-00b25074bca2"}}
+Config values:
+  - target_field: icon_image
+  - target_kind: page_metadata
+2026-03-27 18:12:40.204 | DEBUG | app.services.job_execution.job_execution_service:_run_step:651 - job_execution_step_start | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 stage_id=job_d16407b4d1b1_stage_property_setting pipeline_id=job_d16407b4d1b1_pipeline_icon_image step_id=job_d16407b4d1b1_step_icon_property_set template=step_template_property_set
+2026-03-27 18:12:40.205 | INFO | app.services.job_execution.step_pipeline_log:processing:190 - pipeline_step | PROCESSING | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_property_set | template=step_template_property_set | Setting page metadata (target_field='icon_image').
+2026-03-27 18:12:40.205 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:302 - pipeline_step | FINAL | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 | job_id=loc_79f2e191eb25406ca6c944a531126a7c | stage_id=job_d16407b4d1b1_stage_property_setting | pipeline_id=job_d16407b4d1b1_pipeline_icon_image | step_id=job_d16407b4d1b1_step_icon_property_set | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.11
+2026-03-27 18:12:40.886 | INFO | app.repositories.postgres_run_repository:insert_event:954 - postgres_run_event | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 event_type=pipeline_succeeded payload={'result_preview': {'id': '33086b6e-c531-81cd-9eda-d11b6283c235'}}
+2026-03-27 18:12:40.887 | DEBUG | app.repositories.postgres_run_repository:insert_event:960 - postgres_run_event_full_json | run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57 event_type=pipeline_succeeded payload_json={"result_preview": {"id": "33086b6e-c531-81cd-9eda-d11b6283c235"}}
+2026-03-27 18:12:40.887 | INFO | app.queue.events:_on_success:45 - pipeline_success | job_id=loc_79f2e191eb25406ca6c944a531126a7c run_id=59545b79-1434-492a-a1cf-c6fa8f6d1e57
+2026-03-27 18:12:41.197 | DEBUG | app.services.whatsapp_service:send_message:53 - whatsapp_sent
+2026-03-27 18:12:41.215 | DEBUG | app.queue.worker:run_worker_loop:301 - worker_queue_poll_idle | queue_name=locations_jobs | no messages (confirm API uses same SUPABASE_URL and queue; unset env defaults to locations_jobs)
+

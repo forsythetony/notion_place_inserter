@@ -98,8 +98,8 @@ class Stage(ABC):
 
     @property
     def run_mode(self) -> str:
-        """'sequential' or 'parallel'. Default: sequential."""
-        return "sequential"
+        """'sequential' or 'parallel'. Default: parallel (matches job stage definitions)."""
+        return "parallel"
 
     def pipelines(self, context: PipelineRunContext | None = None) -> list[Pipeline]:
         """Pipelines to run. In parallel mode, these run concurrently. Context optional for stages that need it."""
