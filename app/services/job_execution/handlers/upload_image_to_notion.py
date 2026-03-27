@@ -159,18 +159,26 @@ class UploadImageToNotionHandler(StepRuntime):
         }
         owner_user_id = getattr(ctx, "owner_user_id", "") or ""
         access_token: str | None = None
+        resolution = "integration_global"
+        resolution_reason = "no_owner_user_id"
         if callable(token_getter) and owner_user_id:
             access_token = token_getter(owner_user_id)
             if access_token:
                 # Keep upload + page creation on the same Notion credential context.
                 upload_kwargs["access_token"] = access_token
-                logger.debug(
-                    "notion_upload_token_source | run_id={} step_id={} owner_user_id={} token_source=oauth",
+                resolution = "oauth"
+                resolution_reason = "none"
+                logger.info(
+                    "notion_upload_token_resolution | run_id={} step_id={} owner_user_id={} "
+                    "resolution={} reason={}",
                     getattr(ctx, "run_id", ""),
                     step_id,
                     owner_user_id,
+                    resolution,
+                    resolution_reason,
                 )
             else:
+                resolution_reason = "oauth_token_unavailable"
                 # TODO: Remove global token fallback in future PR. Require OAuth for all Notion uploads.
                 logger.warning(
                     "notion_upload_fallback_to_global_token | run_id={} step_id={} owner_user_id={} "
@@ -179,13 +187,42 @@ class UploadImageToNotionHandler(StepRuntime):
                     step_id,
                     owner_user_id,
                 )
+                logger.info(
+                    "notion_upload_token_resolution | run_id={} step_id={} owner_user_id={} "
+                    "resolution={} reason={}",
+                    getattr(ctx, "run_id", ""),
+                    step_id,
+                    owner_user_id,
+                    resolution,
+                    resolution_reason,
+                )
         elif owner_user_id and not callable(token_getter):
+            resolution_reason = "token_getter_unavailable"
             logger.warning(
                 "notion_upload_fallback_to_global_token | run_id={} step_id={} owner_user_id={} "
                 "reason=token_getter_unavailable",
                 getattr(ctx, "run_id", ""),
                 step_id,
                 owner_user_id,
+            )
+            logger.info(
+                "notion_upload_token_resolution | run_id={} step_id={} owner_user_id={} "
+                "resolution={} reason={}",
+                getattr(ctx, "run_id", ""),
+                step_id,
+                owner_user_id,
+                resolution,
+                resolution_reason,
+            )
+        else:
+            logger.info(
+                "notion_upload_token_resolution | run_id={} step_id={} owner_user_id={} "
+                "resolution={} reason={}",
+                getattr(ctx, "run_id", ""),
+                step_id,
+                owner_user_id or "(empty)",
+                resolution,
+                resolution_reason,
             )
 
         payload = notion.upload_cover_from_bytes(image_bytes, **upload_kwargs)

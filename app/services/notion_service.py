@@ -1,5 +1,6 @@
 """Notion API service wrapper with schema caching."""
 
+import hashlib
 import time
 from io import BytesIO
 
@@ -10,6 +11,11 @@ from notion_client.errors import APIResponseError
 from app.models.schema import DatabaseSchema, PropertySchema
 from app.pipeline_lib.table_format import format_table_log
 from app.services.schema_cache import SchemaCache
+
+
+def _notion_token_fingerprint(raw_token: str) -> str:
+    """Short stable id for logs; does not reveal the secret (SHA-256 prefix)."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()[:12]
 
 
 class NotionService:
@@ -307,6 +313,13 @@ class NotionService:
         try:
             # TODO: Remove global token fallback in future PR. Require OAuth access_token for all Notion uploads.
             upload_client = Client(auth=access_token) if access_token else self._client
+            auth_mode = "oauth" if access_token else "integration_global"
+            raw_for_fp = access_token if access_token else self._api_key
+            logger.info(
+                "notion_file_upload_auth | auth_mode={} token_fp={}",
+                auth_mode,
+                _notion_token_fingerprint(raw_for_fp),
+            )
             logger.info(
                 "notion_file_upload_create_started | bytes_len={} filename={} content_type={}",
                 len(image_bytes),
