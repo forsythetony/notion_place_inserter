@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import httpx
@@ -162,7 +163,11 @@ class UploadImageToNotionHandler(StepRuntime):
         resolution = "integration_global"
         resolution_reason = "no_owner_user_id"
         if callable(token_getter) and owner_user_id:
-            access_token = token_getter(owner_user_id)
+            raw_token = token_getter(owner_user_id)
+            if inspect.isawaitable(raw_token):
+                access_token = await raw_token
+            else:
+                access_token = raw_token
             if access_token:
                 # Keep upload + page creation on the same Notion credential context.
                 upload_kwargs["access_token"] = access_token

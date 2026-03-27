@@ -682,7 +682,14 @@ async def test_upload_image_to_notion_handler_uses_oauth_token_for_upload_when_a
     notion.upload_cover_from_bytes.return_value = {"type": "file_upload", "file_upload": {"id": "fu-1"}}
     ctx._services["notion"] = notion
     ctx._services["google_places"] = MagicMock()
-    ctx._services["get_notion_token"] = MagicMock(return_value="oauth-token-abc")
+    async def get_notion_token(_uid: str) -> str:
+        """
+        Production uses NotionOAuthService.get_access_token (async).
+        Handler must await the getter so we do not pass a coroutine to Notion.
+        """
+        return "oauth-token-abc"
+
+    ctx._services["get_notion_token"] = get_notion_token
     handler = UploadImageToNotionHandler()
 
     with patch(
@@ -721,7 +728,10 @@ async def test_upload_image_to_notion_handler_logs_fallback_when_oauth_unavailab
     notion.upload_cover_from_bytes.return_value = {"type": "file_upload", "file_upload": {"id": "fu-1"}}
     ctx._services["notion"] = notion
     ctx._services["google_places"] = MagicMock()
-    ctx._services["get_notion_token"] = MagicMock(return_value=None)
+    async def get_notion_token_none(_uid: str) -> None:
+        return None
+
+    ctx._services["get_notion_token"] = get_notion_token_none
     handler = UploadImageToNotionHandler()
 
     with patch(
