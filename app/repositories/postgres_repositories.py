@@ -1178,9 +1178,9 @@ class PostgresJobRepository:
             }
             await self._client.table(self.PIPELINE_TABLE).upsert(prow, on_conflict="id,owner_user_id").execute()
 
-            for step in graph.steps:
-                if step.pipeline_id != pipeline.id:
-                    continue
+            steps_for_pipeline = [s for s in graph.steps if s.pipeline_id == pipeline.id]
+            wanted_step_ids = [s.id for s in steps_for_pipeline]
+            for step in steps_for_pipeline:
                 srow = {
                     "id": step.id,
                     "pipeline_id": pipeline.id,
@@ -1193,6 +1193,26 @@ class PostgresJobRepository:
                     "failure_policy": step.failure_policy,
                 }
                 await self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
+
+            # Saved graph is authoritative: remove step rows that are no longer in this pipeline.
+            # Without this, upsert-only persistence leaves orphans and get_graph_by_id reloads them.
+            if wanted_step_ids:
+                await (
+                    self._client.table(self.STEP_TABLE)
+                    .delete()
+                    .eq("pipeline_id", pipeline.id)
+                    .eq("owner_user_id", uid)
+                    .not_.in_("id", wanted_step_ids)
+                    .execute()
+                )
+            else:
+                await (
+                    self._client.table(self.STEP_TABLE)
+                    .delete()
+                    .eq("pipeline_id", pipeline.id)
+                    .eq("owner_user_id", uid)
+                    .execute()
+                )
 
     async def archive(self, id: str, owner_user_id: str) -> None:
         """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""

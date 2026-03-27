@@ -90,26 +90,14 @@ stages:
         display_name: Set Notes
         sequence: 3
         steps:
-          - id: step_ai_prompt_notes
-            step_template_id: step_template_ai_prompt
+          - id: step_property_set_notes
+            step_template_id: step_template_property_set
             sequence: 1
             input_bindings:
               value:
                 cache_key_ref:
                   cache_key: google_places_selected_place
-            config:
-              prompt: |
-                Rewrite this place information into a concise, engaging travel note (2-4 sentences).
-                Use ONLY the facts provided. Do not invent details.
-                Include location, type, and notable highlights when available.
-                Return only the paragraph text.
-              max_tokens: 512
-          - id: step_property_set_notes
-            step_template_id: step_template_property_set
-            sequence: 2
-            input_bindings:
-              value:
-                signal_ref: step.step_ai_prompt_notes.value
+                  path: generativeSummary
             config:
               schema_property_id: prop_notes
       - id: pipeline_tags

@@ -27,6 +27,18 @@ def mock_client():
     return MagicMock()
 
 
+def _job_graph_table_chain_mock() -> MagicMock:
+    """PostgREST-style builder: upsert/delete → eq → … → not_.in_ → execute."""
+    chain = MagicMock()
+    chain.execute = AsyncMock(return_value=MagicMock())
+    chain.upsert.return_value = chain
+    chain.delete.return_value = chain
+    chain.eq.return_value = chain
+    type(chain).not_ = property(lambda self: chain)
+    chain.in_.return_value = chain
+    return chain
+
+
 # ---- PostgresConnectorCredentialsRepository ----
 async def test_postgres_connector_credentials_upsert_clears_revoked_at(mock_client):
     """Upsert should un-revoke credentials when reconnecting OAuth."""
@@ -330,7 +342,7 @@ async def test_postgres_job_get_by_id_delegates_to_get_graph(mock_client):
 
 async def test_postgres_job_save_job_graph_upserts_job_stages_pipelines_steps(mock_client):
     """PostgresJobRepository save_job_graph upserts job, stages, pipelines, steps."""
-    mock_client.table.return_value.upsert.return_value.execute = AsyncMock(return_value=MagicMock())
+    mock_client.table.return_value = _job_graph_table_chain_mock()
     job = JobDefinition(
         id="job_save",
         owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
@@ -374,6 +386,54 @@ async def test_postgres_job_save_job_graph_upserts_job_stages_pipelines_steps(mo
     assert "stage_definitions" in tables_called
     assert "pipeline_definitions" in tables_called
     assert "step_instances" in tables_called
+
+
+async def test_postgres_job_save_job_graph_deletes_steps_not_in_saved_graph(mock_client):
+    """After upserting steps, delete removes rows for that pipeline that are not in the graph."""
+    mock_client.table.return_value = _job_graph_table_chain_mock()
+    job = JobDefinition(
+        id="job_save",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        display_name="Save Test",
+        target_id="t2",
+        status="active",
+        stage_ids=["s1"],
+        visibility="owner",
+    )
+    stage = StageDefinition(
+        id="s1",
+        job_id="job_save",
+        display_name="S1",
+        sequence=0,
+        pipeline_ids=["p1"],
+        pipeline_run_mode="parallel",
+    )
+    pipeline = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="P1",
+        sequence=0,
+        step_ids=["st_keep"],
+        purpose=None,
+    )
+    step = StepInstance(
+        id="st_keep",
+        pipeline_id="p1",
+        step_template_id="step_opt",
+        display_name="Step",
+        sequence=0,
+        input_bindings={},
+        config={},
+    )
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step])
+    repo = PostgresJobRepository(mock_client)
+    await repo.save_job_graph(graph, skip_reference_checks=True)
+
+    chain = mock_client.table.return_value
+    chain.delete.assert_called_once()
+    chain.in_.assert_called_once()
+    assert chain.in_.call_args[0][0] == "id"
+    assert list(chain.in_.call_args[0][1]) == ["st_keep"]
 
 
 # ---- PostgresTargetRepository ----
