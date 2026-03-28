@@ -4,7 +4,11 @@ import httpx
 import pytest
 from unittest.mock import MagicMock, patch
 
-from app.services.freepik_service import FreepikAPIError, FreepikService
+from app.services.freepik_service import (
+    RAMEN_ICON_STOPGAP_URL,
+    FreepikAPIError,
+    FreepikService,
+)
 
 
 def test_search_icons_returns_empty_when_term_empty():
@@ -67,6 +71,19 @@ def test_search_icons_returns_data_from_response():
     assert tr["request"]["params"]["term"] == "bridge"
     assert tr["response"]["status_code"] == 200
     assert tr["response"]["body"]["data"][0]["id"] == 123
+
+
+def test_get_first_icon_url_ramen_stopgap_skips_http():
+    """get_first_icon_url returns static URL for ramen queries without calling Freepik."""
+    svc = FreepikService(api_key="test-key")
+    with patch.object(svc._client, "get") as mock_get:
+        url = svc.get_first_icon_url("ramen")
+    assert url == RAMEN_ICON_STOPGAP_URL
+    mock_get.assert_not_called()
+    with patch.object(svc._client, "get") as mock_get:
+        url2 = svc.get_first_icon_url("best ramen")
+    assert url2 == RAMEN_ICON_STOPGAP_URL
+    mock_get.assert_not_called()
 
 
 def test_get_first_icon_url_returns_url_when_results():

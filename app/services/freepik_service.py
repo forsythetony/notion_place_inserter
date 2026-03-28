@@ -21,6 +21,20 @@ class FreepikAPIError(Exception):
         self.response_body = response_body
 
 
+# Stopgap: we have been IP-blocked on Freepik icon search. Until we wire a stable icon provider,
+# queries containing "ramen" skip the API and use this hosted asset instead.
+RAMEN_ICON_STOPGAP_URL = (
+    "https://s3.oleo.sh/static/84894e1482ad25671b475a5a8cdee88667b01c04b0cc936e5c73035cf1c2d04a.png"
+)
+
+
+def is_ramen_icon_stopgap(term: str) -> bool:
+    """True when the search term should use RAMEN_ICON_STOPGAP_URL instead of Freepik."""
+    if not term or not isinstance(term, str):
+        return False
+    return "ramen" in term.strip().lower()
+
+
 def _mask_freepik_api_key(api_key: str) -> str:
     """Log-safe API key fingerprint (same idea as other integration logs)."""
     k = api_key or ""
@@ -152,6 +166,9 @@ class FreepikService:
         Search for icons and return the URL of the first result's thumbnail.
         Returns None when no results or no usable URL.
         """
+        if is_ramen_icon_stopgap(term):
+            self.clear_last_search_trace()
+            return RAMEN_ICON_STOPGAP_URL
         icons = self.search_icons(term)
         if not icons:
             return None

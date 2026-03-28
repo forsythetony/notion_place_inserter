@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.freepik_service import RAMEN_ICON_STOPGAP_URL
 from app.services.job_execution.binding_resolver import resolve_binding, resolve_input_bindings
 from app.services.job_execution.job_execution_service import JobExecutionService
 from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
@@ -559,6 +560,51 @@ async def test_search_icons_handler_returns_none_when_no_freepik():
         snapshot={},
     )
     assert result["image_url"] is None
+
+
+async def test_search_icons_handler_ramen_stopgap_no_freepik_no_usage():
+    """Ramen queries return static URL without Freepik service and do not record usage."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
+    usage = MagicMock()
+    usage.record_external_api_call = AsyncMock()
+    ctx._services["usage_accounting"] = usage
+    handler = SearchIconsHandler()
+    result = await handler.execute(
+        step_id="step_search",
+        config={},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "Tokyo Ramen"},
+        ctx=ctx,
+        step_handle=_make_step_handle("step_run_1"),
+        snapshot={},
+    )
+    assert result["image_url"] == RAMEN_ICON_STOPGAP_URL
+    usage.record_external_api_call.assert_not_called()
+
+
+async def test_search_icons_handler_ramen_stopgap_skips_freepik_when_configured():
+    """Ramen queries do not call Freepik or record usage when service is present."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    ctx.owner_user_id = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
+    freepik = MagicMock()
+    ctx._services["freepik"] = freepik
+    usage = MagicMock()
+    usage.record_external_api_call = AsyncMock()
+    ctx._services["usage_accounting"] = usage
+    handler = SearchIconsHandler()
+    result = await handler.execute(
+        step_id="step_search",
+        config={},
+        input_bindings={"query": {}},
+        resolved_inputs={"query": "ramen"},
+        ctx=ctx,
+        step_handle=_make_step_handle("step_run_1"),
+        snapshot={},
+    )
+    assert result["image_url"] == RAMEN_ICON_STOPGAP_URL
+    freepik.get_first_icon_url.assert_not_called()
+    usage.record_external_api_call.assert_not_called()
 
 
 async def test_search_icons_handler_skips_usage_when_query_empty():

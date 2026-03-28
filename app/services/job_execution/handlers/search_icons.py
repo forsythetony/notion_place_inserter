@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.services.freepik_service import RAMEN_ICON_STOPGAP_URL, is_ramen_icon_stopgap
 from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
@@ -48,6 +49,13 @@ class SearchIconsHandler(StepRuntime):
             if isinstance(manual, dict):
                 return {"image_url": manual.get("image_url")}
             return {"image_url": str(manual) if manual else None}
+
+        if is_ramen_icon_stopgap(query_stripped):
+            step_handle.log_processing(
+                "Stopgap: query contains 'ramen'; using static icon URL (no Freepik) until "
+                "we replace the icon provider (IP block / provider TBD)."
+            )
+            return {"image_url": RAMEN_ICON_STOPGAP_URL}
 
         freepik = ctx.get_service("freepik")
         if not freepik:
