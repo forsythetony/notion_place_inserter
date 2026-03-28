@@ -37,6 +37,11 @@ from app.services.job_execution.step_pipeline_log import (
 )
 from app.services.job_execution.step_runtime_registry import StepRuntimeRegistry
 from app.services.job_execution.target_write_adapter import build_notion_properties_payload
+from app.services.worker_result_cache import (
+    CachedNotionWritePayload,
+    WorkerResultPayloadCache,
+    build_worker_result_cache_key,
+)
 
 
 def _normalize_property_slug(name: str) -> str:
@@ -127,6 +132,7 @@ class JobExecutionService:
         dry_run: bool = False,
         run_repository: RunRepository | None = None,
         get_notion_token_fn: Callable[[str], Awaitable[str | None]] | None = None,
+        result_cache: WorkerResultPayloadCache | None = None,
     ) -> None:
         self._registry = step_registry or _default_registry()
         self._notion = notion_service
@@ -136,6 +142,106 @@ class JobExecutionService:
         self._dry_run = dry_run
         self._run_repo = run_repository
         self._get_notion_token = get_notion_token_fn
+        self._result_cache = result_cache
+
+    @staticmethod
+    def _worker_result_cache_eligible(
+        *,
+        allow_destination_writes: bool,
+        cache_fixtures: list[dict[str, Any]] | None,
+        scope_boundary: dict[str, Any] | None,
+        api_overrides: dict[str, Any] | None,
+    ) -> bool:
+        if not allow_destination_writes:
+            return False
+        if cache_fixtures:
+            return False
+        if scope_boundary:
+            return False
+        if api_overrides:
+            return False
+        return True
+
+    async def _notion_create_page_and_record_usage(
+        self,
+        *,
+        run_id: str,
+        job_id: str,
+        owner_user_id: str | None,
+        data_source_id: str,
+        notion_props: dict[str, Any],
+        icon: dict[str, Any] | None,
+        cover: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Create Notion page and record usage; shared by full pipeline and worker result cache hit."""
+        access_token: str | None = None
+        if self._get_notion_token and owner_user_id:
+            access_token = await self._get_notion_token(owner_user_id)
+        token_source = "oauth" if access_token else "global"
+        if not access_token and owner_user_id:
+            logger.warning(
+                "notion_create_page_fallback_to_global_token | run_id={} job_id={} owner_user_id={} data_source_id={} "
+                "reason=oauth_token_unavailable",
+                run_id,
+                job_id,
+                owner_user_id,
+                data_source_id,
+            )
+        try:
+            if access_token:
+                from app.services.notion_service import NotionService
+
+                result = NotionService.create_page_with_token(
+                    access_token=access_token,
+                    data_source_id=data_source_id,
+                    properties=notion_props,
+                    icon=icon,
+                    cover=cover,
+                    dry_run=self._dry_run,
+                )
+            elif self._notion:
+                # TODO: Remove global token fallback in future PR. Require OAuth for all Notion writes.
+                result = self._notion.create_page(
+                    data_source_id=data_source_id,
+                    properties=notion_props,
+                    icon=icon,
+                    cover=cover,
+                )
+            else:
+                raise RuntimeError("NotionService not configured for target write")
+        except Exception as e:
+            logger.exception(
+                "job_execution_notion_create_failed | run_id={} job_id={} owner_user_id={} data_source_id={} "
+                "token_source={} error={}",
+                run_id,
+                job_id,
+                owner_user_id or "",
+                data_source_id,
+                token_source,
+                str(e)[:500],
+            )
+            raise
+        if self._run_repo and owner_user_id:
+            try:
+                from app.domain.runs import UsageRecord
+
+                record = UsageRecord(
+                    id=f"usage_{uuid.uuid4().hex[:12]}",
+                    job_run_id=run_id,
+                    usage_type="external_api_call",
+                    provider="notion",
+                    metric_name="create_page",
+                    metric_value=1,
+                    owner_user_id=owner_user_id,
+                )
+                await self._run_repo.save_usage_record(record)
+            except Exception as e:
+                logger.exception(
+                    "job_execution_save_usage_notion_create_failed | run_id={} error={}",
+                    run_id,
+                    e,
+                )
+        return result or {}
 
     async def execute_snapshot_run(
         self,
@@ -160,6 +266,48 @@ class JobExecutionService:
         """
         job_data = snapshot.get("job") or {}
         target_data = snapshot.get("target") or {}
+        data_source_id = target_data.get("external_target_id") or ""
+
+        if not data_source_id:
+            raise ValueError("Snapshot target missing external_target_id")
+
+        cache_key: str | None = None
+        if (
+            self._result_cache
+            and self._worker_result_cache_eligible(
+                allow_destination_writes=allow_destination_writes,
+                cache_fixtures=cache_fixtures,
+                scope_boundary=scope_boundary,
+                api_overrides=api_overrides or {},
+            )
+        ):
+            cache_key = build_worker_result_cache_key(
+                owner_user_id=owner_user_id,
+                definition_snapshot_ref=definition_snapshot_ref,
+                data_source_id=data_source_id,
+                trigger_payload=trigger_payload,
+                dry_run=self._dry_run,
+                invocation_source=invocation_source,
+            )
+            cached = self._result_cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "job_execution_worker_result_cache_hit | run_id={} job_id={} data_source_id={}",
+                    run_id,
+                    job_id,
+                    data_source_id,
+                )
+                await asyncio.sleep(5)
+                return await self._notion_create_page_and_record_usage(
+                    run_id=run_id,
+                    job_id=job_id,
+                    owner_user_id=owner_user_id,
+                    data_source_id=data_source_id,
+                    notion_props=cached.notion_properties,
+                    icon=cached.icon,
+                    cover=cached.cover,
+                )
+
         active_schema = snapshot.get("active_schema") or {}
         active_schema = self._ensure_active_schema(
             active_schema=active_schema,
@@ -168,10 +316,6 @@ class JobExecutionService:
         if active_schema:
             # Ensure runtime binding resolution (target_schema_ref) can use synthesized schema.
             snapshot["active_schema"] = active_schema
-        data_source_id = target_data.get("external_target_id") or ""
-
-        if not data_source_id:
-            raise ValueError("Snapshot target missing external_target_id")
 
         ctx = ExecutionContext(
             run_id=run_id,
@@ -256,21 +400,7 @@ class JobExecutionService:
                 raise
 
         # Build final Notion payload and write.
-        # Prefer OAuth token when available; otherwise use global NotionService.
         notion_props = build_notion_properties_payload(ctx.properties, active_schema)
-        access_token: str | None = None
-        if self._get_notion_token and owner_user_id:
-            access_token = await self._get_notion_token(owner_user_id)
-        token_source = "oauth" if access_token else "global"
-        if not access_token and owner_user_id:
-            logger.warning(
-                "notion_create_page_fallback_to_global_token | run_id={} job_id={} owner_user_id={} data_source_id={} "
-                "reason=oauth_token_unavailable",
-                run_id,
-                job_id,
-                owner_user_id,
-                data_source_id,
-            )
         result: dict[str, Any] = {}
         if not ctx.allow_destination_writes:
             logger.info(
@@ -287,60 +417,24 @@ class JobExecutionService:
                 "run_cache": dict(ctx.run_cache),
             }
         else:
-            try:
-                if access_token:
-                    from app.services.notion_service import NotionService
-
-                    result = NotionService.create_page_with_token(
-                        access_token=access_token,
-                        data_source_id=data_source_id,
-                        properties=notion_props,
+            result = await self._notion_create_page_and_record_usage(
+                run_id=run_id,
+                job_id=job_id,
+                owner_user_id=owner_user_id,
+                data_source_id=data_source_id,
+                notion_props=notion_props,
+                icon=ctx.icon,
+                cover=ctx.cover,
+            )
+            if cache_key and self._result_cache:
+                self._result_cache.set(
+                    cache_key,
+                    CachedNotionWritePayload(
+                        notion_properties=dict(notion_props),
                         icon=ctx.icon,
                         cover=ctx.cover,
-                        dry_run=self._dry_run,
-                    )
-                elif self._notion:
-                    # TODO: Remove global token fallback in future PR. Require OAuth for all Notion writes.
-                    result = self._notion.create_page(
-                        data_source_id=data_source_id,
-                        properties=notion_props,
-                        icon=ctx.icon,
-                        cover=ctx.cover,
-                    )
-                else:
-                    raise RuntimeError("NotionService not configured for target write")
-            except Exception as e:
-                logger.exception(
-                    "job_execution_notion_create_failed | run_id={} job_id={} owner_user_id={} data_source_id={} "
-                    "token_source={} error={}",
-                    run_id,
-                    job_id,
-                    owner_user_id or "",
-                    data_source_id,
-                    token_source,
-                    str(e)[:500],
+                    ),
                 )
-                raise
-            if self._run_repo and owner_user_id:
-                try:
-                    from app.domain.runs import UsageRecord
-
-                    record = UsageRecord(
-                        id=f"usage_{uuid.uuid4().hex[:12]}",
-                        job_run_id=run_id,
-                        usage_type="external_api_call",
-                        provider="notion",
-                        metric_name="create_page",
-                        metric_value=1,
-                        owner_user_id=owner_user_id,
-                    )
-                    await self._run_repo.save_usage_record(record)
-                except Exception as e:
-                    logger.exception(
-                        "job_execution_save_usage_notion_create_failed | run_id={} error={}",
-                        run_id,
-                        e,
-                    )
         return result or {}
 
     def _ensure_active_schema(

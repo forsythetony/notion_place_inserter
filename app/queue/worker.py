@@ -737,13 +737,15 @@ async def _process_message(
             }
             if live_test_block and result.get("run_cache"):
                 result_meta["run_cache"] = result["run_cache"]
+        # Wall-clock end of pipeline — must not reuse loop `now` (same instant as started_at).
+        completed_now = datetime.now(timezone.utc)
         try:
-            await run_repo.update_job_status(job_id, "succeeded", completed_at=now)
+            await run_repo.update_job_status(job_id, "succeeded", completed_at=completed_now)
             await run_repo.update_run(
                 run_id,
                 status="succeeded",
                 result_json=result_meta or result if isinstance(result, dict) else {},
-                completed_at=now,
+                completed_at=completed_now,
             )
             await run_repo.insert_event(
                 run_id,

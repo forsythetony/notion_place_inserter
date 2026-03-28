@@ -49,6 +49,11 @@ from app.services.target_service import TargetService
 from app.services.trigger_service import TriggerService
 from app.services.validation_service import ValidationService
 from app.services.whatsapp_service import WhatsAppService
+from app.services.worker_result_cache import (
+    WorkerResultPayloadCache,
+    parse_cache_results_enabled,
+    parse_cache_results_ttl_seconds,
+)
 
 # Worker tuning (optional env overrides; parsed after bootstrap_env in main)
 _WORKER_POLL_INTERVAL = float(os.environ.get("WORKER_POLL_INTERVAL_SECONDS", "1.0"))
@@ -188,6 +193,22 @@ async def _async_worker_main() -> None:
         external_sources_repo=external_sources_repo,
         connector_instance_repo=connector_instance_repo,
     )
+    cache_results_enabled = parse_cache_results_enabled(
+        os.environ.get("CACHE_RESULTS"),
+    )
+    cache_ttl = parse_cache_results_ttl_seconds(
+        os.environ.get("CACHE_RESULTS_TTL_SECONDS"),
+        default=300.0,
+    )
+    result_payload_cache = (
+        WorkerResultPayloadCache(ttl_seconds=cache_ttl) if cache_results_enabled else None
+    )
+    if cache_results_enabled:
+        logger.info(
+            "worker_result_cache_enabled | ttl_seconds={}",
+            cache_ttl,
+        )
+
     job_execution_service = JobExecutionService(
         notion_service=notion_svc,
         claude_service=claude_svc,
@@ -196,6 +217,7 @@ async def _async_worker_main() -> None:
         dry_run=dry_run,
         run_repository=run_repo,
         get_notion_token_fn=notion_oauth_svc.get_access_token,
+        result_cache=result_payload_cache,
     )
 
     event_bus = EventBus()
