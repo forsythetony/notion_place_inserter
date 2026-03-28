@@ -77,6 +77,8 @@ class StepRun:
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_summary: str | None = None
+    # Structured error (schema_version, type, message, traceback, context); jsonb in DB.
+    error_detail: dict[str, Any] | None = None
 
 
 @dataclass

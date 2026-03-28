@@ -1,8 +1,10 @@
 """Unit tests for FreepikService."""
 
+import httpx
+import pytest
 from unittest.mock import MagicMock, patch
 
-from app.services.freepik_service import FreepikService
+from app.services.freepik_service import FreepikAPIError, FreepikService
 
 
 def test_search_icons_returns_empty_when_term_empty():
@@ -14,12 +16,25 @@ def test_search_icons_returns_empty_when_term_empty():
     mock_get.assert_not_called()
 
 
-def test_search_icons_returns_empty_on_exception():
-    """search_icons returns empty list on HTTP or parse error."""
+def test_search_icons_raises_freepik_error_on_request_error():
+    """search_icons raises FreepikAPIError on transport failure."""
     svc = FreepikService(api_key="test-key")
-    with patch.object(svc._client, "get", side_effect=Exception("network error")):
-        result = svc.search_icons("bridge")
-    assert result == []
+    req = httpx.Request("GET", "https://api.freepik.com/v1/icons")
+    err = httpx.RequestError("network error", request=req)
+    with patch.object(svc._client, "get", side_effect=err):
+        with pytest.raises(FreepikAPIError, match="Freepik request error"):
+            svc.search_icons("bridge")
+
+
+def test_search_icons_raises_freepik_error_on_http_error():
+    """search_icons raises FreepikAPIError when API returns non-2xx."""
+    svc = FreepikService(api_key="test-key")
+    req = httpx.Request("GET", "https://api.freepik.com/v1/icons")
+    resp = httpx.Response(401, request=req, text='{"error":"unauthorized"}')
+    with patch.object(svc._client, "get", return_value=resp):
+        with pytest.raises(FreepikAPIError) as exc_info:
+            svc.search_icons("bridge")
+    assert exc_info.value.status_code == 401
 
 
 def test_search_icons_returns_data_from_response():
@@ -27,6 +42,7 @@ def test_search_icons_returns_data_from_response():
     svc = FreepikService(api_key="test-key")
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": [
             {
@@ -46,6 +62,11 @@ def test_search_icons_returns_data_from_response():
     assert call_kwargs["headers"]["x-freepik-api-key"] == "test-key"
     assert call_kwargs["params"]["term"] == "bridge"
     assert call_kwargs["params"]["per_page"] == 1
+    tr = svc.get_last_search_trace()
+    assert tr is not None
+    assert tr["request"]["params"]["term"] == "bridge"
+    assert tr["response"]["status_code"] == 200
+    assert tr["response"]["body"]["data"][0]["id"] == 123
 
 
 def test_get_first_icon_url_returns_url_when_results():

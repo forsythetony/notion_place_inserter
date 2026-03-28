@@ -11,8 +11,10 @@ from app.services.job_execution.runtime_types import ExecutionContext, StepExecu
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.pipeline_live_test.api_overrides import consume_manual_api_response
 
-# Per-line cap for step_traces.processing (aligned with pipeline log preview size).
+# Short preview for manual overrides and rare paths.
 _PROCESSING_PREVIEW_MAX = 2500
+# Safety cap per field when logging full Claude optimize_input trace (step_runs.processing_log).
+_PROCESSING_FULL_MAX = 100_000
 
 
 def _processing_preview(text: str, max_len: int = _PROCESSING_PREVIEW_MAX) -> str:
@@ -20,6 +22,14 @@ def _processing_preview(text: str, max_len: int = _PROCESSING_PREVIEW_MAX) -> st
     if len(s) <= max_len:
         return s
     return s[: max_len - 3] + "..."
+
+
+def _processing_log_full_text(text: str, *, max_len: int = _PROCESSING_FULL_MAX) -> str:
+    """Full text for processing_log; truncate only if absurdly long."""
+    s = text if text is not None else ""
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 40] + "\n...(truncated; increase cap in optimize_input.py if needed)"
 
 
 def _find_pipeline_containing_step(snapshot: dict[str, Any], step_id: str) -> list[dict[str, Any]] | None:
@@ -159,13 +169,16 @@ class OptimizeInputClaudeHandler(StepRuntime):
                 f"Claude API model={trace.get('model', '')} (optimize_input)"
             )
             step_handle.log_processing(
-                f"Claude system prompt (preview): {_processing_preview(str(trace.get('system_prompt', '')), 2000)}"
+                "Claude system prompt (full):\n"
+                + _processing_log_full_text(str(trace.get("system_prompt", "")))
             )
             step_handle.log_processing(
-                f"Claude user message (preview): {_processing_preview(str(trace.get('user_message', '')), 2000)}"
+                "Claude user message (full):\n"
+                + _processing_log_full_text(str(trace.get("user_message", "")))
             )
             step_handle.log_processing(
-                f"Claude assistant text (preview): {_processing_preview(str(trace.get('assistant_text', '')), 2000)}"
+                "Claude assistant text (full):\n"
+                + _processing_log_full_text(str(trace.get("assistant_text", "")))
             )
         else:
             step_handle.log_processing("Claude optimize_input completed.")

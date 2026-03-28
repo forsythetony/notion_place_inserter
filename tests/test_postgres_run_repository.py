@@ -331,6 +331,31 @@ async def test_save_step_run_includes_processing_log(mock_resolve, repo, mock_cl
     assert call_arg["processing_log"] == ["line1", "line2"]
 
 
+@patch("app.repositories.postgres_run_repository.resolve_or_create_mapping")
+async def test_save_step_run_includes_error_detail(mock_resolve, repo, mock_client):
+    mock_resolve.side_effect = [
+        uuid.UUID("d4e5f6a7-b8c9-4012-d345-6789abcdef01"),
+        uuid.UUID("e5f6a7b8-c9d0-4123-e456-789abcdef012"),
+        uuid.UUID("f6a7b8c9-d0e1-4234-f567-89abcdef0123"),
+    ]
+    mock_client.table.return_value.upsert.return_value.execute = AsyncMock(return_value=MagicMock())
+    detail = {"schema_version": 1, "type": "RuntimeError", "message": "x"}
+    run = StepRun(
+        id="run_07cfee18_step_step_optimize_query",
+        pipeline_run_id="run_07cfee18_pipeline_pipeline_research",
+        step_id="step_optimize_query",
+        step_template_id="step_template_optimize_input_claude",
+        status="failed",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        job_run_id="07cfee18-272f-4969-a817-0c37f8e4f0e0",
+        stage_run_id="run_07cfee18_stage_stage_research",
+        error_detail=detail,
+    )
+    await repo.save_step_run(run)
+    call_arg = mock_client.table.return_value.upsert.call_args[0][0]
+    assert call_arg["error_detail"] == detail
+
+
 async def test_list_step_runs_for_job_run_orders_and_joins_pipeline(repo, mock_client):
     """list_step_runs_for_job_run queries step_runs and enriches pipeline_id."""
     job_uuid = "07cfee18-272f-4969-a817-0c37f8e4f0e0"

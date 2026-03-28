@@ -28,6 +28,6 @@ query_schema:
   type: string
   description: "Short keyword for Freepik icon search"
   hints:
-    - "1-3 words only"
+    - "1 word only"
     - "Visual or conceptual term (e.g. bridge, landmark, travel)"
-    - "Avoid location names; focus on what the place represents"
+    - "Avoid proper names unless the place is a well-known landmark; focus on what the place represents"

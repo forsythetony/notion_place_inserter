@@ -97,6 +97,7 @@ def _row_to_step_run(row: dict[str, Any], *, pipeline_id: str | None = None) -> 
         started_at=_parse_dt(row.get("started_at")),
         completed_at=_parse_dt(row.get("completed_at")),
         error_summary=row.get("error_summary"),
+        error_detail=_coerce_jsonb_value(row.get("error_detail")),
     )
 
 
@@ -460,6 +461,7 @@ class PostgresRunRepository:
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
             "error_summary": run.error_summary,
+            "error_detail": run.error_detail,
         }
         try:
             await self._client.table(self.STEP_RUNS).upsert(row, on_conflict="id").execute()
@@ -481,7 +483,7 @@ class PostgresRunRepository:
                 .select(
                     "id, pipeline_run_id, step_id, step_template_id, job_run_id, stage_run_id, "
                     "owner_user_id, status, input_summary, output_summary, step_trace_full, processing_log, "
-                    "started_at, completed_at, error_summary, created_at"
+                    "started_at, completed_at, error_summary, error_detail, created_at"
                 )
                 .eq("job_run_id", str(job_run_uuid))
                 .eq("owner_user_id", uid)

@@ -489,6 +489,7 @@ def parse_step_run(data: dict[str, Any]) -> "StepRun":
         started_at=_parse_datetime(data.get("started_at")),
         completed_at=_parse_datetime(data.get("completed_at")),
         error_summary=data.get("error_summary"),
+        error_detail=data.get("error_detail"),
     )
 
 

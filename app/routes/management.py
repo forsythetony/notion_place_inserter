@@ -175,6 +175,7 @@ def _step_trace_to_api(sr: StepRun) -> dict[str, Any]:
         "started_at": _serialize_datetime(sr.started_at),
         "completed_at": _serialize_datetime(sr.completed_at),
         "error_summary": sr.error_summary,
+        "error_detail": sr.error_detail,
         "input": sr.input_summary,
         "processing": sr.processing_log or [],
         "output": sr.output_summary,

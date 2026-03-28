@@ -17,6 +17,16 @@ from app.services.pipeline_live_test.scoped_snapshot import apply_cache_fixtures
 if TYPE_CHECKING:
     from app.domain.repositories import RunRepository
 from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
+from app.services.job_execution.step_error import (
+    FAILURE_POLICY_CONTINUE,
+    FAILURE_POLICY_CONTINUE_WITH_DEFAULT,
+    FAILURE_POLICY_FAIL,
+    build_step_error_detail,
+    default_outputs_for_step,
+    infer_provider_for_exception,
+    infer_retryable_for_exception,
+    normalize_failure_policy,
+)
 from app.services.job_execution.step_pipeline_log import (
     StepPipelineLog,
     build_step_input_summary,
@@ -721,25 +731,114 @@ class JobExecutionService:
                     )
         except Exception as e:
             runtime_ms = (time.perf_counter() - t0) * 1000.0 if t0 is not None else 0.0
+            failure_policy = normalize_failure_policy(step_data.get("failure_policy"))
+            provider = infer_provider_for_exception(e)
+            retryable = infer_retryable_for_exception(e)
+            err_detail = build_step_error_detail(
+                e,
+                step_id=step_id,
+                step_template_id=step_template_id,
+                stage_id=stage_id,
+                pipeline_id=pipeline_id,
+                failure_policy=failure_policy,
+                provider=provider,
+                retryable=retryable,
+            )
+
+            if failure_policy == FAILURE_POLICY_FAIL:
+                emit_step_final(
+                    step_log,
+                    outputs={},
+                    status="failed",
+                    runtime_ms=runtime_ms,
+                    error=str(e),
+                )
+                output_summary = build_step_output_summary(
+                    outputs={},
+                    status="failed",
+                    runtime_ms=runtime_ms,
+                    error=str(e),
+                    step_outcome="failed",
+                    error_detail=err_detail,
+                )
+                trace_full_failed = build_step_trace_full(
+                    step_log,
+                    resolved_inputs=resolved_inputs,
+                    input_bindings=input_bindings,
+                    config=config,
+                    outputs={},
+                )
+                if self._run_repo and owner_user_id:
+                    try:
+                        await self._run_repo.save_step_run(
+                            StepRun(
+                                id=step_run_id,
+                                pipeline_run_id=pipeline_run_id,
+                                step_id=step_id,
+                                step_template_id=step_template_id,
+                                status="failed",
+                                owner_user_id=owner_user_id,
+                                job_run_id=job_run_id,
+                                stage_run_id=stage_run_id,
+                                started_at=step_started_at_utc,
+                                completed_at=datetime.now(timezone.utc),
+                                error_summary=str(e)[:500],
+                                error_detail=err_detail,
+                                input_summary=input_summary,
+                                output_summary=output_summary,
+                                step_trace_full=trace_full_failed,
+                                processing_log=list(step_log.processing_lines),
+                            )
+                        )
+                    except Exception as save_err:
+                        logger.exception(
+                            "job_execution_save_step_run_failed | step_run_id={} error={}",
+                            step_run_id,
+                            save_err,
+                        )
+                raise
+
+            if failure_policy == FAILURE_POLICY_CONTINUE:
+                recovery_outputs: dict[str, Any] = {}
+                step_outcome = "continued_with_error"
+            else:
+                recovery_outputs = default_outputs_for_step(
+                    step_template_id,
+                    resolved_inputs=resolved_inputs,
+                )
+                step_outcome = "continued_with_default"
+
+            for out_name, out_val in recovery_outputs.items():
+                ctx.set_step_output(step_id, out_name, out_val)
+
             emit_step_final(
                 step_log,
-                outputs={},
-                status="failed",
+                outputs=recovery_outputs,
+                status="succeeded",
                 runtime_ms=runtime_ms,
                 error=str(e),
             )
             output_summary = build_step_output_summary(
-                outputs={},
-                status="failed",
+                outputs=recovery_outputs,
+                status="succeeded",
                 runtime_ms=runtime_ms,
                 error=str(e),
+                step_outcome=step_outcome,
+                error_detail=err_detail,
             )
-            trace_full_failed = build_step_trace_full(
+            trace_recovered = build_step_trace_full(
                 step_log,
                 resolved_inputs=resolved_inputs,
                 input_bindings=input_bindings,
                 config=config,
-                outputs={},
+                outputs=recovery_outputs,
+            )
+            logger.warning(
+                "job_execution_step_degraded | run_id={} step_id={} policy={} error={}",
+                ctx.run_id,
+                step_id,
+                failure_policy,
+                str(e)[:500],
             )
             if self._run_repo and owner_user_id:
                 try:
@@ -749,16 +848,17 @@ class JobExecutionService:
                             pipeline_run_id=pipeline_run_id,
                             step_id=step_id,
                             step_template_id=step_template_id,
-                            status="failed",
+                            status="succeeded",
                             owner_user_id=owner_user_id,
                             job_run_id=job_run_id,
                             stage_run_id=stage_run_id,
                             started_at=step_started_at_utc,
                             completed_at=datetime.now(timezone.utc),
                             error_summary=str(e)[:500],
+                            error_detail=err_detail,
                             input_summary=input_summary,
                             output_summary=output_summary,
-                            step_trace_full=trace_full_failed,
+                            step_trace_full=trace_recovered,
                             processing_log=list(step_log.processing_lines),
                         )
                     )
@@ -768,4 +868,3 @@ class JobExecutionService:
                         step_run_id,
                         save_err,
                     )
-            raise

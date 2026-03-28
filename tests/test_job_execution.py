@@ -20,6 +20,7 @@ from app.services.job_execution.handlers import (
     TemplaterHandler,
     UploadImageToNotionHandler,
 )
+from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.job_execution.step_runtime_registry import StepRuntimeRegistry
 from app.services.job_execution.target_write_adapter import build_notion_properties_payload
 
@@ -1695,3 +1696,134 @@ async def test_execute_snapshot_run_logs_fallback_when_oauth_unavailable():
     assert "ds-123" in call_str
     assert "oauth_token_unavailable" in call_str
     notion.create_page.assert_called_once()
+
+
+class _FailingStepHandler(StepRuntime):
+    """Test double: always raises."""
+
+    async def execute(
+        self,
+        step_id: str,
+        config: dict,
+        input_bindings: dict,
+        resolved_inputs: dict,
+        ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
+        snapshot: dict,
+    ) -> dict:
+        raise RuntimeError("step boom")
+
+
+@pytest.mark.asyncio
+async def test_run_step_failure_policy_fail_saves_error_detail_and_reraises():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_search_icons", _FailingStepHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    with pytest.raises(RuntimeError, match="step boom"):
+        await svc._run_step(
+            step_data={
+                "id": "step_icon_search",
+                "step_template_id": "step_template_search_icons",
+                "sequence": 1,
+                "input_bindings": {"query": {"static_value": "x"}},
+                "config": {},
+            },
+            ctx=ctx,
+            snapshot={},
+            stage_id="st1",
+            pipeline_id="p1",
+            job_run_id="jr1",
+            stage_run_id="sr1",
+            pipeline_run_id="pr1",
+            owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        )
+    failed_calls = [c.args[0] for c in run_repo.save_step_run.call_args_list if c.args[0].status == "failed"]
+    assert len(failed_calls) >= 1
+    failed = failed_calls[-1]
+    assert failed.error_detail is not None
+    assert failed.error_detail.get("type") == "RuntimeError"
+    assert failed.output_summary.get("step_outcome") == "failed"
+
+
+@pytest.mark.asyncio
+async def test_run_step_failure_policy_continue_with_default_sets_outputs_and_succeeds():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_search_icons", _FailingStepHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_icon_search",
+            "step_template_id": "step_template_search_icons",
+            "sequence": 1,
+            "input_bindings": {"query": {"static_value": "x"}},
+            "config": {},
+            "failure_policy": "continue_with_default",
+        },
+        ctx=ctx,
+        snapshot={},
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    assert ctx.get_step_output("step_icon_search", "image_url") is None
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "continued_with_default"
+    assert last.error_detail is not None
+
+
+@pytest.mark.asyncio
+async def test_run_step_failure_policy_continue_empty_outputs():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_search_icons", _FailingStepHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_icon_search",
+            "step_template_id": "step_template_search_icons",
+            "sequence": 1,
+            "input_bindings": {"query": {"static_value": "x"}},
+            "config": {},
+            "failure_policy": "continue",
+        },
+        ctx=ctx,
+        snapshot={},
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    assert ctx.get_step_output("step_icon_search", "image_url") is None
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "continued_with_error"
+    assert last.output_summary.get("outputs") == {}

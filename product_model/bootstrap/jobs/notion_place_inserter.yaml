@@ -308,7 +308,7 @@ stages:
             config:
               prompt: Generate a short icon search query (1-3 words) for this place.
               linked_step_id: step_icon_search
-              include_target_query_schema: false
+            failure_policy: continue_with_default
           - id: step_icon_search
             step_template_id: step_template_search_icons
             sequence: 2
@@ -316,6 +316,7 @@ stages:
               query:
                 signal_ref: step.step_icon_optimize_query.optimized_query
             config: {}
+            failure_policy: continue_with_default
           - id: step_icon_upload_notion
             step_template_id: step_template_upload_image_to_notion
             sequence: 3
@@ -323,6 +324,7 @@ stages:
               value:
                 signal_ref: step.step_icon_search.image_url
             config: {}
+            failure_policy: continue_with_default
           - id: step_icon_property_set
             step_template_id: step_template_property_set
             sequence: 4

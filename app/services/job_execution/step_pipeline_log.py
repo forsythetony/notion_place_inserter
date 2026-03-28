@@ -91,21 +91,32 @@ def build_step_output_summary(
     runtime_ms: float,
     error: str | None = None,
     max_str: int | None = None,
+    step_outcome: str | None = None,
+    error_detail: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Structured FINAL payload for DB/API (v1)."""
+    """Structured FINAL payload for DB/API (v1).
+
+    ``status`` is retained for legacy readers (typically ``succeeded`` or ``failed``).
+    ``step_outcome`` distinguishes degraded outcomes: ``continued_with_error``,
+    ``continued_with_default`` when the executor applies a failure policy.
+    """
     m = max_str if max_str is not None else _str_max_for_input()
     out = outputs or {}
     sanitized_outputs = sanitize_for_step_log(dict(out), max_str=m)
     err_out: str | None = None
     if error:
         err_out = error if len(error) <= 2000 else error[:1997] + "..."
-    raw = {
+    raw: dict[str, Any] = {
         "schema_version": STEP_TRACE_SCHEMA_VERSION,
         "outputs": sanitized_outputs,
         "status": status,
         "runtime_ms": round(runtime_ms, 4),
         "error": err_out,
     }
+    if step_outcome:
+        raw["step_outcome"] = step_outcome
+    if error_detail:
+        raw["error_detail"] = json_safe_for_db(dict(error_detail))
     return json_safe_for_db(raw)
 
 

@@ -205,6 +205,7 @@ def _step_run_admin_dict(s: StepRun) -> dict:
         "startedAt": _dt_iso(s.started_at),
         "completedAt": _dt_iso(s.completed_at),
         "errorSummary": s.error_summary,
+        "errorDetail": s.error_detail,
     }
 
 

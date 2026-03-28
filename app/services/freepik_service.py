@@ -1,6 +1,34 @@
 """Freepik Icons API service wrapper for icon search."""
 
+import json
+from typing import Any
+
 import httpx
+
+
+class FreepikAPIError(Exception):
+    """Raised when the Freepik Icons API request fails or returns an error response."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        response_body: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_body = response_body
+
+
+def _mask_freepik_api_key(api_key: str) -> str:
+    """Log-safe API key fingerprint (same idea as other integration logs)."""
+    k = api_key or ""
+    if not k:
+        return "[unset]"
+    if len(k) <= 12:
+        return "…(redacted)…"
+    return f"{k[:4]}…(redacted,len={len(k)})…{k[-4:]}"
 
 
 class FreepikService:
@@ -11,6 +39,15 @@ class FreepikService:
     def __init__(self, api_key: str):
         self._api_key = api_key
         self._client = httpx.Client(timeout=10.0)
+        self._last_search_trace: dict[str, Any] | None = None
+
+    def clear_last_search_trace(self) -> None:
+        """Reset before a search; avoids stale traces when reusing the client."""
+        self._last_search_trace = None
+
+    def get_last_search_trace(self) -> dict[str, Any] | None:
+        """Last GET /v1/icons request/response snapshot for step processing logs."""
+        return self._last_search_trace
 
     def search_icons(
         self,
@@ -26,30 +63,89 @@ class FreepikService:
         Uses GET /v1/icons with x-freepik-api-key header.
         """
         if not term or not str(term).strip():
+            self.clear_last_search_trace()
             return []
+        self.clear_last_search_trace()
+        headers = {
+            "x-freepik-api-key": self._api_key,
+            "Accept-Language": "en-US",
+        }
+        params = {
+            "term": str(term).strip(),
+            "page": page,
+            "per_page": per_page,
+            "order": order,
+            "thumbnail_size": thumbnail_size,
+        }
+        request_log = {
+            "method": "GET",
+            "url": self.SEARCH_URL,
+            "params": dict(params),
+            "headers": {
+                "x-freepik-api-key": _mask_freepik_api_key(self._api_key),
+                "Accept-Language": headers["Accept-Language"],
+            },
+        }
         try:
-            headers = {
-                "x-freepik-api-key": self._api_key,
-                "Accept-Language": "en-US",
-            }
-            params = {
-                "term": str(term).strip(),
-                "page": page,
-                "per_page": per_page,
-                "order": order,
-                "thumbnail_size": thumbnail_size,
-            }
             response = self._client.get(
                 self.SEARCH_URL,
                 headers=headers,
                 params=params,
             )
             response.raise_for_status()
-            data = response.json()
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                raw_text = response.text or ""
+                self._last_search_trace = {
+                    "request": request_log,
+                    "response": {
+                        "status_code": response.status_code,
+                        "body_text": raw_text,
+                    },
+                    "error": f"JSONDecodeError: {e}",
+                }
+                raise FreepikAPIError(
+                    "Freepik response was not valid JSON",
+                    status_code=response.status_code,
+                    response_body=(response.text or "")[:2000],
+                ) from e
             icons = data.get("data") or []
-            return list(icons) if isinstance(icons, list) else []
-        except Exception:
-            return []
+            icon_list = list(icons) if isinstance(icons, list) else []
+            self._last_search_trace = {
+                "request": request_log,
+                "response": {
+                    "status_code": response.status_code,
+                    "body": data,
+                },
+            }
+            return icon_list
+        except httpx.HTTPStatusError as e:
+            body = ""
+            try:
+                body = (e.response.text or "")[:50000]
+            except Exception:
+                pass
+            self._last_search_trace = {
+                "request": request_log,
+                "response": {
+                    "status_code": e.response.status_code,
+                    "body_text": body,
+                },
+                "error": "HTTPStatusError",
+            }
+            raise FreepikAPIError(
+                f"Freepik HTTP {e.response.status_code}: {(body or str(e))[:500]}",
+                status_code=e.response.status_code,
+                response_body=body,
+            ) from e
+        except httpx.RequestError as e:
+            self._last_search_trace = {
+                "request": request_log,
+                "response": None,
+                "error": f"RequestError: {e}",
+            }
+            raise FreepikAPIError(f"Freepik request error: {e}") from e
 
     def get_first_icon_url(self, term: str) -> str | None:
         """
