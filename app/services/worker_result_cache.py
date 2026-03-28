@@ -27,6 +27,17 @@ def parse_cache_results_ttl_seconds(raw: str | None, default: float = 300.0) -> 
         return default
 
 
+def parse_cache_results_hit_delay_seconds(raw: str | None, default: float = 5.0) -> float:
+    """Parse CACHE_RESULTS_HIT_DELAY_SECONDS; 0 disables sleep; invalid or empty uses default."""
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        v = float(str(raw).strip())
+        return max(0.0, v)
+    except ValueError:
+        return default
+
+
 def canonical_json_for_cache(obj: Any) -> str:
     """Deterministic JSON for hashing (sorted keys, stable for nested dicts/lists)."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)

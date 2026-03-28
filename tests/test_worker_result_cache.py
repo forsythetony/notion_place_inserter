@@ -10,6 +10,7 @@ from app.services.worker_result_cache import (
     WorkerResultPayloadCache,
     build_worker_result_cache_key,
     parse_cache_results_enabled,
+    parse_cache_results_hit_delay_seconds,
     parse_cache_results_ttl_seconds,
 )
 
@@ -25,6 +26,13 @@ def test_parse_cache_results_ttl_seconds():
     assert parse_cache_results_ttl_seconds(None) == 300.0
     assert parse_cache_results_ttl_seconds("600") == 600.0
     assert parse_cache_results_ttl_seconds("bad", default=300.0) == 300.0
+
+
+def test_parse_cache_results_hit_delay_seconds():
+    assert parse_cache_results_hit_delay_seconds(None) == 5.0
+    assert parse_cache_results_hit_delay_seconds("0") == 0.0
+    assert parse_cache_results_hit_delay_seconds("2.5") == 2.5
+    assert parse_cache_results_hit_delay_seconds("bad", default=5.0) == 5.0
 
 
 def test_build_worker_result_cache_key_stable_order():
@@ -93,6 +101,7 @@ async def test_execute_snapshot_run_cache_hit_skips_stages():
         notion_service=notion,
         dry_run=False,
         result_cache=cache,
+        result_cache_hit_delay_seconds=5.0,
     )
 
     snapshot = {
@@ -177,6 +186,7 @@ async def test_execute_snapshot_run_scope_boundary_bypasses_cache():
         notion_service=notion,
         dry_run=False,
         result_cache=cache,
+        result_cache_hit_delay_seconds=5.0,
     )
 
     snapshot = {

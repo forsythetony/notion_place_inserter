@@ -133,6 +133,7 @@ class JobExecutionService:
         run_repository: RunRepository | None = None,
         get_notion_token_fn: Callable[[str], Awaitable[str | None]] | None = None,
         result_cache: WorkerResultPayloadCache | None = None,
+        result_cache_hit_delay_seconds: float = 0.0,
     ) -> None:
         self._registry = step_registry or _default_registry()
         self._notion = notion_service
@@ -143,6 +144,7 @@ class JobExecutionService:
         self._run_repo = run_repository
         self._get_notion_token = get_notion_token_fn
         self._result_cache = result_cache
+        self._result_cache_hit_delay_seconds = result_cache_hit_delay_seconds
 
     @staticmethod
     def _worker_result_cache_eligible(
@@ -297,7 +299,8 @@ class JobExecutionService:
                     job_id,
                     data_source_id,
                 )
-                await asyncio.sleep(5)
+                if self._result_cache_hit_delay_seconds > 0:
+                    await asyncio.sleep(self._result_cache_hit_delay_seconds)
                 return await self._notion_create_page_and_record_usage(
                     run_id=run_id,
                     job_id=job_id,

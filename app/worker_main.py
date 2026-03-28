@@ -52,6 +52,7 @@ from app.services.whatsapp_service import WhatsAppService
 from app.services.worker_result_cache import (
     WorkerResultPayloadCache,
     parse_cache_results_enabled,
+    parse_cache_results_hit_delay_seconds,
     parse_cache_results_ttl_seconds,
 )
 
@@ -200,13 +201,22 @@ async def _async_worker_main() -> None:
         os.environ.get("CACHE_RESULTS_TTL_SECONDS"),
         default=300.0,
     )
+    cache_hit_delay = (
+        parse_cache_results_hit_delay_seconds(
+            os.environ.get("CACHE_RESULTS_HIT_DELAY_SECONDS"),
+            default=5.0,
+        )
+        if cache_results_enabled
+        else 0.0
+    )
     result_payload_cache = (
         WorkerResultPayloadCache(ttl_seconds=cache_ttl) if cache_results_enabled else None
     )
     if cache_results_enabled:
         logger.info(
-            "worker_result_cache_enabled | ttl_seconds={}",
+            "worker_result_cache_enabled | ttl_seconds={} hit_delay_seconds={}",
             cache_ttl,
+            cache_hit_delay,
         )
 
     job_execution_service = JobExecutionService(
@@ -218,6 +228,7 @@ async def _async_worker_main() -> None:
         run_repository=run_repo,
         get_notion_token_fn=notion_oauth_svc.get_access_token,
         result_cache=result_payload_cache,
+        result_cache_hit_delay_seconds=cache_hit_delay,
     )
 
     event_bus = EventBus()
