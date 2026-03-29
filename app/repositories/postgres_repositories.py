@@ -39,6 +39,25 @@ def _seq_int(seq: int | float) -> int:
     return int(round(seq)) if isinstance(seq, float) else int(seq)
 
 
+# Band used only during save_job_graph: move steps here before assigning final 1..n so
+# reorders never transiently violate uq_step_sequence_per_pipeline (Postgres checks each row).
+_STEP_SEQUENCE_TEMP_BASE = 10_000_000
+
+
+def _step_instance_row(step: StepInstance, pipeline_id: str, uid: str, sequence: int) -> dict[str, Any]:
+    return {
+        "id": step.id,
+        "pipeline_id": pipeline_id,
+        "owner_user_id": uid,
+        "step_template_id": step.step_template_id,
+        "display_name": step.display_name,
+        "sequence": _seq_int(sequence),
+        "input_bindings": step.input_bindings,
+        "config": step.config,
+        "failure_policy": step.failure_policy,
+    }
+
+
 def _row_to_connector_template(row: dict[str, Any]) -> ConnectorTemplate:
     return ConnectorTemplate(
         id=row["id"],
@@ -1179,33 +1198,16 @@ class PostgresJobRepository:
             await self._client.table(self.PIPELINE_TABLE).upsert(prow, on_conflict="id,owner_user_id").execute()
 
             steps_for_pipeline = [s for s in graph.steps if s.pipeline_id == pipeline.id]
-            wanted_step_ids = [s.id for s in steps_for_pipeline]
-            for step in steps_for_pipeline:
-                srow = {
-                    "id": step.id,
-                    "pipeline_id": pipeline.id,
-                    "owner_user_id": uid,
-                    "step_template_id": step.step_template_id,
-                    "display_name": step.display_name,
-                    "sequence": _seq_int(step.sequence),
-                    "input_bindings": step.input_bindings,
-                    "config": step.config,
-                    "failure_policy": step.failure_policy,
-                }
-                await self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
+            steps_ordered = sorted(
+                steps_for_pipeline,
+                key=lambda s: (_seq_int(s.sequence), s.id),
+            )
+            wanted_step_ids = [s.id for s in steps_ordered]
 
-            # Saved graph is authoritative: remove step rows that are no longer in this pipeline.
-            # Without this, upsert-only persistence leaves orphans and get_graph_by_id reloads them.
-            if wanted_step_ids:
-                await (
-                    self._client.table(self.STEP_TABLE)
-                    .delete()
-                    .eq("pipeline_id", pipeline.id)
-                    .eq("owner_user_id", uid)
-                    .not_.in_("id", wanted_step_ids)
-                    .execute()
-                )
-            else:
+            # Saved graph is authoritative for which step ids exist. Remove orphan rows *before*
+            # writing final sequences: leftover rows still hold 1..n slots and would violate
+            # uq_step_sequence_per_pipeline during the second upsert phase.
+            if not wanted_step_ids:
                 await (
                     self._client.table(self.STEP_TABLE)
                     .delete()
@@ -1213,6 +1215,25 @@ class PostgresJobRepository:
                     .eq("owner_user_id", uid)
                     .execute()
                 )
+                continue
+
+            await (
+                self._client.table(self.STEP_TABLE)
+                .delete()
+                .eq("pipeline_id", pipeline.id)
+                .eq("owner_user_id", uid)
+                .not_.in_("id", wanted_step_ids)
+                .execute()
+            )
+
+            # Two-phase upsert: per-row upserts can collide on (pipeline_id, owner_user_id, sequence)
+            # when reordering (e.g. swap 1<->2). Move all steps to a temp band, then write 1..n.
+            for i, step in enumerate(steps_ordered):
+                srow = _step_instance_row(step, pipeline.id, uid, _STEP_SEQUENCE_TEMP_BASE + i)
+                await self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
+            for i, step in enumerate(steps_ordered):
+                srow = _step_instance_row(step, pipeline.id, uid, i + 1)
+                await self._client.table(self.STEP_TABLE).upsert(srow, on_conflict="id,owner_user_id").execute()
 
     async def archive(self, id: str, owner_user_id: str) -> None:
         """Soft-delete: set status to archived. Archived jobs are excluded from list and get_graph_by_id."""

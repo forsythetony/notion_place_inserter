@@ -70,5 +70,6 @@ Phase 5 adds the visual-first pipeline authoring experience described in the PRD
 - [p5 — Trigger management API (body schema)](./p5_trigger-management-ui-body-schema.md) — `body_fields`, GET/PATCH shape
 - [p5 — Trigger UI implementation guide](./p5_trigger-ui-implementation-guide.md) — detailed frontend plan for `notion_pipeliner_ui` (outside this repo); end-user trigger management, not admin-only
 - [p5 — Pipeline live testing](./p5_pipeline-live-testing-architecture.md) — run-from-editor architecture, trigger-derived saved test inputs, full-job vs stage-scoped execution
+- [p5 — Pipeline step vertical drag reorder (graph editor)](./p5_pipeline-step-drag-reorder-architecture.md) — axis-locked step reorder, neighbor preview, in-memory `sequence`; save-only persistence
 - [Phase 4 datastore-backed definitions](../phase-4-datastore-backed-definitions/index.md)
 - [Notion onboarding and database selection deep dive](./notion-onboarding-and-database-selection-deep-dive.md)

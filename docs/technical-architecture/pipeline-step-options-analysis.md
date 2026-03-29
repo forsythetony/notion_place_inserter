@@ -224,6 +224,8 @@ Options are resolved from the job's active schema (target database) at runtime.
 - Passes `source_value` to Claude as candidate context (dict, list, or scalar).
 - Uses `claude.choose_multi_select_from_context()` to select from options; may suggest new values if `allowable_value_eagerness` > 0.
 - Truncates output to `max_output_values` if configured.
+- **Failure semantics:** If the Claude service is not configured on the execution context, or the Anthropic API call fails, the step returns a **structured failed** `StepExecutionResult` (orchestrator persists `error_detail` with `service`, `operation`, `retryable`, etc.). It does **not** silently return empty `selected_values` in those cases. Use `failure_policy: continue_with_default` on the step if the pipeline should proceed with default outputs (`selected_values: []`).
+- **Observability:** Processing logs follow input summary → configuration summary → `[StepRuntime]` calling service → `[ClaudeService]` LLM request/response + token usage (when trace is available) → output summary. Live-test manual overrides skip the API but still log input/output summaries where applicable.
 
 ---
 
@@ -282,27 +284,26 @@ Allowed `target_field` values: `cover_image`, `icon_image`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `transformed_value` | any | Extracted value at `source_path`, or `fallback_value` if path is missing |
+| `transformed_value` | any | Value returned by the JMESPath `expression`, or `fallback_value` if the expression yields no result |
 
 ### Configuration
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `operation` | string | No | `extract_key` | Currently only `extract_key` is supported |
-| `source_path` | string | No | `""` | Dot-notation path with optional array indices, e.g. `photos[0].name`, `formattedAddress` |
+| `expression` | string | No | `""` | JMESPath expression, e.g. `photos[0].name`, `[0]`, `[*].firstProp` |
 | `fallback_value` | any | No | — | Value returned when path does not exist |
 
-### Path Syntax
+### Expression Syntax
 
-- `key` — dict key
-- `key[0]` — first element of list at `key`
-- `photos[0].name` — nested path
+- `formattedAddress` — object field lookup
+- `photos[0].name` — nested field and array indexing
+- `[0]` — first element of the input array
+- `[*].firstProp` — project one field from every object in the input array
 
 ### Runtime Behavior
 
-- Parses `source_path` into segments (keys and indices).
-- Traverses `value` and returns the value at the path, or `fallback_value` if any segment is missing.
-- If `operation` is not `extract_key` or `source_path` is empty, returns `fallback_value`.
+- Evaluates `expression` against `value` with JMESPath.
+- Returns `fallback_value` if the expression yields `None`, is empty, or is invalid.
 
 ---
 

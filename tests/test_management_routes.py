@@ -1584,6 +1584,65 @@ def test_management_data_target_schema_200_returns_properties(client):
     assert data["properties"][1]["options"] == [{"id": "a", "name": "Active"}, {"id": "b", "name": "Done"}]
 
 
+def test_management_data_target_schema_refresh_200_calls_sync_and_returns_schema(client):
+    """POST /management/data-targets/{id}/schema/refresh runs sync then returns schema."""
+    from app.domain.targets import TargetSchemaProperty, TargetSchemaSnapshot
+    from datetime import datetime, timezone
+
+    user_id = _setup_auth(client)
+    mock_target_repo = MagicMock()
+    mock_target_repo.get_by_id = AsyncMock(return_value=DataTarget(
+        id="tgt1",
+        owner_user_id=user_id,
+        target_template_id="tt_notion_db",
+        connector_instance_id="conn_1",
+        display_name="Places",
+        external_target_id="ds-xxx",
+        status="active",
+        active_schema_snapshot_id="snap1",
+    ))
+    app.state.target_repository = mock_target_repo
+
+    mock_schema_repo = MagicMock()
+    mock_schema_repo.get_by_id = AsyncMock(return_value=TargetSchemaSnapshot(
+        id="snap1",
+        owner_user_id=user_id,
+        data_target_id="tgt1",
+        version="1",
+        fetched_at=datetime.now(timezone.utc),
+        is_active=True,
+        source_connector_instance_id="conn_1",
+        properties=[
+            TargetSchemaProperty(
+                id="prop1",
+                external_property_id="title",
+                name="Name",
+                normalized_slug="name",
+                property_type="title",
+                required=False,
+                readonly=False,
+            ),
+        ],
+    ))
+    app.state.target_schema_repository = mock_schema_repo
+
+    mock_sync = MagicMock()
+    mock_sync.sync_for_target = AsyncMock()
+    app.state.schema_sync_service = mock_sync
+
+    resp = client.post(
+        "/management/data-targets/tgt1/schema/refresh",
+        headers={"Authorization": "Bearer valid-jwt"},
+        json={},
+    )
+    assert resp.status_code == 200
+    mock_sync.sync_for_target.assert_awaited_once_with("tgt1", user_id)
+    data = resp.json()
+    assert data["target_id"] == "tgt1"
+    assert data["display_name"] == "Places"
+    assert len(data["properties"]) == 1
+
+
 def _minimal_live_test_snapshot():
     return {
         "job": {

@@ -1,0 +1,589 @@
+  (none)
+Status: succeeded
+Runtime_ms: 0.11
+2026-03-29 00:29:56.856 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude
+INPUT LOG:
+Input:
+  - source_value: {"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "health", "sports_activity_location", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComp...
+Config values:
+  - allowable_value_eagerness: 3
+  - allowable_values_source: {"target_schema_ref": {"field": "options", "schema_property_id": "prop_tags"}}
+  - max_output_values: 3
+  - max_suggestible_values: 2
+2026-03-29 00:29:56.857 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_tags step_id=job_e261ce05de13_step_constrain_tags template=step_template_ai_constrain_values_claude
+2026-03-29 00:29:56.857 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude | Calling Claude to constrain values (options_count=43, allow_suggest=True).
+2026-03-29 00:29:56.857 | INFO | app.services.claude_service:choose_multi_select_from_context:374 - claude_multi_select_options | property_name=values options=Restaurant, Brewery, Dog Park, Bar, Food Truck, Movie Theater, Entertainment, Nature, Ramen, Pizza, Seafood, Distillery, Arcade, Museum, Always Free, Free Sometimes, Farm, Landmark, Church, History, Prison, Street, Park, Asylum, Beachside, Oktys-Birthday-Dinner-2024, Deli, House, Burger, Diner, Billiards, Art, Donuts, Chicken, Photography, Literature, Planetarium, Hot Dogs, Tacos, Michelin Starred, Shopping, Food, Attractions allow_suggest_new=True
+2026-03-29 00:29:56.857 | INFO | app.services.claude_service:choose_multi_select_from_context:384 - claude_multi_select_request
+2026-03-29 00:29:58.033 | INFO | app.services.claude_service:choose_multi_select_from_context:421 - claude_multi_select_response
+2026-03-29 00:29:58.034 | INFO | app.services.claude_service:choose_multi_select_from_context:427 - claude_multi_select_validated
+2026-03-29 00:29:58.035 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude
+FINAL LOG:
+Output:
+  - selected_values: ["Attractions"]
+Status: succeeded
+Runtime_ms: 1178.05
+2026-03-29 00:29:58.090 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 618 2nd Ave S, Minneapolis, MN 55402, USA
+Config values:
+  - schema_property_id: prop_address
+2026-03-29 00:29:58.090 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_address step_id=job_e261ce05de13_step_property_set_address template=step_template_property_set
+2026-03-29 00:29:58.090 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_address').
+2026-03-29 00:29:58.090 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.09
+2026-03-29 00:29:58.101 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_url | step_id=job_e261ce05de13_step_property_set_url | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: https://www.ihg.com/hotelindigo/hotels/us/en/minneapolis/mspdg/hoteldetail?cm_mmc=GoogleMaps-_-IN-_-US-_-MSPDG
+Config values:
+  - schema_property_id: prop_url
+2026-03-29 00:29:58.101 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_url step_id=job_e261ce05de13_step_property_set_url template=step_template_property_set
+2026-03-29 00:29:58.101 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_url | step_id=job_e261ce05de13_step_property_set_url | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_url').
+2026-03-29 00:29:58.101 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_url | step_id=job_e261ce05de13_step_property_set_url | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.08
+2026-03-29 00:29:58.105 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude
+INPUT LOG:
+Input:
+  - query: Hotel Indigo Minneapolis Downtown by IHG
+Config values:
+  - linked_step_id: job_e261ce05de13_step_icon_search
+  - prompt: Generate a short icon search query (1-3 words) for this place.
+2026-03-29 00:29:58.105 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_icon_image step_id=job_e261ce05de13_step_icon_optimize_query template=step_template_optimize_input_claude
+2026-03-29 00:29:58.105 | WARNING | app.services.job_execution.handlers.optimize_input:_find_linked_step:62 - optimize_input_linked_step_not_found | step_id=job_e261ce05de13_step_icon_optimize_query linked_step_id=job_e261ce05de13_step_icon_search
+2026-03-29 00:29:58.105 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Calling Claude optimize_input (mode=place_query_fallback, linked_template_id=None).
+2026-03-29 00:29:59.341 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude API model=claude-sonnet-4-20250514 (optimize_input)
+2026-03-29 00:29:59.342 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude system prompt (full):
+You are a search query optimizer. Rewrite the user's place search into a concise, effective Google Places text query. Return only the query string, no explanation.
+2026-03-29 00:29:59.342 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude user message (full):
+Rewrite for Google Places search: Hotel Indigo Minneapolis Downtown by IHG
+2026-03-29 00:29:59.342 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude assistant text (full):
+Hotel Indigo Minneapolis Downtown IHG
+2026-03-29 00:29:59.362 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Notion Place Inserter
+Config values:
+  - schema_property_id: prop_source
+2026-03-29 00:29:59.362 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_source step_id=job_e261ce05de13_step_property_set_source template=step_template_property_set
+2026-03-29 00:29:59.362 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_source').
+2026-03-29 00:29:59.363 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.58
+2026-03-29 00:29:59.375 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_longitude | step_id=job_e261ce05de13_step_property_set_longitude | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: -93.269514
+Config values:
+  - schema_property_id: prop_longitude
+2026-03-29 00:29:59.376 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_longitude step_id=job_e261ce05de13_step_property_set_longitude template=step_template_property_set
+2026-03-29 00:29:59.376 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_longitude | step_id=job_e261ce05de13_step_property_set_longitude | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_longitude').
+2026-03-29 00:29:59.376 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_longitude | step_id=job_e261ce05de13_step_property_set_longitude | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.10
+2026-03-29 00:29:59.395 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: hotel
+Config values:
+  - schema_property_id: prop_main_type
+2026-03-29 00:29:59.395 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_main_type step_id=job_e261ce05de13_step_property_set_main_type template=step_template_property_set
+2026-03-29 00:29:59.395 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_main_type').
+2026-03-29 00:29:59.395 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:29:59.405 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: None
+Config values:
+  - schema_property_id: prop_notes
+2026-03-29 00:29:59.405 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_notes step_id=job_e261ce05de13_step_property_set_notes template=step_template_property_set
+2026-03-29 00:29:59.405 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_notes').
+2026-03-29 00:29:59.405 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.07
+2026-03-29 00:29:59.407 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_latitude | step_id=job_e261ce05de13_step_property_set_latitude | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 44.9761129
+Config values:
+  - schema_property_id: prop_latitude
+2026-03-29 00:29:59.407 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_latitude step_id=job_e261ce05de13_step_property_set_latitude template=step_template_property_set
+2026-03-29 00:29:59.407 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_latitude | step_id=job_e261ce05de13_step_property_set_latitude | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_latitude').
+2026-03-29 00:29:59.407 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_latitude | step_id=job_e261ce05de13_step_property_set_latitude | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:29:59.429 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Central Minneapolis
+Config values:
+  - schema_property_id: prop_neighborhood
+2026-03-29 00:29:59.429 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_neighborhood step_id=job_e261ce05de13_step_property_set_neighborhood template=step_template_property_set
+2026-03-29 00:29:59.429 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_neighborhood').
+2026-03-29 00:29:59.429 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.08
+2026-03-29 00:29:59.434 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Hotel Indigo Minneapolis Downtown by IHG
+Config values:
+  - schema_property_id: prop_name
+2026-03-29 00:29:59.434 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_name step_id=job_e261ce05de13_step_property_set_name template=step_template_property_set
+2026-03-29 00:29:59.435 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_name').
+2026-03-29 00:29:59.435 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.07
+2026-03-29 00:29:59.439 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion
+INPUT LOG:
+Input:
+  - value: places/ChIJq6qq95kys1IRc3GC1Oi76ic/photos/AU_ZVEH7xdxV6cpsGXf9oEFOK8aOaAg79J_LOX9d8q-eXH_u9gd31KvxgS1hpGQ01aDjt5XK-0s...
+Config values:
+  (none)
+2026-03-29 00:29:59.439 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_cover_image step_id=job_e261ce05de13_step_cover_upload_notion template=step_template_upload_image_to_notion
+2026-03-29 00:29:59.439 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion | Fetching image bytes from Google Places photo resource.
+2026-03-29 00:29:59.740 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion | Uploading image bytes to Notion (file upload).
+2026-03-29 00:29:59.771 | INFO | app.services.job_execution.handlers.upload_image_to_notion:execute:176 - notion_upload_token_resolution | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 step_id=job_e261ce05de13_step_cover_upload_notion owner_user_id=a82a22c5-112e-4f10-8558-9664ca110cc7 resolution=oauth reason=none
+2026-03-29 00:29:59.780 | INFO | app.services.notion_service:upload_cover_from_bytes:318 - notion_file_upload_auth | auth_mode=oauth token_fp=8f5644571d66
+2026-03-29 00:29:59.780 | INFO | app.services.notion_service:upload_cover_from_bytes:323 - notion_file_upload_create_started | bytes_len=252107 filename=image.jpg content_type=image/jpeg
+2026-03-29 00:30:00.145 | INFO | app.services.notion_service:upload_cover_from_bytes:339 - notion_file_upload_send_started | upload_id=33286b6e-c531-8165-a1ec-00b2e5c83272
+2026-03-29 00:30:02.786 | INFO | app.services.notion_service:upload_cover_from_bytes:346 - notion_file_upload_status_after_send | upload_id=33286b6e-c531-8165-a1ec-00b2e5c83272 status=uploaded
+2026-03-29 00:30:02.786 | INFO | app.services.notion_service:upload_cover_from_bytes:352 - notion_file_upload_uploaded | upload_id=33286b6e-c531-8165-a1ec-00b2e5c83272
+2026-03-29 00:30:02.786 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion
+FINAL LOG:
+Output:
+  - notion_image_url: {"type": "file_upload", "file_upload": {"id": "33286b6e-c531-8165-a1ec-00b2e5c83272"}}
+Status: succeeded
+Runtime_ms: 3347.15
+2026-03-29 00:30:02.836 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation
+INPUT LOG:
+Input:
+  - source_value: 618 2nd Ave S, Minneapolis, MN 55402, USA
+Config values:
+  - key_lookup: title
+  - prompt: Match the place to the best Location page (city, neighborhood, or region) based on address. Consider aliases (e.g. Tw...
+  - related_db: target_locations
+2026-03-29 00:30:02.836 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_location step_id=job_e261ce05de13_step_location_ai_select template=step_template_ai_select_relation
+2026-03-29 00:30:02.836 | DEBUG | app.services.job_execution.handlers.ai_select_relation:execute:235 - ai_select_relation_resolved_id | step_id=job_e261ce05de13_step_location_ai_select related_db=target_locations id_source=display_name
+2026-03-29 00:30:02.836 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation | Querying Notion related data source for candidates (related_db='target_locations', key_lookup='title').
+2026-03-29 00:30:03.890 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation | Calling Claude to choose best relation (candidates_count=27).
+2026-03-29 00:30:05.479 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation
+FINAL LOG:
+Output:
+  - selected_page_pointer: {"id": "382a494a-909b-464d-b098-4dfa7b101782"}
+  - selected_relation: [{"id": "382a494a-909b-464d-b098-4dfa7b101782"}]
+Status: succeeded
+Runtime_ms: 2642.11
+2026-03-29 00:30:05.504 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude
+FINAL LOG:
+Output:
+  - optimized_query: Hotel Indigo Minneapolis Downtown IHG
+Status: succeeded
+Runtime_ms: 7398.21
+2026-03-29 00:30:05.510 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater
+INPUT LOG:
+Input:
+  (none)
+Config values:
+  - template: {{latitude}}, {{longitude}}
+  - values: {"latitude": {"cache_key_ref": {"path": "latitude", "cache_key": "google_places_selected_place"}}, "longitude": {"cache_key_ref": {"path": "longitude", "cache_key": "google_places_selected_place"}}}
+2026-03-29 00:30:05.511 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_coordinates step_id=job_e261ce05de13_step_coordinates_templater template=step_template_templater
+2026-03-29 00:30:05.511 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater | Rendering template (placeholder_keys=['latitude', 'longitude']).
+2026-03-29 00:30:05.511 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater
+FINAL LOG:
+Output:
+  - rendered_value: 44.9761129, -93.269514
+Status: succeeded
+Runtime_ms: 0.12
+2026-03-29 00:30:05.540 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_property_set_tags | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: ["Attractions"]
+Config values:
+  - schema_property_id: prop_tags
+2026-03-29 00:30:05.541 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_tags step_id=job_e261ce05de13_step_property_set_tags template=step_template_property_set
+2026-03-29 00:30:05.541 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_property_set_tags | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_tags').
+2026-03-29 00:30:05.541 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_property_set_tags | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.07
+2026-03-29 00:30:05.579 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_property_set | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: {"type": "file_upload", "file_upload": {"id": "33286b6e-c531-8165-a1ec-00b2e5c83272"}}
+Config values:
+  - target_field: cover_image
+  - target_kind: page_metadata
+2026-03-29 00:30:05.579 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_cover_image step_id=job_e261ce05de13_step_cover_property_set template=step_template_property_set
+2026-03-29 00:30:05.579 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_property_set | template=step_template_property_set | Setting page metadata (target_field='cover_image').
+2026-03-29 00:30:05.579 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_property_set | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:30:05.592 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_property_set_location | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: [{"id": "382a494a-909b-464d-b098-4dfa7b101782"}]
+Config values:
+  - schema_property_id: prop_location
+2026-03-29 00:30:05.592 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_location step_id=job_e261ce05de13_step_property_set_location template=step_template_property_set
+2026-03-29 00:30:05.592 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_property_set_location | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_location').
+2026-03-29 00:30:05.592 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_property_set_location | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:30:05.609 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_property_set_coordinates | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 44.9761129, -93.269514
+Config values:
+  - schema_property_id: prop_coordinates
+2026-03-29 00:30:05.610 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_coordinates step_id=job_e261ce05de13_step_property_set_coordinates template=step_template_property_set
+2026-03-29 00:30:05.610 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_property_set_coordinates | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_coordinates').
+2026-03-29 00:30:05.610 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_property_set_coordinates | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:30:05.611 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=step_7d729705 | template=step_template_search_icon_library
+INPUT LOG:
+Input:
+  - query: Hotel Indigo Minneapolis Downtown IHG
+Config values:
+  - record_miss: True
+2026-03-29 00:30:05.611 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_icon_image step_id=step_7d729705 template=step_template_search_icon_library
+2026-03-29 00:30:05.611 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=step_7d729705 | template=step_template_search_icon_library | Icon library search (normalized='hotel indigo minneapolis downtown ihg', color_style=None, min_score=0.8)
+2026-03-29 00:30:05.623 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=step_7d729705 | template=step_template_search_icon_library
+FINAL LOG:
+Output:
+  (none)
+Status: failed
+Runtime_ms: 12.09
+Error: {'message': 'invalid input syntax for type uuid: "loc_e77085a5b5244cb1a53fcb2f56264508"', 'code': '22P02', 'hint': None, 'details': None}
+2026-03-29 00:30:05.638 | WARNING | app.services.job_execution.job_execution_service:_run_parallel_pipelines:670 - job_execution_pipeline_failed | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_icon_image error={'message': 'invalid input syntax for type uuid: "loc_e77085a5b5244cb1a53fcb2f56264508"', 'code': '22P02', 'hint': None, 'details': None}
+2026-03-29 00:30:05.643 | ERROR | app.queue.worker:_process_message:668 - worker_pipeline_failed | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 error={'message': 'invalid input syntax for type uuid: "loc_e77085a5b5244cb1a53fcb2f56264508"', 'code': '22P02', 'hint': None, 'details': None} attempt=3 exception_class=APIError notion_data_source_id= | exception=APIError:{'message': 'invalid input syntax for type uuid: "loc_e77085a5b5244cb1a53fcb2f56264508"', 'code': '22P02', 'hint': None, 'details': None}
+2026-03-29 00:30:05.650 | INFO | app.queue.worker:_process_message:704 - worker_retry_scheduled | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 retry_count=3 delay_seconds=60
+2026-03-29 00:31:05.722 | INFO | app.repositories.postgres_run_repository:insert_event:956 - postgres_run_event | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 event_type=pipeline_started payload={'keywords_preview': 'Hotel indigo minneapolis', 'job_definition_id': 'job_e261ce05de13', 'job_slug': 'notion_place_inserter'}
+2026-03-29 00:31:05.723 | DEBUG | app.repositories.postgres_run_repository:insert_event:962 - postgres_run_event_full_json | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 event_type=pipeline_started payload_json={"keywords_preview": "Hotel indigo minneapolis", "job_definition_id": "job_e261ce05de13", "job_slug": "notion_place_inserter"}
+2026-03-29 00:31:05.911 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude
+INPUT LOG:
+Input:
+  - query: Hotel indigo minneapolis
+Config values:
+  - include_target_query_schema: True
+  - linked_step_id: job_e261ce05de13_step_google_places_lookup
+  - prompt: Rewrite this input into an optimized Google Places query.
+2026-03-29 00:31:05.912 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_research pipeline_id=job_e261ce05de13_pipeline_research step_id=job_e261ce05de13_step_optimize_query template=step_template_optimize_input_claude
+2026-03-29 00:31:05.912 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude | Calling Claude optimize_input (mode=target_schema, linked_template_id='step_template_google_places_lookup').
+2026-03-29 00:31:07.179 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude | Claude API model=claude-sonnet-4-20250514 (optimize_input)
+2026-03-29 00:31:07.179 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude | Claude system prompt (full):
+You are a search query optimizer. Rewrite the user's input into a query optimized for the target API.
+
+Target API: Text query for Google Places searchText API (textQuery field)
+
+Optimization hints:
+- Include place name and location when known (e.g. 'Stone Arch Bridge Minneapolis MN')
+- Avoid conversational or question-style phrasing
+- Prefer format: Place Name City Region
+
+Return only the query string, no explanation.
+2026-03-29 00:31:07.179 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude | Claude user message (full):
+Rewrite this input into an optimized Google Places query.
+
+Input: Hotel indigo minneapolis
+2026-03-29 00:31:07.179 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude | Claude assistant text (full):
+Hotel Indigo Minneapolis MN
+2026-03-29 00:31:07.195 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_optimize_query | template=step_template_optimize_input_claude
+FINAL LOG:
+Output:
+  - optimized_query: Hotel Indigo Minneapolis MN
+Status: succeeded
+Runtime_ms: 1282.93
+2026-03-29 00:31:07.211 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup
+INPUT LOG:
+Input:
+  - query: Hotel Indigo Minneapolis MN
+Config values:
+  - connector_instance_id: connector_instance_google_places_default
+  - fetch_details_if_needed: True
+2026-03-29 00:31:07.211 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_research pipeline_id=job_e261ce05de13_pipeline_research step_id=job_e261ce05de13_step_google_places_lookup template=step_template_google_places_lookup
+2026-03-29 00:31:07.211 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Calling Google Places searchText with query preview='Hotel Indigo Minneapolis MN' fetch_details=True
+2026-03-29 00:31:07.629 | DEBUG | app.services.job_execution.handlers.google_places_lookup:execute:123 - google_places_search_raw_response | raw_response={"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2nd Avenue South", "short | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316
+2026-03-29 00:31:07.629 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Enriching place with details (place_id='ChIJq6qq95kys1IRc3GC1Oi76ic').
+2026-03-29 00:31:07.732 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Google Places HTTP trace [1/2] searchText POST status=200
+2026-03-29 00:31:07.732 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | URL: https://places.googleapis.com/v1/places:searchText
+2026-03-29 00:31:07.733 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Request headers (redacted): {"Content-Type": "application/json", "X-Goog-Api-Key": "AIza…(redacted,len=39)", "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.id,places.rating,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.internationalPhoneNumber,places.location,places.primaryType,places.types,places.generativeSummary,places.addressComponents,places.photos"}
+2026-03-29 00:31:07.733 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Request body: {"textQuery": "Hotel Indigo Minneapolis MN"}
+2026-03-29 00:31:07.733 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Response preview: {"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2nd Avenue South", "shortText": "2nd Ave S", "types": ["route"], "languageCode": "en"}, {"longText": "Central Minneapolis", "shortText": "Central Minneapolis", "types": ["neighborhood", "political"], "languageCode": "en"}, {"longText": "Minneapolis", "shortText": "Minneapolis", "types": ["locality", "political"], "languageCode": "en"}, {"longText": "Hennepin County", "shortText": "Hennepin County", "types": ["administrative_area_level_2", "political"], "languageCode": "en"}, {"longText": "Minnesota", "shortText": "MN", "types": ["administrative_area_level_1", "political"], "languageCode": "en"}, {"longText": "United States", "shortText": "US", "types": ["country", "political"], "languageCode": "en"}, {"longText": "55402", "shortText": "55402", "types": ["postal_code"], "languageCode": "en-US"}], "location": {"latitude": 44.9761129, "longitude": -93.269514}, "rating": 4.3, "googleMapsUri": "https://maps.google.com/?cid=2876317920701608307&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA", "websiteUri": "https://www.ihg.com/hotelindigo/hotels/us/en/minneapolis/mspdg/hoteldetail?cm_mmc=GoogleMaps-_-IN-_-US-_-MSPDG", "displayName": {"text": "Hotel Indigo Minneapolis Downtown by IHG", "languageCode": "en"}, "primaryType": "hotel", "photos": [{"name": "places/ChIJq6qq95kys1IRc3GC1Oi76ic/photos/AU_ZVEHUezQcR0wIVqycJN5ZhrkpA8VUrCcaqI7CRoIHBN0MfyKmhD7MNa76446Z-N5flnRr2dVEqSYOLb4PHtPLLLclXYArK2z9U2ztrd72WQBe-9Lew4-B3g9KZq-vxHMqcS7We_-_zVPXkX92deFLxaA_5iGDHulKJjVM3dtF7-N-1S0hhtR8M_hW1Kik13qhVJ7n5lPaoXgFTV_cBlQPlltXamww0lduScWpRVcsbQXEcv_VfYapX7oo5F7lqG21vl_n0QNTa_EoKYQ-mH-WqLGCbonCVN5KHsc3-CfAxqvSkA", "widthPx": 2048, "heightPx": 1472, "authorAttributions": [{"displayName": "Hotel Indigo Minneapolis Downtown by IHG", "uri": "https://maps.google.com/maps/contrib/101836043634343993094", "photoUri": "https://lh3.googleusercontent.com/a-/ALV-UjVx6L4hpSSqCn7usUh4cpeFJAeJcnig7kXdtXSYw7EypDb-Q65G=s100-p-k-no-mo"}], "flagContentUri": "https://www.google.com/local/imagery/report/?cb_clie...
+2026-03-29 00:31:07.734 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Google Places HTTP trace [2/2] placeDetails GET status=200
+2026-03-29 00:31:07.734 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | URL: https://places.googleapis.com/v1/places/ChIJq6qq95kys1IRc3GC1Oi76ic
+2026-03-29 00:31:07.735 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Request headers (redacted): {"Content-Type": "application/json", "X-Goog-Api-Key": "AIza…(redacted,len=39)", "X-Goog-FieldMask": "id,displayName,formattedAddress,rating,primaryType,types,generativeSummary,editorialSummary,addressComponents,photos"}
+2026-03-29 00:31:07.735 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup | Response preview: {"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2nd Avenue South", "shortText": "2nd Ave S", "types": ["route"], "languageCode": "en"}, {"longText": "Central Minneapolis", "shortText": "Central Minneapolis", "types": ["neighborhood", "political"], "languageCode": "en"}, {"longText": "Minneapolis", "shortText": "Minneapolis", "types": ["locality", "political"], "languageCode": "en"}, {"longText": "Hennepin County", "shortText": "Hennepin County", "types": ["administrative_area_level_2", "political"], "languageCode": "en"}, {"longText": "Minnesota", "shortText": "MN", "types": ["administrative_area_level_1", "political"], "languageCode": "en"}, {"longText": "United States", "shortText": "US", "types": ["country", "political"], "languageCode": "en"}, {"longText": "55402", "shortText": "55402", "types": ["postal_code"], "languageCode": "en-US"}], "rating": 4.3, "displayName": {"text": "Hotel Indigo Minneapolis Downtown by IHG", "languageCode": "en"}, "primaryType": "hotel", "editorialSummary": {"text": "Stylish rooms & suites in a relaxed hotel featuring a bistro/bar & a gym, plus parking.", "languageCode": "en"}, "photos": [{"name": "places/ChIJq6qq95kys1IRc3GC1Oi76ic/photos/AU_ZVEGFs4m1ZIkaKDzYHSGXDMNrunNTLeYSQKqU5onrdiYvEaARPsb2cvrnRlsHM4GII-rQ8xXrWgXwSLgEq9-xZAMdHo2S3w_ZXp0oy7C4mDwMVECM8ERlnvbY-AcXkeSc5a0H3Qt9ZfwP6t6AINHXXgAGSAHWF77sQW3rsa7q-FTsl1MyE2AVAmjf9SIoCruW4wEjYTUoGKX_PdbFMWczG8o00ChF8H_dP9XJ_Jr-MFiNhgnTjScZrfi9-p3GWpmQzhnq1GnncPU1HSA6n5w7MWoQvqFrfhmGiMXu3LRviWMX8w", "widthPx": 2048, "heightPx": 1472, "authorAttributions": [{"displayName": "Hotel Indigo Minneapolis Downtown by IHG", "uri": "https://maps.google.com/maps/contrib/101836043634343993094", "photoUri": "https://lh3.googleusercontent.com/a-/ALV-UjVx6L4hpSSqCn7usUh4cpeFJAeJcnig7kXdtXSYw7EypDb-Q65G=s100-p-k-no-mo"}], "flagContentUri": "https://www.google.com/local/imagery/report/?cb_client=maps_api_places.places_api&image_key=!1e10!2sAF1QipPvOfHTH6iWercUP22YpVkIVPPvciHMV-oHtS2l&hl=en-US", "googleMapsUri": "https://www.google.com/maps/place//data=!3m4!1e2!3m2!1sAF1QipPvOfHTH6iWercUP22YpVkIVPPvciHMV-oHtS2l!2e10!4m2!3m1!1s0x52b33299f7aaaaab:0x27eabbe8d4827173"}, {"name":...
+2026-03-29 00:31:07.737 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_google_places_lookup | template=step_template_google_places_lookup
+FINAL LOG:
+Output:
+  - search_response: {"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2n...
+  - selected_place: {"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "displayName": "Hotel Indigo Minneapolis Downtown by IHG", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2nd Avenue South", "shortText": "2nd Ave S", "types": ["route"], "languageCode": "en"}, {"longText": "Central Minneapolis", "shortText": "Central Minneapolis", "types": ["neighborhood",...
+Status: succeeded
+Runtime_ms: 525.18
+2026-03-29 00:31:07.804 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_places | template=step_template_cache_set
+INPUT LOG:
+Input:
+  - value: {"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComp...
+Config values:
+  - cache_key: google_places_response
+2026-03-29 00:31:07.805 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_research pipeline_id=job_e261ce05de13_pipeline_research step_id=job_e261ce05de13_step_cache_places template=step_template_cache_set
+2026-03-29 00:31:07.805 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_places | template=step_template_cache_set | Writing run cache (key='google_places_response').
+2026-03-29 00:31:07.805 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_places | template=step_template_cache_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.14
+2026-03-29 00:31:07.843 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_place | template=step_template_cache_set
+INPUT LOG:
+Input:
+  - value: {"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "displayName": "Hotel Indigo Minneapolis Downtown by IHG", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComponents": [{"longText": "618", "shortText": "618", "types": ["street_number"], "languageCode": "en-US"}, {"longText": "2nd Avenue South", "shortText": "2nd Ave S", "types": ["route"], ...
+Config values:
+  - cache_key: google_places_selected_place
+2026-03-29 00:31:07.844 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_research pipeline_id=job_e261ce05de13_pipeline_research step_id=job_e261ce05de13_step_cache_place template=step_template_cache_set
+2026-03-29 00:31:07.844 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_place | template=step_template_cache_set | Writing run cache (key='google_places_selected_place').
+2026-03-29 00:31:07.844 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_research | pipeline_id=job_e261ce05de13_pipeline_research | step_id=job_e261ce05de13_step_cache_place | template=step_template_cache_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.14
+2026-03-29 00:31:07.956 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Notion Place Inserter
+Config values:
+  - schema_property_id: prop_source
+2026-03-29 00:31:07.957 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_source step_id=job_e261ce05de13_step_property_set_source template=step_template_property_set
+2026-03-29 00:31:07.957 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_source').
+2026-03-29 00:31:07.957 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_source | step_id=job_e261ce05de13_step_property_set_source | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.12
+2026-03-29 00:31:07.961 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Central Minneapolis
+Config values:
+  - schema_property_id: prop_neighborhood
+2026-03-29 00:31:07.961 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_neighborhood step_id=job_e261ce05de13_step_property_set_neighborhood template=step_template_property_set
+2026-03-29 00:31:07.961 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_neighborhood').
+2026-03-29 00:31:07.961 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_neighborhood | step_id=job_e261ce05de13_step_property_set_neighborhood | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:31:07.980 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater
+INPUT LOG:
+Input:
+  (none)
+Config values:
+  - template: {{latitude}}, {{longitude}}
+  - values: {"latitude": {"cache_key_ref": {"path": "latitude", "cache_key": "google_places_selected_place"}}, "longitude": {"cache_key_ref": {"path": "longitude", "cache_key": "google_places_selected_place"}}}
+2026-03-29 00:31:07.980 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_coordinates step_id=job_e261ce05de13_step_coordinates_templater template=step_template_templater
+2026-03-29 00:31:07.980 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater | Rendering template (placeholder_keys=['latitude', 'longitude']).
+2026-03-29 00:31:07.980 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_coordinates | step_id=job_e261ce05de13_step_coordinates_templater | template=step_template_templater
+FINAL LOG:
+Output:
+  - rendered_value: 44.9761129, -93.269514
+Status: succeeded
+Runtime_ms: 0.08
+2026-03-29 00:31:07.985 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: Hotel Indigo Minneapolis Downtown by IHG
+Config values:
+  - schema_property_id: prop_name
+2026-03-29 00:31:07.985 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_name step_id=job_e261ce05de13_step_property_set_name template=step_template_property_set
+2026-03-29 00:31:07.985 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_name').
+2026-03-29 00:31:07.985 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_name | step_id=job_e261ce05de13_step_property_set_name | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:31:07.990 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: None
+Config values:
+  - schema_property_id: prop_notes
+2026-03-29 00:31:07.991 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_notes step_id=job_e261ce05de13_step_property_set_notes template=step_template_property_set
+2026-03-29 00:31:07.991 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_notes').
+2026-03-29 00:31:07.991 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_notes | step_id=job_e261ce05de13_step_property_set_notes | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.06
+2026-03-29 00:31:07.994 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion
+INPUT LOG:
+Input:
+  - value: places/ChIJq6qq95kys1IRc3GC1Oi76ic/photos/AU_ZVEHUezQcR0wIVqycJN5ZhrkpA8VUrCcaqI7CRoIHBN0MfyKmhD7MNa76446Z-N5flnRr2dV...
+Config values:
+  (none)
+2026-03-29 00:31:07.994 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_cover_image step_id=job_e261ce05de13_step_cover_upload_notion template=step_template_upload_image_to_notion
+2026-03-29 00:31:07.994 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion | Fetching image bytes from Google Places photo resource.
+2026-03-29 00:31:08.328 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion | Uploading image bytes to Notion (file upload).
+2026-03-29 00:31:08.351 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude
+INPUT LOG:
+Input:
+  - source_value: {"places": [{"id": "ChIJq6qq95kys1IRc3GC1Oi76ic", "types": ["hotel", "casino", "fitness_center", "gym", "lodging", "sports_activity_location", "health", "point_of_interest", "establishment"], "nationalPhoneNumber": "(612) 888-9222", "internationalPhoneNumber": "+1 612-888-9222", "formattedAddress": "618 2nd Ave S, Minneapolis, MN 55402, USA", "addressComp...
+Config values:
+  - allowable_value_eagerness: 3
+  - allowable_values_source: {"target_schema_ref": {"field": "options", "schema_property_id": "prop_tags"}}
+  - max_output_values: 3
+  - max_suggestible_values: 2
+2026-03-29 00:31:08.352 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_tags step_id=job_e261ce05de13_step_constrain_tags template=step_template_ai_constrain_values_claude
+2026-03-29 00:31:08.352 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude | Calling Claude to constrain values (options_count=43, allow_suggest=True).
+2026-03-29 00:31:08.352 | INFO | app.services.claude_service:choose_multi_select_from_context:374 - claude_multi_select_options | property_name=values options=Restaurant, Brewery, Dog Park, Bar, Food Truck, Movie Theater, Entertainment, Nature, Ramen, Pizza, Seafood, Distillery, Arcade, Museum, Always Free, Free Sometimes, Farm, Landmark, Church, History, Prison, Street, Park, Asylum, Beachside, Oktys-Birthday-Dinner-2024, Deli, House, Burger, Diner, Billiards, Art, Donuts, Chicken, Photography, Literature, Planetarium, Hot Dogs, Tacos, Michelin Starred, Shopping, Food, Attractions allow_suggest_new=True
+2026-03-29 00:31:08.352 | INFO | app.services.claude_service:choose_multi_select_from_context:384 - claude_multi_select_request
+2026-03-29 00:31:09.940 | INFO | app.services.claude_service:choose_multi_select_from_context:421 - claude_multi_select_response
+2026-03-29 00:31:09.940 | INFO | app.services.claude_service:choose_multi_select_from_context:427 - claude_multi_select_validated
+2026-03-29 00:31:09.940 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_tags | step_id=job_e261ce05de13_step_constrain_tags | template=step_template_ai_constrain_values_claude
+FINAL LOG:
+Output:
+  - selected_values: ["Attractions"]
+Status: succeeded
+Runtime_ms: 1587.70
+2026-03-29 00:31:09.942 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation
+INPUT LOG:
+Input:
+  - source_value: 618 2nd Ave S, Minneapolis, MN 55402, USA
+Config values:
+  - key_lookup: title
+  - prompt: Match the place to the best Location page (city, neighborhood, or region) based on address. Consider aliases (e.g. Tw...
+  - related_db: target_locations
+2026-03-29 00:31:09.942 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_location step_id=job_e261ce05de13_step_location_ai_select template=step_template_ai_select_relation
+2026-03-29 00:31:09.942 | DEBUG | app.services.job_execution.handlers.ai_select_relation:execute:235 - ai_select_relation_resolved_id | step_id=job_e261ce05de13_step_location_ai_select related_db=target_locations id_source=display_name
+2026-03-29 00:31:09.942 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation | Querying Notion related data source for candidates (related_db='target_locations', key_lookup='title').
+2026-03-29 00:31:10.897 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation | Calling Claude to choose best relation (candidates_count=27).
+2026-03-29 00:31:12.223 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_location | step_id=job_e261ce05de13_step_location_ai_select | template=step_template_ai_select_relation
+FINAL LOG:
+Output:
+  - selected_page_pointer: {"id": "382a494a-909b-464d-b098-4dfa7b101782"}
+  - selected_relation: [{"id": "382a494a-909b-464d-b098-4dfa7b101782"}]
+Status: succeeded
+Runtime_ms: 2280.97
+2026-03-29 00:31:12.238 | INFO | app.services.job_execution.handlers.upload_image_to_notion:execute:176 - notion_upload_token_resolution | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 step_id=job_e261ce05de13_step_cover_upload_notion owner_user_id=a82a22c5-112e-4f10-8558-9664ca110cc7 resolution=oauth reason=none
+2026-03-29 00:31:12.247 | INFO | app.services.notion_service:upload_cover_from_bytes:318 - notion_file_upload_auth | auth_mode=oauth token_fp=8f5644571d66
+2026-03-29 00:31:12.247 | INFO | app.services.notion_service:upload_cover_from_bytes:323 - notion_file_upload_create_started | bytes_len=252107 filename=image.jpg content_type=image/jpeg
+2026-03-29 00:31:12.538 | INFO | app.services.notion_service:upload_cover_from_bytes:339 - notion_file_upload_send_started | upload_id=33286b6e-c531-8196-81c5-00b2ba155c5f
+2026-03-29 00:31:13.829 | INFO | app.services.notion_service:upload_cover_from_bytes:346 - notion_file_upload_status_after_send | upload_id=33286b6e-c531-8196-81c5-00b2ba155c5f status=uploaded
+2026-03-29 00:31:13.829 | INFO | app.services.notion_service:upload_cover_from_bytes:352 - notion_file_upload_uploaded | upload_id=33286b6e-c531-8196-81c5-00b2ba155c5f
+2026-03-29 00:31:13.829 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_cover_image | step_id=job_e261ce05de13_step_cover_upload_notion | template=step_template_upload_image_to_notion
+FINAL LOG:
+Output:
+  - notion_image_url: {"type": "file_upload", "file_upload": {"id": "33286b6e-c531-8196-81c5-00b2ba155c5f"}}
+Status: succeeded
+Runtime_ms: 5834.77
+2026-03-29 00:31:13.859 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: hotel
+Config values:
+  - schema_property_id: prop_main_type
+2026-03-29 00:31:13.859 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_main_type step_id=job_e261ce05de13_step_property_set_main_type template=step_template_property_set
+2026-03-29 00:31:13.860 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_main_type').
+2026-03-29 00:31:13.860 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_main_type | step_id=job_e261ce05de13_step_property_set_main_type | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.09
+2026-03-29 00:31:13.861 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: 618 2nd Ave S, Minneapolis, MN 55402, USA
+Config values:
+  - schema_property_id: prop_address
+2026-03-29 00:31:13.861 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_address step_id=job_e261ce05de13_step_property_set_address template=step_template_property_set
+2026-03-29 00:31:13.861 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_address').
+2026-03-29 00:31:13.861 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_address | step_id=job_e261ce05de13_step_property_set_address | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.08
+2026-03-29 00:31:13.873 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_google_maps | step_id=job_e261ce05de13_step_property_set_google_maps | template=step_template_property_set
+INPUT LOG:
+Input:
+  - value: https://maps.google.com/?cid=2876317920701608307&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA
+Config values:
+  - schema_property_id: prop_google_maps
+2026-03-29 00:31:13.873 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_google_maps step_id=job_e261ce05de13_step_property_set_google_maps template=step_template_property_set
+2026-03-29 00:31:13.873 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_google_maps | step_id=job_e261ce05de13_step_property_set_google_maps | template=step_template_property_set | Recording property for page payload (schema_property_id='prop_google_maps').
+2026-03-29 00:31:13.873 | INFO | app.services.job_execution.step_pipeline_log:emit_step_final:313 - pipeline_step | FINAL | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_google_maps | step_id=job_e261ce05de13_step_property_set_google_maps | template=step_template_property_set
+FINAL LOG:
+Output:
+  (none)
+Status: succeeded
+Runtime_ms: 0.09
+2026-03-29 00:31:13.883 | INFO | app.services.job_execution.step_pipeline_log:emit_step_input:238 - pipeline_step | INPUT | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude
+INPUT LOG:
+Input:
+  - query: Hotel Indigo Minneapolis Downtown by IHG
+Config values:
+  - linked_step_id: job_e261ce05de13_step_icon_search
+  - prompt: Generate a short icon search query (1-3 words) for this place.
+2026-03-29 00:31:13.883 | DEBUG | app.services.job_execution.job_execution_service:_run_step:763 - job_execution_step_start | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 stage_id=job_e261ce05de13_stage_property_setting pipeline_id=job_e261ce05de13_pipeline_icon_image step_id=job_e261ce05de13_step_icon_optimize_query template=step_template_optimize_input_claude
+2026-03-29 00:31:13.883 | WARNING | app.services.job_execution.handlers.optimize_input:_find_linked_step:62 - optimize_input_linked_step_not_found | step_id=job_e261ce05de13_step_icon_optimize_query linked_step_id=job_e261ce05de13_step_icon_search
+2026-03-29 00:31:13.883 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Calling Claude optimize_input (mode=place_query_fallback, linked_template_id=None).
+^C2026-03-29 00:31:14.963 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude API model=claude-sonnet-4-20250514 (optimize_input)
+2026-03-29 00:31:14.963 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude system prompt (full):
+You are a search query optimizer. Rewrite the user's place search into a concise, effective Google Places text query. Return only the query string, no explanation.
+2026-03-29 00:31:14.964 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude user message (full):
+Rewrite for Google Places search: Hotel Indigo Minneapolis Downtown by IHG
+2026-03-29 00:31:14.964 | INFO | app.services.job_execution.step_pipeline_log:processing:201 - pipeline_step | PROCESSING | run_id=c3f49e2b-c9b6-432a-8135-3f06f4c36316 | job_id=loc_e77085a5b5244cb1a53fcb2f56264508 | stage_id=job_e261ce05de13_stage_property_setting | pipeline_id=job_e261ce05de13_pipeline_icon_image | step_id=job_e261ce05de13_step_icon_optimize_query | template=step_template_optimize_input_claude | Claude assistant text (full):
+Hotel Indigo Minneapolis Downtown
+2026-03-29 00:31:14.971 | INFO | __main__:shutdown:319 - worker_shutdown_requested
+2026-03-29 00:31:14.977 | INFO | __main__:_async_worker_main:331 - worker_stopped
+>
+~/Documents/coding/python/notion_place_inserter main *1 !12 ?11 >                                                      INT 12:31:15 AM

@@ -1,13 +1,15 @@
 """Unit tests for Notion OAuth and connection lifecycle routes."""
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.domain.connectors import ConnectorInstance
-from app.domain.targets import DataTarget
+from app.domain.targets import DataTarget, TargetSchemaProperty, TargetSchemaSnapshot
 from app.main import app
+from app.routes.notion_oauth import _serialize_tracked_properties
 from app.services.supabase_auth_repository import USER_TYPE_STANDARD
 
 
@@ -246,3 +248,44 @@ def test_select_data_sources_200_creates_targets(client):
     assert isinstance(saved, DataTarget)
     assert saved.external_target_id == "src-1"
     assert saved.connector_instance_id == NOTION_CONN_ID
+
+
+def test_serialize_tracked_properties_includes_options_for_choice_types():
+    """Choice properties include synced option dicts for data-sources debugging."""
+    snap = TargetSchemaSnapshot(
+        id="snap1",
+        owner_user_id="u1",
+        data_target_id="t1",
+        version="v1",
+        fetched_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        is_active=True,
+        source_connector_instance_id="conn",
+        properties=[
+            TargetSchemaProperty(
+                id="p1",
+                external_property_id="ext1",
+                name="Tags",
+                normalized_slug="tags",
+                property_type="multi_select",
+                options=[{"id": "a", "name": "Foo", "color": "red"}],
+            ),
+            TargetSchemaProperty(
+                id="p2",
+                external_property_id="ext2",
+                name="Title",
+                normalized_slug="title",
+                property_type="title",
+            ),
+        ],
+    )
+    rows = _serialize_tracked_properties(snap)
+    assert len(rows) == 2
+    tags = next(r for r in rows if r["name"] == "Tags")
+    assert tags["property_type"] == "multi_select"
+    assert tags["options"] == [{"id": "a", "name": "Foo", "color": "red"}]
+    title = next(r for r in rows if r["name"] == "Title")
+    assert "options" not in title
+
+
+def test_serialize_tracked_properties_none_snapshot():
+    assert _serialize_tracked_properties(None) == []

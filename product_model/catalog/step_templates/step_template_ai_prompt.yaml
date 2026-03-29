@@ -15,11 +15,21 @@ output_contract:
 config_schema:
   prompt:
     type: string
+    format: multiline
     required: true
-    description: The prompt. Use {{value}} or {{input}} as placeholder; otherwise input is appended.
+    description: The prompt. Use {{value}} or {{input}} as placeholder; otherwise input is appended. The pipeline editor shows a design-time Request preview of the system + user text sent to Claude.
   max_tokens:
     type: integer
     description: Max tokens for the response (default 1024)
+  limit_words:
+    type: integer
+    description: After the model returns, keep only the first N segments when splitting the output by delimiter. Default 0 means no limit (full output).
+  delimiter:
+    type: string
+    description: Delimiter used to split the model output before applying limit_words. Default is a single space. If empty, a space is used.
+  sanitize_output:
+    type: boolean
+    description: When true, strip special characters (including markdown asterisks) from the model output, collapse whitespace, and lowercase the result. Applied after limit_words trimming.
 runtime_binding: ai_prompt
 category: ai
 status: active

@@ -28,6 +28,7 @@ from app.services.trigger_request_body import (
     preview_string_for_log,
     validate_request_body_against_schema,
 )
+from app.services.schema_sync_service import SchemaSyncServiceError
 from app.services.validation_service import ValidationError
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -895,16 +896,11 @@ async def list_data_targets(
     return {"items": items}
 
 
-@router.get("/data-targets/{target_id}/schema")
-async def get_data_target_schema(
+async def _build_data_target_schema_response(
     request: Request,
     target_id: str,
-    ctx: AuthContext = Depends(require_managed_auth),
-):
-    """
-    Fetch active schema for a data target. Owner-scoped.
-    Returns target summary plus properties with name, type, id, select/multi_select options.
-    """
+    ctx: AuthContext,
+) -> dict[str, Any]:
     target_repo = getattr(request.app.state, "target_repository", None)
     if not target_repo:
         return JSONResponse(
@@ -951,6 +947,49 @@ async def get_data_target_schema(
         "schema_snapshot_id": schema.id if schema else None,
         "properties": properties,
     }
+
+
+@router.get("/data-targets/{target_id}/schema")
+async def get_data_target_schema(
+    request: Request,
+    target_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Fetch active schema for a data target. Owner-scoped.
+    Returns target summary plus properties with name, type, id, select/multi_select options.
+    """
+    return await _build_data_target_schema_response(request, target_id, ctx)
+
+
+@router.post("/data-targets/{target_id}/schema/refresh")
+async def refresh_data_target_schema(
+    request: Request,
+    target_id: str,
+    ctx: AuthContext = Depends(require_managed_auth),
+):
+    """
+    Re-fetch live Notion schema for the target, persist a new snapshot, then return
+    the same shape as GET /data-targets/{target_id}/schema.
+    """
+    schema_sync = getattr(request.app.state, "schema_sync_service", None)
+    if not schema_sync:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server misconfiguration: schema sync service not available"},
+        )
+    try:
+        await schema_sync.sync_for_target(target_id, ctx.user_id)
+    except SchemaSyncServiceError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        logger.exception(
+            "schema_refresh_failed | target_id={} owner={}",
+            target_id,
+            ctx.user_id,
+        )
+        raise HTTPException(status_code=500, detail="Schema sync failed") from e
+    return await _build_data_target_schema_response(request, target_id, ctx)
 
 
 @router.get("/step-templates")

@@ -297,40 +297,40 @@ stages:
         display_name: Set Icon Image
         sequence: 15
         steps:
-          - id: step_icon_optimize_query
-            step_template_id: step_template_optimize_input_claude
+          - id: step_icon_ai_prompt
+            step_template_id: step_template_ai_prompt
             sequence: 1
             input_bindings:
-              query:
+              value:
                 cache_key_ref:
                   cache_key: google_places_selected_place
-                  path: displayName
+                  path: types
             config:
-              prompt: Generate a short icon search query (1-3 words) for this place.
-              linked_step_id: step_icon_search
-            failure_policy: continue_with_default
+              prompt: You have to pick one of these words to use as an icon for an image. Pick the best one. Respond with only one word.
+              limit_words: 1
+              sanitize_output: true
           - id: step_icon_search
-            step_template_id: step_template_search_icons
+            step_template_id: step_template_search_icons_iconify
             sequence: 2
             input_bindings:
               query:
-                signal_ref: step.step_icon_optimize_query.optimized_query
+                signal_ref: step.step_icon_ai_prompt.value
             config: {}
             failure_policy: continue_with_default
-          - id: step_icon_upload_notion
-            step_template_id: step_template_upload_image_to_notion
+          - id: step_icon_svg_edit
+            step_template_id: step_template_svg_edit
             sequence: 3
             input_bindings:
-              value:
+              image_url:
                 signal_ref: step.step_icon_search.image_url
-            config: {}
-            failure_policy: continue_with_default
+            config:
+              tint_color: "#cccccc"
           - id: step_icon_property_set
             step_template_id: step_template_property_set
             sequence: 4
             input_bindings:
               value:
-                signal_ref: step.step_icon_upload_notion.notion_image_url
+                signal_ref: step.step_icon_svg_edit.image_url
             config:
               target_kind: page_metadata
               target_field: icon_image

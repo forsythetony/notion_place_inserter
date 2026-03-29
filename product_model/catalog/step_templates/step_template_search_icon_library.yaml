@@ -1,0 +1,56 @@
+id: step_template_search_icon_library
+slug: search_icon_library
+display_name: Search Icon Library
+step_kind: search_icon_library
+description: Search the first-party SVG icon catalog (tag-weighted)
+input_contract:
+  fields:
+    query:
+      type: string
+      required: true
+output_contract:
+  fields:
+    image_url:
+      type: string
+      title: Hosted icon URL
+      summary: Public HTTPS URL for the SVG when a match clears the minimum score.
+      example: "https://media.example.com/icons/00000000-0000-4000-8000-000000000001/original.svg"
+    icon_asset_id:
+      type: string
+      title: Icon asset id
+      summary: UUID of the catalog row (present even on weak matches / misses when a candidate exists).
+      example: "00000000-0000-4000-8000-000000000001"
+    match_score:
+      type: number
+      title: Match score
+      summary: Best tag-based score in [0, 1]; compare to minimum_match_score in config.
+      example: 0.95
+    matched_tags:
+      type: array
+      title: Matched tags
+      summary: Tags that contributed to the score for the top candidate.
+      example:
+        - label: Car
+          normalizedLabel: car
+          weight: 1.0
+config_schema:
+  color_style_preference:
+    type: string
+    description: "Optional filter — light, dark, or multicolor"
+  minimum_match_score:
+    type: number
+    description: "Minimum score to auto-select the top hit (default 0.8)"
+  record_miss:
+    type: boolean
+    description: "When true, upsert icon_search_misses if no strong match"
+runtime_binding: search_icon_library
+category: transform
+status: active
+visibility: platform
+query_schema:
+  api: icon_library
+  type: string
+  description: "Keyword aligned with catalog tags (e.g. car, coffee, bridge)"
+  hints:
+    - "Short conceptual term"
+    - "Match operator-authored tags in the internal library"

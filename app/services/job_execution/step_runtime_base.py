@@ -5,7 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
+from app.services.job_execution.runtime_types import (
+    ExecutionContext,
+    StepExecutionHandle,
+    StepExecutionResult,
+)
 
 
 class StepRuntime(ABC):
@@ -24,8 +28,9 @@ class StepRuntime(ABC):
         ctx: ExecutionContext,
         step_handle: StepExecutionHandle,
         snapshot: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | StepExecutionResult:
         """
-        Execute the step. Returns dict of output_name -> value for downstream bindings.
+        Execute the step. Returns a dict of output_name -> value for downstream bindings,
+        or a :class:`StepExecutionResult` for structured success / degraded / fatal outcomes.
         """
         ...

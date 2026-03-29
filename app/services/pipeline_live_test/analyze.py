@@ -52,6 +52,13 @@ _TEMPLATE_EXTERNAL_CALLS: dict[str, list[dict[str, Any]]] = {
             "provider": "freepik",
         }
     ],
+    "step_template_search_icons_iconify": [
+        {
+            "call_site_id": "iconify.search_icons",
+            "label": "Iconify (search icons)",
+            "provider": "iconify",
+        }
+    ],
     "step_template_upload_image_to_notion": [
         {
             "call_site_id": "notion.upload_image",
@@ -59,12 +66,25 @@ _TEMPLATE_EXTERNAL_CALLS: dict[str, list[dict[str, Any]]] = {
             "provider": "notion",
         }
     ],
+    "step_template_svg_edit": [
+        {
+            "call_site_id": "http.svg_fetch",
+            "label": "HTTP (fetch SVG)",
+            "provider": "http",
+        },
+        {
+            "call_site_id": "r2.put_object",
+            "label": "R2 (upload tinted SVG)",
+            "provider": "r2",
+        },
+    ],
 }
 
 _DESTINATION_WRITE_TEMPLATES = frozenset(
     {
         "step_template_property_set",
         "step_template_upload_image_to_notion",
+        "step_template_svg_edit",
     }
 )
 

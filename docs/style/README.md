@@ -17,5 +17,6 @@ Treat that styleguide as the contract for UI work; this backend repo only keeps 
 
 - [design-direction-options.md](./design-direction-options.md) — decided palette direction (Option A — Calm Graphite) and rationale before tokens were finalized
 - [admin-theming-design-tokens-research.md](./admin-theming-design-tokens-research.md) — admin-configurable palette / tokens / presets (industry patterns + product direction; not implementation spec)
+- [step-observability-resilience-guide.md](./step-observability-resilience-guide.md) — short engineering note on step error handling and observability conventions; stored here intentionally as a local documentation override
 
 Superseded notes can move under [archive/](./archive/).

@@ -7,9 +7,15 @@ import pytest
 from app.services.freepik_service import RAMEN_ICON_STOPGAP_URL
 from app.services.job_execution.binding_resolver import resolve_binding, resolve_input_bindings
 from app.services.job_execution.job_execution_service import JobExecutionService
-from app.services.job_execution.runtime_types import ExecutionContext, StepExecutionHandle
+from app.services.job_execution.runtime_types import (
+    ExecutionContext,
+    StepExecutionHandle,
+    StepExecutionResult,
+)
 from app.services.job_execution.step_pipeline_log import StepPipelineLog
+from app.services.iconify_service import IconifyAPIError
 from app.services.job_execution.handlers import (
+    AiConstrainValuesClaudeHandler,
     AiPromptHandler,
     AiSelectRelationHandler,
     CacheGetHandler,
@@ -18,8 +24,16 @@ from app.services.job_execution.handlers import (
     OptimizeInputClaudeHandler,
     PropertySetHandler,
     SearchIconsHandler,
+    SearchIconsIconifyHandler,
     TemplaterHandler,
     UploadImageToNotionHandler,
+)
+from app.services.job_execution.handlers.ai_prompt import sanitize_ai_prompt_output, trim_ai_prompt_output
+from app.services.claude_service import ClaudeAPIError
+from app.services.job_execution.step_error import (
+    default_outputs_for_step,
+    infer_provider_for_exception,
+    infer_retryable_for_exception,
 )
 from app.services.job_execution.step_runtime_base import StepRuntime
 from app.services.job_execution.step_runtime_registry import StepRuntimeRegistry
@@ -357,14 +371,14 @@ async def test_property_set_handler_page_metadata_converts_url_string():
     assert ctx.cover == {"type": "external", "external": {"url": "https://example.com/img.png"}}
 
 
-async def test_data_transform_handler_extract_key():
-    """DataTransformHandler extracts value at source_path."""
+async def test_data_transform_handler_extracts_nested_value_with_jmespath():
+    """DataTransformHandler extracts a nested value via JMESPath."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = DataTransformHandler()
     value = {"photos": [{"name": "places/abc/photos/xyz"}, {"name": "places/def/photos/uvw"}]}
     result = await handler.execute(
         step_id="step_transform",
-        config={"operation": "extract_key", "source_path": "photos[0].name"},
+        config={"expression": "photos[0].name"},
         input_bindings={"value": {}},
         resolved_inputs={"value": value},
         ctx=ctx,
@@ -374,15 +388,70 @@ async def test_data_transform_handler_extract_key():
     assert result["transformed_value"] == "places/abc/photos/xyz"
 
 
-async def test_data_transform_handler_returns_fallback_when_path_missing():
-    """DataTransformHandler returns fallback_value when path missing."""
+async def test_data_transform_handler_extracts_root_array_element():
+    """DataTransformHandler supports root array indexing via JMESPath."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    handler = DataTransformHandler()
+    result = await handler.execute(
+        step_id="step_transform",
+        config={"expression": "[0]"},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": ["first", "second"]},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["transformed_value"] == "first"
+
+
+async def test_data_transform_handler_projects_array_values():
+    """DataTransformHandler supports array projection via JMESPath."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    handler = DataTransformHandler()
+    result = await handler.execute(
+        step_id="step_transform",
+        config={"expression": "[*].firstProp"},
+        input_bindings={"value": {}},
+        resolved_inputs={
+            "value": [
+                {"firstProp": "a", "other": 1},
+                {"firstProp": "b", "other": 2},
+            ]
+        },
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["transformed_value"] == ["a", "b"]
+
+
+async def test_data_transform_handler_returns_fallback_when_expression_missing_value():
+    """DataTransformHandler returns fallback_value when expression yields no result."""
     ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
     handler = DataTransformHandler()
     result = await handler.execute(
         step_id="step_transform",
         config={
-            "operation": "extract_key",
-            "source_path": "photos[0].url",
+            "expression": "photos[0].url",
+            "fallback_value": "default.jpg",
+        },
+        input_bindings={"value": {}},
+        resolved_inputs={"value": {"photos": [{"name": "x"}]}},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["transformed_value"] == "default.jpg"
+
+
+async def test_data_transform_handler_returns_fallback_for_invalid_expression():
+    """DataTransformHandler returns fallback_value when the JMESPath expression is invalid."""
+    ctx = ExecutionContext(run_id="r1", job_id="j1", definition_snapshot_ref=None, trigger_payload={})
+    handler = DataTransformHandler()
+    result = await handler.execute(
+        step_id="step_transform",
+        config={
+            "expression": "[",
             "fallback_value": "default.jpg",
         },
         input_bindings={"value": {}},
@@ -1044,15 +1113,21 @@ async def test_ai_prompt_handler_returns_value_when_claude_available():
     )
     claude = MagicMock()
     claude.prompt_completion.return_value = "A charming café in downtown."
+    claude.get_last_usage.return_value = {
+        "input_tokens": 1,
+        "output_tokens": 2,
+        "model": "claude-mock",
+    }
     ctx._services["claude"] = claude
     handler = AiPromptHandler()
+    step_handle = _make_step_handle()
     result = await handler.execute(
         step_id="step_ai_prompt",
         config={"prompt": "Rewrite into a travel note."},
         input_bindings={"value": {}},
         resolved_inputs={"value": {"displayName": "Joe's Coffee", "formattedAddress": "123 Main St"}},
         ctx=ctx,
-        step_handle=_make_step_handle(),
+        step_handle=step_handle,
         snapshot={},
     )
     assert result["value"] == "A charming café in downtown."
@@ -1061,6 +1136,285 @@ async def test_ai_prompt_handler_returns_value_when_claude_available():
         value={"displayName": "Joe's Coffee", "formattedAddress": "123 Main St"},
         max_tokens=1024,
     )
+    lines = step_handle.pipeline_log.processing_lines
+    assert any("[StepRuntime] Calling claude ai_prompt" in line for line in lines)
+    assert any("[ClaudeService]" in line for line in lines)
+    assert any("[StepRuntime] Received successful response" in line for line in lines)
+
+
+async def test_ai_prompt_handler_processing_log_uses_llm_trace_when_present():
+    """When mock exposes get_last_ai_prompt_llm_trace, service lines use trace fields."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "model out"
+    claude.get_last_ai_prompt_llm_trace.return_value = {
+        "model": "claude-test",
+        "max_tokens": 1024,
+        "user_message": "constructed user body",
+        "assistant_text": "model out",
+        "usage": {"input_tokens": 3, "output_tokens": 4},
+    }
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    step_handle = _make_step_handle()
+    await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "Do the thing."},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "input val"},
+        ctx=ctx,
+        step_handle=step_handle,
+        snapshot={},
+    )
+    blob = "\n".join(step_handle.pipeline_log.processing_lines)
+    assert "Calling prompt with model `claude-test`" in blob
+    assert "constructed user body" in blob
+    assert "Successful response of `model out`" in blob
+    assert "tokens consumed in=3 out=4" in blob
+
+
+def test_sanitize_ai_prompt_output_strips_special_chars_and_lowercases():
+    assert sanitize_ai_prompt_output("**Bar**") == "bar"
+    assert sanitize_ai_prompt_output("  Foo-Bar!  ") == "foobar"
+    assert sanitize_ai_prompt_output("one  two") == "one two"
+
+
+async def test_ai_prompt_handler_processing_log_includes_transform_when_trim():
+    """limit_words triggers a Transforming processing line when output changes."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "alpha beta gamma delta"
+    claude.get_last_ai_prompt_llm_trace.return_value = {
+        "model": "claude-test",
+        "max_tokens": 1024,
+        "user_message": "x",
+        "assistant_text": "alpha beta gamma delta",
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+    }
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    step_handle = _make_step_handle()
+    await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "limit_words": 2},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=step_handle,
+        snapshot={},
+    )
+    assert any(
+        "[StepRuntime] Transforming response" in line
+        and "alpha beta gamma delta" in line
+        and "alpha beta" in line
+        for line in step_handle.pipeline_log.processing_lines
+    )
+
+
+async def test_ai_prompt_handler_processing_log_includes_transform_when_sanitize():
+    """sanitize_output triggers a Transforming processing line when output changes."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "**Bar**"
+    claude.get_last_ai_prompt_llm_trace.return_value = {
+        "model": "claude-test",
+        "max_tokens": 1024,
+        "user_message": "x",
+        "assistant_text": "**Bar**",
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+    }
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    step_handle = _make_step_handle()
+    await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "sanitize_output": True},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=step_handle,
+        snapshot={},
+    )
+    assert any(
+        "[StepRuntime] Transforming response" in line and "**Bar**" in line and "bar" in line
+        for line in step_handle.pipeline_log.processing_lines
+    )
+
+
+def test_trim_ai_prompt_output_no_limit_or_invalid():
+    assert trim_ai_prompt_output("a b c", limit_words=0, delimiter=" ") == "a b c"
+    assert trim_ai_prompt_output("a b c", limit_words=-1, delimiter=" ") == "a b c"
+    assert trim_ai_prompt_output("a b c", limit_words="bad", delimiter=" ") == "a b c"
+
+
+def test_trim_ai_prompt_output_space_and_custom_delimiter():
+    assert trim_ai_prompt_output("one two three four", limit_words=2, delimiter=" ") == "one two"
+    assert trim_ai_prompt_output("a|b|c", limit_words=2, delimiter="|") == "a|b"
+
+
+def test_trim_ai_prompt_output_empty_delimiter_falls_back_to_space():
+    """Empty delimiter in config is normalized to space so split/join is safe."""
+    assert trim_ai_prompt_output("x y z", limit_words=1, delimiter="") == "x"
+
+
+async def test_ai_prompt_handler_truncates_output_when_limit_words_set():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "alpha beta gamma delta"
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "limit_words": 2},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "alpha beta"
+
+
+async def test_ai_prompt_handler_truncates_with_custom_delimiter():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "p1|p2|p3"
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "limit_words": 2, "delimiter": "|"},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "p1|p2"
+
+
+async def test_ai_prompt_handler_sanitize_output():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "**Bar**"
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "sanitize_output": True},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "bar"
+
+
+async def test_ai_prompt_handler_sanitize_after_limit_words():
+    """Sanitize runs after limit_words trimming."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    claude = MagicMock()
+    claude.prompt_completion.return_value = "**Alpha** **Beta**"
+    ctx._services["claude"] = claude
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "limit_words": 1, "delimiter": " ", "sanitize_output": True},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "alpha"
+
+
+async def test_ai_prompt_handler_manual_override_applies_limit_words():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+        api_overrides={
+            "claude.ai_prompt": {
+                "enabled": False,
+                "manual_response": "one two three",
+            }
+        },
+    )
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "limit_words": 2},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "one two"
+
+
+async def test_ai_prompt_handler_manual_override_applies_sanitize_output():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+        api_overrides={
+            "claude.ai_prompt": {
+                "enabled": False,
+                "manual_response": "**Pub**",
+            }
+        },
+    )
+    handler = AiPromptHandler()
+    result = await handler.execute(
+        step_id="step_ai_prompt",
+        config={"prompt": "x", "sanitize_output": True},
+        input_bindings={"value": {}},
+        resolved_inputs={"value": "in"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result["value"] == "pub"
 
 
 async def test_ai_prompt_handler_returns_empty_when_no_claude():
@@ -1082,6 +1436,214 @@ async def test_ai_prompt_handler_returns_empty_when_no_claude():
         snapshot={},
     )
     assert result["value"] == ""
+
+
+_SNAPSHOT_CONSTRAIN = {
+    "active_schema": {
+        "properties": [
+            {
+                "id": "prop_tags",
+                "external_property_id": "tags",
+                "property_type": "multi_select",
+                "options": [
+                    {"id": "o1", "name": "History"},
+                    {"id": "o2", "name": "Landmark"},
+                ],
+            },
+        ],
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_ai_constrain_values_handler_success_with_mock_claude():
+    """AiConstrainValuesClaudeHandler returns selected_values and logs processing."""
+    claude = MagicMock()
+    claude.choose_multi_select_from_context.return_value = ["History", "Landmark"]
+    claude.clear_last_multi_select_trace = MagicMock()
+    claude.get_last_multi_select_llm_trace.return_value = {
+        "model": "claude-3-test",
+        "max_tokens": 256,
+        "user_message": "prompt body",
+        "assistant_text": '{"values":["History","Landmark"]}',
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    }
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    ctx._services["claude"] = claude
+    handle = _make_step_handle()
+    handler = AiConstrainValuesClaudeHandler()
+    result = await handler.execute(
+        step_id="step_constrain",
+        config={
+            "allowable_values_source": {
+                "target_schema_ref": {
+                    "schema_property_id": "prop_tags",
+                    "field": "options",
+                }
+            },
+            "allowable_value_eagerness": 1,
+            "max_output_values": 5,
+        },
+        input_bindings={},
+        resolved_inputs={"source_value": {"primaryType": "museum"}},
+        ctx=ctx,
+        step_handle=handle,
+        snapshot=_SNAPSHOT_CONSTRAIN,
+    )
+    assert result == {"selected_values": ["History", "Landmark"]}
+    claude.choose_multi_select_from_context.assert_called_once()
+    log_text = "\n".join(handle.pipeline_log.processing_lines)
+    assert "[StepRuntime] Input summary:" in log_text
+    assert "[StepRuntime] Configuration summary:" in log_text
+    assert "[ClaudeService] Calling prompt with model" in log_text
+    assert "[StepRuntime] Output summary:" in log_text
+
+
+@pytest.mark.asyncio
+async def test_ai_constrain_values_handler_missing_claude_structured_fail():
+    """Without Claude service, handler returns structured failed StepExecutionResult."""
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    handle = _make_step_handle()
+    handler = AiConstrainValuesClaudeHandler()
+    result = await handler.execute(
+        step_id="step_constrain",
+        config={
+            "allowable_values_source": {
+                "target_schema_ref": {
+                    "schema_property_id": "prop_tags",
+                    "field": "options",
+                }
+            },
+        },
+        input_bindings={},
+        resolved_inputs={"source_value": {}},
+        ctx=ctx,
+        step_handle=handle,
+        snapshot=_SNAPSHOT_CONSTRAIN,
+    )
+    assert isinstance(result, StepExecutionResult)
+    assert result.outcome == "failed"
+    assert result.error_detail is not None
+    assert result.error_detail.get("service") == "ClaudeService"
+    assert result.error_detail.get("retryable") is False
+    assert "[StepRuntime] step failed" in "\n".join(handle.pipeline_log.processing_lines)
+
+
+@pytest.mark.asyncio
+async def test_ai_constrain_values_handler_claude_api_error_structured_fail():
+    """ClaudeAPIError from service becomes structured failed result."""
+    claude = MagicMock()
+    claude.clear_last_multi_select_trace = MagicMock()
+    claude.choose_multi_select_from_context.side_effect = ClaudeAPIError(
+        "Anthropic API request failed: rate limit",
+        operation="choose_multi_select_from_context",
+        status_code=429,
+        retryable=True,
+        details={"exception_type": "RateLimitError"},
+    )
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    ctx._services["claude"] = claude
+    handle = _make_step_handle()
+    handler = AiConstrainValuesClaudeHandler()
+    result = await handler.execute(
+        step_id="step_constrain",
+        config={
+            "allowable_values_source": {
+                "target_schema_ref": {
+                    "schema_property_id": "prop_tags",
+                    "field": "options",
+                }
+            },
+        },
+        input_bindings={},
+        resolved_inputs={"source_value": {"x": 1}},
+        ctx=ctx,
+        step_handle=handle,
+        snapshot=_SNAPSHOT_CONSTRAIN,
+    )
+    assert isinstance(result, StepExecutionResult)
+    assert result.outcome == "failed"
+    assert result.error_detail.get("retryable") is True
+    assert result.error_detail.get("details", {}).get("exception_type") == "RateLimitError"
+
+
+@pytest.mark.asyncio
+async def test_run_step_ai_constrain_structured_fail_continue_with_default():
+    """failure_policy continue_with_default recovers with empty selected_values when step fails structured."""
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_ai_constrain_values_claude", AiConstrainValuesClaudeHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_constrain",
+            "step_template_id": "step_template_ai_constrain_values_claude",
+            "sequence": 1,
+            "input_bindings": {"source_value": {"static_value": {"k": 1}}},
+            "config": {
+                "allowable_values_source": {
+                    "target_schema_ref": {
+                        "schema_property_id": "prop_tags",
+                        "field": "options",
+                    }
+                },
+            },
+            "failure_policy": "continue_with_default",
+        },
+        ctx=ctx,
+        snapshot=_SNAPSHOT_CONSTRAIN,
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    assert ctx.get_step_output("step_constrain", "selected_values") == []
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "continued_with_default"
+
+
+def test_default_outputs_ai_constrain_values():
+    assert default_outputs_for_step(
+        "step_template_ai_constrain_values_claude",
+        resolved_inputs={},
+    ) == {"selected_values": []}
+
+
+def test_infer_claude_api_error_provider_and_retryable():
+    exc = ClaudeAPIError(
+        "x",
+        operation="choose_multi_select_from_context",
+        status_code=503,
+        retryable=True,
+        details={},
+    )
+    assert infer_provider_for_exception(exc) == "anthropic"
+    assert infer_retryable_for_exception(exc) is True
 
 
 async def test_step_runtime_registry_get_returns_handler():
@@ -1873,3 +2435,252 @@ async def test_run_step_failure_policy_continue_empty_outputs():
     assert last.status == "succeeded"
     assert last.output_summary.get("step_outcome") == "continued_with_error"
     assert last.output_summary.get("outputs") == {}
+
+
+def test_step_error_iconify_provider_retryable_and_default_outputs():
+    err = IconifyAPIError("boom", status_code=503)
+    assert infer_provider_for_exception(err) == "iconify"
+    assert infer_retryable_for_exception(err) is True
+    assert default_outputs_for_step(
+        "step_template_search_icons_iconify",
+        resolved_inputs={},
+    ) == {"image_url": None}
+
+
+@pytest.mark.asyncio
+async def test_search_icons_iconify_handler_empty_query():
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    handler = SearchIconsIconifyHandler()
+    result = await handler.execute(
+        step_id="s1",
+        config={},
+        input_bindings={},
+        resolved_inputs={"query": "   "},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result == {"image_url": None}
+
+
+@pytest.mark.asyncio
+async def test_search_icons_iconify_handler_returns_first_svg_url():
+    mock_iconify = MagicMock()
+    mock_iconify.get_first_icon_svg_url.return_value = (
+        "https://api.iconify.design/mdi/food-ramen.svg"
+    )
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    ctx._services["iconify"] = mock_iconify
+    handler = SearchIconsIconifyHandler()
+    result = await handler.execute(
+        step_id="s1",
+        config={},
+        input_bindings={},
+        resolved_inputs={"query": "ramen"},
+        ctx=ctx,
+        step_handle=_make_step_handle(),
+        snapshot={},
+    )
+    assert result == {"image_url": "https://api.iconify.design/mdi/food-ramen.svg"}
+    mock_iconify.get_first_icon_svg_url.assert_called_once_with("ramen")
+
+
+@pytest.mark.asyncio
+async def test_run_step_failure_policy_continue_with_default_iconify():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_search_icons_iconify", _FailingStepHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_icon_search",
+            "step_template_id": "step_template_search_icons_iconify",
+            "sequence": 1,
+            "input_bindings": {"query": {"static_value": "x"}},
+            "config": {},
+            "failure_policy": "continue_with_default",
+        },
+        ctx=ctx,
+        snapshot={},
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    assert ctx.get_step_output("step_icon_search", "image_url") is None
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "continued_with_default"
+    assert last.error_detail is not None
+
+
+class _StructuredDegradedHandler(StepRuntime):
+    async def execute(
+        self,
+        step_id: str,
+        config: dict,
+        input_bindings: dict,
+        resolved_inputs: dict,
+        ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
+        snapshot: dict,
+    ) -> StepExecutionResult:
+        return StepExecutionResult(
+            outputs={"image_url": "", "probe": "ok"},
+            outcome="degraded",
+            error_message="degraded for test",
+            error_detail={"reason": "test"},
+            warnings=["w1"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_step_structured_degraded_persists_outputs_and_error_detail():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_structured_probe", _StructuredDegradedHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_probe",
+            "step_template_id": "step_template_structured_probe",
+            "sequence": 1,
+            "input_bindings": {},
+            "config": {},
+        },
+        ctx=ctx,
+        snapshot={},
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    assert ctx.get_step_output("step_probe", "image_url") == ""
+    assert ctx.get_step_output("step_probe", "probe") == "ok"
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "structured_degraded"
+    assert last.error_detail is not None
+    assert last.error_detail.get("source") == "structured_step_result"
+    assert "WARNING: w1" in "\n".join(last.processing_log or [])
+
+
+class _StructuredFailedHandler(StepRuntime):
+    async def execute(
+        self,
+        step_id: str,
+        config: dict,
+        input_bindings: dict,
+        resolved_inputs: dict,
+        ctx: ExecutionContext,
+        step_handle: StepExecutionHandle,
+        snapshot: dict,
+    ) -> StepExecutionResult:
+        return StepExecutionResult(
+            outputs={},
+            outcome="failed",
+            error_message="structured fatal",
+            error_detail={"reason": "fatal_test"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_step_structured_failed_respects_failure_policy_fail():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_structured_fail", _StructuredFailedHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    with pytest.raises(RuntimeError, match="structured fatal"):
+        await svc._run_step(
+            step_data={
+                "id": "step_fail",
+                "step_template_id": "step_template_structured_fail",
+                "sequence": 1,
+                "input_bindings": {},
+                "config": {},
+            },
+            ctx=ctx,
+            snapshot={},
+            stage_id="st1",
+            pipeline_id="p1",
+            job_run_id="jr1",
+            stage_run_id="sr1",
+            pipeline_run_id="pr1",
+            owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+        )
+    failed_calls = [c.args[0] for c in run_repo.save_step_run.call_args_list if c.args[0].status == "failed"]
+    assert failed_calls
+    failed = failed_calls[-1]
+    assert failed.error_detail.get("source") == "structured_step_result"
+    assert failed.error_detail.get("type") == "StructuredStepFailure"
+
+
+@pytest.mark.asyncio
+async def test_run_step_structured_failed_continue_with_default_recover():
+    reg = StepRuntimeRegistry()
+    reg.register("step_template_structured_fail", _StructuredFailedHandler)
+    run_repo = MagicMock()
+    run_repo.save_step_run = AsyncMock()
+    svc = JobExecutionService(step_registry=reg, run_repository=run_repo)
+    ctx = ExecutionContext(
+        run_id="r1",
+        job_id="j1",
+        definition_snapshot_ref=None,
+        trigger_payload={},
+    )
+    await svc._run_step(
+        step_data={
+            "id": "step_fail",
+            "step_template_id": "step_template_structured_fail",
+            "sequence": 1,
+            "input_bindings": {"query": {"static_value": "q"}},
+            "config": {},
+            "failure_policy": "continue_with_default",
+        },
+        ctx=ctx,
+        snapshot={},
+        stage_id="st1",
+        pipeline_id="p1",
+        job_run_id="jr1",
+        stage_run_id="sr1",
+        pipeline_run_id="pr1",
+        owner_user_id="871ba2fa-fd5d-4a81-9f0d-0d98b348ccde",
+    )
+    last = run_repo.save_step_run.call_args_list[-1].args[0]
+    assert last.status == "succeeded"
+    assert last.output_summary.get("step_outcome") == "continued_with_default"

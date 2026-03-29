@@ -25,8 +25,7 @@ Define a reusable, YAML-backed pipeline architecture for setting Notion page cov
    - Purpose: small deterministic transform over step input.
    - Typical operation for cover: extract a single URL from array/object payload.
    - Suggested config:
-     - `operation` (e.g. `extract_key`, `first_non_empty`, `json_path`)
-     - `source_path` (e.g. `photos[0].url`)
+     - `expression` (JMESPath, e.g. `photos[0].url`, `[0]`, `[*].url`)
      - `fallback_value` (optional)
    - Output: `transformed_value`
 
@@ -155,7 +154,7 @@ Add/extend save-time and execution-time validation:
 
 1. `Property Set` with `target_kind: page_metadata` must use supported `target_field`.
 2. `Upload Image to Notion` input must resolve to non-empty URL string.
-3. `Data Transform` must declare a deterministic operation and source path.
+3. `Data Transform` must declare a deterministic expression.
 4. `Search Icons` output must normalize to one URL.
 5. Existing terminal-step rule remains unchanged (`Cache Set` or `Property Set`).
 
@@ -163,7 +162,7 @@ Add/extend save-time and execution-time validation:
 
 Track per-step run summaries for debugging:
 
-- `Data Transform`: selected path + output length (not full payload)
+- `Data Transform`: selected expression + output length (not full payload)
 - `Upload Image to Notion`: source host + upload result status + returned URL domain
 - `Property Set`: `target_kind`, `target_field`, write status
 

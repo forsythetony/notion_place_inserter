@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.dependencies import AuthContext, require_managed_auth
-from app.domain.targets import DataTarget, TargetSchemaSnapshot
+from app.domain.targets import DataTarget, TargetSchemaProperty, TargetSchemaSnapshot
 from app.services.notion_oauth_service import (
     is_notion_oauth_configured,
     NotionOAuthService,
@@ -100,10 +100,40 @@ def _pick_canonical_target_for_source(
     return sorted(targets_for_eid, key=lambda t: t.id)[0]
 
 
-def _serialize_tracked_properties(snapshot: TargetSchemaSnapshot | None) -> list[dict[str, str]]:
+# Notion property kinds that expose enumerated options in synced schema (tags / choices).
+_CHOICE_PROPERTY_TYPES = frozenset({"select", "multi_select", "status"})
+
+
+def _option_dict_for_api(opt: dict[str, Any]) -> dict[str, Any]:
+    """Keep stable keys for UI debugging (matches /management/data-targets/{id}/schema shape)."""
+    out: dict[str, Any] = {}
+    if "id" in opt:
+        out["id"] = opt["id"]
+    if "name" in opt:
+        out["name"] = opt["name"]
+    if "color" in opt:
+        out["color"] = opt["color"]
+    return out
+
+
+def _serialize_tracked_property(p: TargetSchemaProperty) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "name": p.name,
+        "property_type": p.property_type,
+    }
+    if p.property_type in _CHOICE_PROPERTY_TYPES and p.options:
+        row["options"] = [
+            _option_dict_for_api(o)
+            for o in p.options
+            if isinstance(o, dict)
+        ]
+    return row
+
+
+def _serialize_tracked_properties(snapshot: TargetSchemaSnapshot | None) -> list[dict[str, Any]]:
     if not snapshot or not snapshot.properties:
         return []
-    return [{"name": p.name, "property_type": p.property_type} for p in snapshot.properties]
+    return [_serialize_tracked_property(p) for p in snapshot.properties]
 
 
 async def _build_data_source_management_response(
@@ -166,7 +196,7 @@ async def _build_data_source_management_response(
         canonical = _pick_canonical_target_for_source(eid, match) if is_tracked else None
 
         last_sync: datetime | None = None
-        tracked_props: list[dict[str, str]] = []
+        tracked_props: list[dict[str, Any]] = []
         tracked_tid: str | None = None
         if canonical:
             tracked_tid = canonical.id

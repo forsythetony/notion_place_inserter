@@ -16,6 +16,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.services.claude_service import ClaudeService
 from app.services.freepik_service import FreepikService
+from app.services.iconify_service import IconifyService
+from app.services.icon_catalog_service import IconCatalogService
+from app.services.r2_media_storage_service import R2MediaStorageService
 from app.services.google_places_service import GooglePlacesService
 from app.services.location_service import LocationService
 from app.services.notion_service import NotionService
@@ -55,6 +58,7 @@ from app.repositories.supabase_beta_waitlist_repository import (
     SupabaseBetaWaitlistRepository,
 )
 from app.routes import (
+    admin_icons,
     auth_admin,
     auth_context,
     eula,
@@ -281,11 +285,17 @@ async def lifespan(app: FastAPI):
 
     freepik_key = os.environ.get("FREEPIK_API_KEY")
     freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
+    iconify_svc = IconifyService()
+
+    r2_storage = R2MediaStorageService.from_env()
+    app.state.r2_media_storage = r2_storage
+    app.state.icon_catalog_service = IconCatalogService(supabase_client, r2_storage)
 
     app.state.notion_service = notion_svc
     app.state.claude_service = ClaudeService(api_key=anthropic_token)
     app.state.google_places_service = GooglePlacesService(api_key=google_places_key)
     app.state.freepik_service = freepik_svc
+    app.state.iconify_service = iconify_svc
     app.state.location_service = LocationService(
         notion_service=notion_svc,
         claude_service=app.state.claude_service,
@@ -369,6 +379,9 @@ async def lifespan(app: FastAPI):
         claude_service=app.state.claude_service,
         google_places_service=app.state.google_places_service,
         freepik_service=freepik_svc,
+        iconify_service=iconify_svc,
+        icon_catalog_service=app.state.icon_catalog_service,
+        r2_media_storage=r2_storage,
         dry_run=dry_run,
         run_repository=postgres_run_repo,
         get_notion_token_fn=notion_oauth_svc.get_access_token,
@@ -473,6 +486,7 @@ app.include_router(public_waitlist.router)
 app.include_router(eula.public_router)
 app.include_router(invitations.router)
 app.include_router(auth_admin.router)
+app.include_router(admin_icons.router)
 app.include_router(eula.admin_router)
 app.include_router(locations.router)
 app.include_router(test.router)

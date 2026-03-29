@@ -1,0 +1,33 @@
+id: step_template_search_icons_iconify
+slug: search_icons_iconify
+display_name: Search Icons (Iconify)
+step_kind: search_icons_iconify
+description: Search the Iconify public icon index and return an SVG URL for the top hit
+input_contract:
+  fields:
+    query:
+      type: string
+      required: true
+output_contract:
+  fields:
+    image_url:
+      type: string
+config_schema:
+  connector_instance_id:
+    type: string
+  provider:
+    type: string
+  result_preference:
+    type: string
+runtime_binding: search_icons_iconify
+category: transform
+status: active
+visibility: platform
+query_schema:
+  api: iconify_icons
+  type: string
+  description: "Short keyword for Iconify icon search"
+  hints:
+    - "1 word or short phrase"
+    - "Visual or conceptual term (e.g. bridge, ramen, travel)"
+    - "Avoid proper names unless the place is a well-known landmark; focus on what the place represents"

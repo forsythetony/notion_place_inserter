@@ -20,6 +20,39 @@ class OptionSelectionResult(NamedTuple):
     is_new: bool
 
 
+def _retryable_for_http_status(status_code: int | None) -> bool | None:
+    """Whether an HTTP status suggests a later retry may succeed."""
+    if status_code is None:
+        return None
+    return status_code in (408, 429, 500, 502, 503, 504)
+
+
+class ClaudeAPIError(Exception):
+    """
+    Structured failure from the Anthropic API boundary for step handlers.
+
+    Carries fields aligned with docs/style/step-observability-resilience-guide.md.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        operation: str,
+        status_code: int | None = None,
+        retryable: bool | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.service = "ClaudeService"
+        self.operation = operation
+        self.status_code = status_code
+        self.retryable = retryable if retryable is not None else _retryable_for_http_status(
+            status_code
+        )
+        self.details = details or {}
+
+
 class ClaudeService:
     """Wraps the Anthropic API client for poem generation and place/property inference."""
 
@@ -27,6 +60,24 @@ class ClaudeService:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._last_usage: dict | None = None
         self._last_optimize_llm_trace: dict[str, Any] | None = None
+        self._last_ai_prompt_trace: dict[str, Any] | None = None
+        self._last_multi_select_trace: dict[str, Any] | None = None
+
+    def clear_last_ai_prompt_trace(self) -> None:
+        """Reset snapshot from last :meth:`prompt_completion` (e.g. before a new step)."""
+        self._last_ai_prompt_trace = None
+
+    def get_last_ai_prompt_llm_trace(self) -> dict[str, Any] | None:
+        """Last ai_prompt call: model, max_tokens, system/user/assistant text (truncated), usage."""
+        return self._last_ai_prompt_trace
+
+    def clear_last_multi_select_trace(self) -> None:
+        """Reset snapshot from last :meth:`choose_multi_select_from_context` (e.g. before a new step)."""
+        self._last_multi_select_trace = None
+
+    def get_last_multi_select_llm_trace(self) -> dict[str, Any] | None:
+        """Last multi-select call: model, max_tokens, system/user/assistant text (truncated), usage."""
+        return self._last_multi_select_trace
 
     def clear_last_optimize_input_trace(self) -> None:
         """Reset snapshot from last rewrite_place_query / rewrite_query_for_target (e.g. new step)."""
@@ -49,6 +100,46 @@ class ClaudeService:
             "system_prompt": self._truncate_text(system, max_chars=12000),
             "user_message": self._truncate_text(user_message, max_chars=12000),
             "assistant_text": self._truncate_text(response_text, max_chars=8000),
+        }
+
+    def _record_ai_prompt_trace(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        assistant_text: str,
+        max_tokens: int,
+        model: str = _MODEL_AI_PROMPT,
+    ) -> None:
+        usage = self._last_usage
+        self._last_ai_prompt_trace = {
+            "operation": "ai_prompt",
+            "model": model,
+            "max_tokens": max_tokens,
+            "system_prompt": self._truncate_text(system_prompt, max_chars=12000),
+            "user_message": self._truncate_text(user_message, max_chars=12000),
+            "assistant_text": self._truncate_text(assistant_text, max_chars=8000),
+            "usage": dict(usage) if usage else None,
+        }
+
+    def _record_multi_select_trace(
+        self,
+        *,
+        system: str,
+        user_message: str,
+        assistant_text: str,
+        model: str = _MODEL_SONNET,
+        max_tokens: int = 256,
+    ) -> None:
+        usage = self._last_usage
+        self._last_multi_select_trace = {
+            "operation": "choose_multi_select_from_context",
+            "model": model,
+            "max_tokens": max_tokens,
+            "system_prompt": self._truncate_text(system, max_chars=12000),
+            "user_message": self._truncate_text(user_message, max_chars=12000),
+            "assistant_text": self._truncate_text(assistant_text, max_chars=8000),
+            "usage": dict(usage) if usage else None,
         }
 
     def rewrite_place_query(self, raw_query: str) -> str:
@@ -407,13 +498,45 @@ Rules:
 {suggest_rule}
 - If nothing applies, return {{"values": []}}.
 - Return JSON only, no markdown or prose."""
-        response = self._client.messages.create(
-            model=_MODEL_SONNET,
-            max_tokens=256,
-            system="You map structured place data to allowed multi-select options. Be concise.",
-            messages=[{"role": "user", "content": prompt}],
-        )
+        system = "You map structured place data to allowed multi-select options. Be concise."
+        max_tokens = 256
+        try:
+            response = self._client.messages.create(
+                model=_MODEL_SONNET,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            self._last_multi_select_trace = None
+            status_code = getattr(exc, "status_code", None)
+            retryable = _retryable_for_http_status(status_code)
+            logger.error(
+                "[ClaudeService] choose_multi_select_from_context failed service=ClaudeService "
+                "operation=choose_multi_select_from_context status_code={} retryable={} message={}",
+                status_code,
+                retryable,
+                str(exc)[:500],
+            )
+            raise ClaudeAPIError(
+                f"Anthropic API request failed: {exc}",
+                operation="choose_multi_select_from_context",
+                status_code=status_code,
+                retryable=retryable,
+                details={
+                    "exception_type": type(exc).__name__,
+                    "status_code": status_code,
+                },
+            ) from exc
+
         raw_value = self._extract_text(response).strip()
+        self._record_multi_select_trace(
+            system=system,
+            user_message=prompt,
+            assistant_text=raw_value,
+            model=_MODEL_SONNET,
+            max_tokens=max_tokens,
+        )
         logger.bind(
             property_name=field_name,
             options=options,
@@ -757,13 +880,21 @@ Rules:
         else:
             user_content = f"{prompt}\n\n{value_str}" if value_str else prompt
 
+        system_prompt = "You follow instructions precisely. Return only the requested output."
         response = self._client.messages.create(
             model=_MODEL_AI_PROMPT,
             max_tokens=max_tokens,
-            system="You follow instructions precisely. Return only the requested output.",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
         )
         result = self._extract_text(response).strip()
+        self._record_ai_prompt_trace(
+            system_prompt=system_prompt,
+            user_message=user_content,
+            assistant_text=result,
+            max_tokens=max_tokens,
+            model=_MODEL_AI_PROMPT,
+        )
         return result
 
     def get_last_usage(self) -> dict | None:

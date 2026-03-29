@@ -39,6 +39,9 @@ from app.repositories import (
 from app.services.claude_service import ClaudeService
 from app.services.communicator import Communicator
 from app.services.freepik_service import FreepikService
+from app.services.iconify_service import IconifyService
+from app.services.icon_catalog_service import IconCatalogService
+from app.services.r2_media_storage_service import R2MediaStorageService
 from app.services.google_places_service import GooglePlacesService
 from app.services.job_definition_service import JobDefinitionService
 from app.services.job_execution import JobExecutionService
@@ -154,6 +157,10 @@ async def _async_worker_main() -> None:
     google_places_svc = GooglePlacesService(api_key=google_places_key)
     freepik_key = os.environ.get("FREEPIK_API_KEY")
     freepik_svc = FreepikService(api_key=freepik_key) if freepik_key else None
+    iconify_svc = IconifyService()
+
+    r2_storage = R2MediaStorageService.from_env()
+    icon_catalog_svc = IconCatalogService(supabase_client, r2_storage)
 
     step_template_repo = PostgresStepTemplateRepository(supabase_client)
     target_template_repo = PostgresTargetTemplateRepository(supabase_client)
@@ -224,6 +231,9 @@ async def _async_worker_main() -> None:
         claude_service=claude_svc,
         google_places_service=google_places_svc,
         freepik_service=freepik_svc,
+        iconify_service=iconify_svc,
+        icon_catalog_service=icon_catalog_svc,
+        r2_media_storage=r2_storage,
         dry_run=dry_run,
         run_repository=run_repo,
         get_notion_token_fn=notion_oauth_svc.get_access_token,

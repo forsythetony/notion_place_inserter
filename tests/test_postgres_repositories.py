@@ -389,7 +389,7 @@ async def test_postgres_job_save_job_graph_upserts_job_stages_pipelines_steps(mo
 
 
 async def test_postgres_job_save_job_graph_deletes_steps_not_in_saved_graph(mock_client):
-    """After upserting steps, delete removes rows for that pipeline that are not in the graph."""
+    """Delete removes orphan step rows for that pipeline before step upserts (avoids sequence slot collisions)."""
     mock_client.table.return_value = _job_graph_table_chain_mock()
     job = JobDefinition(
         id="job_save",
@@ -434,6 +434,87 @@ async def test_postgres_job_save_job_graph_deletes_steps_not_in_saved_graph(mock
     chain.in_.assert_called_once()
     assert chain.in_.call_args[0][0] == "id"
     assert list(chain.in_.call_args[0][1]) == ["st_keep"]
+
+
+async def test_postgres_job_save_job_graph_two_phase_step_sequences_on_reorder(mock_client):
+    """Reordering steps uses a temp sequence band then 1..n so DB unique constraint never collides."""
+    from app.repositories.postgres_repositories import _STEP_SEQUENCE_TEMP_BASE
+
+    step_sequences: list[int] = []
+
+    def make_table(name: str) -> MagicMock:
+        chain = MagicMock()
+        chain.execute = AsyncMock(return_value=MagicMock())
+        chain.delete.return_value = chain
+        chain.eq.return_value = chain
+        type(chain).not_ = property(lambda self: chain)
+        chain.in_.return_value = chain
+
+        def upsert_side_effect(row: dict, *args: object, **kwargs: object) -> MagicMock:
+            if name == "step_instances" and isinstance(row, dict) and "sequence" in row:
+                step_sequences.append(int(row["sequence"]))
+            return chain
+
+        chain.upsert.side_effect = upsert_side_effect
+        return chain
+
+    mock_client.table.side_effect = make_table
+
+    owner = "871ba2fa-fd5d-4a81-9f0d-0d98b348ccde"
+    job = JobDefinition(
+        id="job_save",
+        owner_user_id=owner,
+        display_name="Save Test",
+        target_id="t2",
+        status="active",
+        stage_ids=["s1"],
+        visibility="owner",
+    )
+    stage = StageDefinition(
+        id="s1",
+        job_id="job_save",
+        display_name="S1",
+        sequence=0,
+        pipeline_ids=["p1"],
+        pipeline_run_mode="parallel",
+    )
+    pipeline = PipelineDefinition(
+        id="p1",
+        stage_id="s1",
+        display_name="P1",
+        sequence=0,
+        step_ids=["st_a", "st_b"],
+        purpose=None,
+    )
+    # Swapped order vs typical 1 then 2 — save must not upsert final seq in one pass only.
+    step_a = StepInstance(
+        id="st_a",
+        pipeline_id="p1",
+        step_template_id="t_a",
+        display_name="A",
+        sequence=2,
+        input_bindings={},
+        config={},
+    )
+    step_b = StepInstance(
+        id="st_b",
+        pipeline_id="p1",
+        step_template_id="t_b",
+        display_name="B",
+        sequence=1,
+        input_bindings={},
+        config={},
+    )
+    graph = JobGraph(job=job, stages=[stage], pipelines=[pipeline], steps=[step_a, step_b])
+    repo = PostgresJobRepository(mock_client)
+    await repo.save_job_graph(graph, skip_reference_checks=True)
+
+    assert step_sequences == [
+        _STEP_SEQUENCE_TEMP_BASE,
+        _STEP_SEQUENCE_TEMP_BASE + 1,
+        1,
+        2,
+    ]
 
 
 # ---- PostgresTargetRepository ----

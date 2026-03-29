@@ -1,0 +1,30 @@
+id: step_template_svg_edit
+slug: svg_edit
+display_name: SVG Edit
+step_kind: svg_edit
+description: Fetch an SVG from a URL, apply a tint color, upload to R2 (icons/beta), output hosted URL
+input_contract:
+  fields:
+    image_url:
+      type: string
+      required: true
+output_contract:
+  fields:
+    image_url:
+      type: string
+      title: Hosted SVG URL
+      summary: Public HTTPS URL for the tinted SVG on R2 (or passthrough when uploads are skipped).
+      example: "https://cdn.example.com/oleo/icons/beta/00000000-0000-4000-8000-000000000001.svg"
+config_schema:
+  tint_color:
+    type: string
+    format: color
+    description: "Tint color (#RGB or #RRGGBB)"
+    default: "#000000"
+  timeout_ms:
+    type: integer
+    description: "HTTP fetch timeout in ms (optional; default 15000)"
+runtime_binding: svg_edit
+category: transform
+status: active
+visibility: platform

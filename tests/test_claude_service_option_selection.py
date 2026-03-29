@@ -2,9 +2,10 @@
 
 from types import SimpleNamespace
 
+import pytest
 from loguru import logger
 
-from app.services.claude_service import ClaudeService
+from app.services.claude_service import ClaudeAPIError, ClaudeService
 
 
 class _FakeMessages:
@@ -280,6 +281,34 @@ def test_choose_multi_select_skips_when_no_options():
 
     assert result == []
     assert len(fake_client.messages.calls) == 0
+
+
+class _BoomMessages:
+    def create(self, **kwargs):
+        err = RuntimeError("simulated API failure")
+        err.status_code = 503  # type: ignore[attr-defined]
+        raise err
+
+
+class _BoomClient:
+    messages = _BoomMessages()
+
+
+def test_choose_multi_select_raises_claude_api_error_on_messages_failure():
+    """API errors become ClaudeAPIError with operation and structured fields."""
+    service = ClaudeService(api_key="test-key")
+    service._client = _BoomClient()
+    with pytest.raises(ClaudeAPIError) as ei:
+        service.choose_multi_select_from_context(
+            field_name="Tags",
+            options=["Landmark"],
+            candidate_context={"primaryType": "landmark"},
+            allow_suggest_new=False,
+        )
+    assert ei.value.operation == "choose_multi_select_from_context"
+    assert ei.value.service == "ClaudeService"
+    assert ei.value.status_code == 503
+    assert ei.value.retryable is True
 
 
 def test_choose_multi_select_returns_empty_when_no_match():
